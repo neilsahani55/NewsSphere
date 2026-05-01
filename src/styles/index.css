@@ -1316,7 +1316,20 @@ button { font-family: inherit; }
 /* Phone */
 @media (max-width: 540px) {
   .hdr-in, .layout, .filters, .foot { padding-left: 1rem; padding-right: 1rem; }
-  .hdr-in { padding-top: .65rem; padding-bottom: .65rem; }
+  .hdr-in {
+    padding-top: .6rem;
+    padding-bottom: .65rem;
+    /* Float the theme toggle to the top-right corner of the brand row,
+       while the rest of the controls stack below in their natural flow. */
+    position: relative;
+    padding-right: 3.25rem;
+  }
+  .ctrls > .icon-btn {
+    position: absolute;
+    top: .5rem;
+    right: 1rem;
+    margin: 0;
+  }
   .brand-name { font-size: 1.42rem; }
   .feed-title { font-size: 1rem; }
   .dpbody { padding: 1rem; }
@@ -1354,6 +1367,8 @@ button { font-family: inherit; }
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */
 @media (max-width: 380px) {
   .hdr-in, .layout, .filters, .foot { padding-left: .85rem; padding-right: .85rem; }
+  .hdr-in { padding-right: 3rem; }
+  .ctrls > .icon-btn { right: .85rem; top: .45rem; }
   .brand-name { font-size: 1.25rem; }
   .ctrls { gap: .45rem; }
   .seg-btn { padding: .3rem .65rem; font-size: .72rem; }
