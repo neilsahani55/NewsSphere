@@ -1319,17 +1319,26 @@ button { font-family: inherit; }
   .hdr-in {
     padding-top: .6rem;
     padding-bottom: .65rem;
-    /* Float the theme toggle to the top-right corner of the brand row,
-       while the rest of the controls stack below in their natural flow. */
+    /* hdr-in is the positioning context. Padding stays at 1rem on all sides
+       so the search bar + control cluster get full width — only the brand
+       row reserves space for the floating theme toggle. */
     position: relative;
-    padding-right: 3.25rem;
   }
+  .brand { padding-right: 3.25rem; }
   .ctrls > .icon-btn {
     position: absolute;
-    top: .5rem;
+    top: .55rem;
     right: 1rem;
     margin: 0;
   }
+  /* Make the bottom controls cluster wrap cleanly on a single row when it can
+     and to two rows on the very narrowest screens, with a comfortable gap. */
+  .ctrls {
+    width: 100%;
+    gap: .5rem;
+    justify-content: flex-start;
+  }
+  .seg, .tr-global, .btn-p { flex: 0 1 auto; }
   .brand-name { font-size: 1.42rem; }
   .feed-title { font-size: 1rem; }
   .dpbody { padding: 1rem; }
@@ -1367,8 +1376,8 @@ button { font-family: inherit; }
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */
 @media (max-width: 380px) {
   .hdr-in, .layout, .filters, .foot { padding-left: .85rem; padding-right: .85rem; }
-  .hdr-in { padding-right: 3rem; }
   .ctrls > .icon-btn { right: .85rem; top: .45rem; }
+  .brand { padding-right: 3rem; }
   .brand-name { font-size: 1.25rem; }
   .ctrls { gap: .45rem; }
   .seg-btn { padding: .3rem .65rem; font-size: .72rem; }
