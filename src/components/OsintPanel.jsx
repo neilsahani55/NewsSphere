@@ -19,6 +19,16 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
   const [enrichments, setEnrichments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedUrl, setExpandedUrl] = useState(null);
+  // Each OSINT section is independently collapsible so the panel can stay
+  // compact on mobile. Wikipedia + cross-refs default open (the most
+  // discovery-heavy parts), external chips default closed.
+  const [openSections, setOpenSections] = useState({
+    wikipedia: true,
+    related: true,
+    external: false,
+  });
+  const toggleSection = (key) =>
+    setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   const entities = useMemo(() => {
     if (!article) return [];
@@ -86,8 +96,12 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
       </header>
 
       {enrichments.length > 0 && (
-        <div className="osint-block">
-          <h4 className="osint-sub">Mentioned · Wikipedia</h4>
+        <OsintSection
+          title="Mentioned · Wikipedia"
+          count={enrichments.length}
+          open={openSections.wikipedia}
+          onToggle={() => toggleSection('wikipedia')}
+        >
           <div className="osint-cards">
             {enrichments.map((e) => (
               <a
@@ -116,12 +130,16 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
               </a>
             ))}
           </div>
-        </div>
+        </OsintSection>
       )}
 
       {related.length > 0 && (
-        <div className="osint-block">
-          <h4 className="osint-sub">Cross-references in your feed · {related.length}</h4>
+        <OsintSection
+          title="Cross-references in your feed"
+          count={related.length}
+          open={openSections.related}
+          onToggle={() => toggleSection('related')}
+        >
           <ul className="osint-related">
             {related.map((r) => {
               const isOpen = expandedUrl === r.article_url;
@@ -161,12 +179,16 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
               );
             })}
           </ul>
-        </div>
+        </OsintSection>
       )}
 
       {investigations.length > 0 && (
-        <div className="osint-block">
-          <h4 className="osint-sub">External investigations</h4>
+        <OsintSection
+          title="External investigations"
+          count={investigations.length}
+          open={openSections.external}
+          onToggle={() => toggleSection('external')}
+        >
           <div className="osint-actions">
             {investigations.map((a) => (
               <a
@@ -183,9 +205,33 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
               </a>
             ))}
           </div>
-        </div>
+        </OsintSection>
       )}
     </section>
+  );
+}
+
+// Collapsible section header with a count badge and a chevron. The body is
+// only mounted when open, so collapsed sections cost nothing.
+function OsintSection({ title, count, open, onToggle, children }) {
+  return (
+    <div className={`osint-block ${open ? 'open' : 'closed'}`}>
+      <button
+        type="button"
+        className="osint-section-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="osint-sub">
+          {title}
+          {typeof count === 'number' && count > 0 && (
+            <span className="osint-count">{count}</span>
+          )}
+        </span>
+        <span className="osint-chev" aria-hidden>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="osint-section-body">{children}</div>}
+    </div>
   );
 }
 

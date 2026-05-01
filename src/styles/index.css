@@ -834,6 +834,54 @@ button { font-family: inherit; }
   transition: background .18s, transform .15s;
 }
 .rlink:hover { background: var(--accent2); transform: translateY(-1px); }
+/* Prev / Next navigation row at the bottom of the reader. Same row also
+   responds to mobile swipe (left = next, right = previous). */
+.dnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  margin-top: 1.4rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+.dnav-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: .65rem 1rem;
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  color: var(--ink2);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s, transform .12s;
+  max-width: 180px;
+}
+.dnav-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper2));
+  transform: translateY(-1px);
+}
+.dnav-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+.dnav-pos {
+  font-family: monospace;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.dnav-of { color: var(--ink4); font-weight: 400; }
+
 .dph {
   padding: 3rem 1.5rem;
   text-align: center;
@@ -888,16 +936,65 @@ button { font-family: inherit; }
   color: var(--ink4);
   font-style: italic;
 }
-.osint-block { margin-top: .85rem; }
+.osint-block {
+  margin-top: .65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--rsm);
+  background: var(--paper2);
+  overflow: hidden;
+}
 .osint-block:first-of-type { margin-top: 0; }
+
+/* Collapsible section header — clicking toggles open/closed. */
+.osint-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: .65rem .85rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  transition: background .15s;
+}
+.osint-section-toggle:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.osint-block.open .osint-section-toggle {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.osint-section-body { padding: .85rem; }
+
 .osint-sub {
   font-size: .62rem;
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink3);
-  margin-bottom: .55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
+.osint-count {
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 7px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+.osint-chev {
+  font-size: .85rem;
+  color: var(--ink3);
+  transition: transform .18s;
+}
+.osint-block.open .osint-chev { color: var(--accent); }
 
 /* Wikipedia entity cards: horizontally scrollable on narrow screens */
 .osint-cards {
@@ -1235,6 +1332,11 @@ button { font-family: inherit; }
   /* Inline reader — tighter padding inside cross-references */
   .osint-inline { padding: .9rem .9rem .8rem; }
   .osint-inline-img { max-height: 200px; }
+
+  /* Nav buttons stretch full-width on phones; labels stay so it's tap-clear. */
+  .dnav { gap: .4rem; }
+  .dnav-btn { padding: .65rem .8rem; font-size: .78rem; max-width: none; }
+  .dnav-pos { font-size: .68rem; }
 }
 
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */

@@ -89,7 +89,11 @@ export default function App() {
     if (!stillVisible) setSelectedUrl(filtered[0].article_url);
   }, [filtered, selectedUrl]);
 
-  const selected = filtered.find((a) => a.article_url === selectedUrl) || filtered[0] || null;
+  const selectedIndex = selectedUrl
+    ? filtered.findIndex((a) => a.article_url === selectedUrl)
+    : (filtered.length ? 0 : -1);
+
+  const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
 
   const handleLoadMore = useCallback(() => {
     setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
@@ -98,6 +102,23 @@ export default function App() {
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
   }, []);
+
+  // Prev/Next navigation across the filtered list — used by the bottom buttons
+  // and the mobile swipe gesture. Auto-extends the visible window when the user
+  // walks past the loaded slice.
+  const handlePrev = useCallback(() => {
+    if (selectedIndex <= 0) return;
+    setSelectedUrl(filtered[selectedIndex - 1].article_url);
+  }, [selectedIndex, filtered]);
+
+  const handleNext = useCallback(() => {
+    if (selectedIndex < 0 || selectedIndex >= filtered.length - 1) return;
+    const nextIdx = selectedIndex + 1;
+    if (nextIdx >= visibleCount - 5) {
+      setVisibleCount((c) => Math.min(Math.max(c + PAGE_SIZE, nextIdx + 1), filtered.length));
+    }
+    setSelectedUrl(filtered[nextIdx].article_url);
+  }, [selectedIndex, filtered, visibleCount]);
 
   return (
     <div className="app">
@@ -159,6 +180,11 @@ export default function App() {
           target={target}
           allArticles={completeArticles}
           onSelectArticle={handleSelect}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          hasPrev={selectedIndex > 0}
+          hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
+          position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
         />
       </main>
 

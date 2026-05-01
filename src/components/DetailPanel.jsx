@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
 import { formatDate, parseKeyPoints, stripHtml } from '../utils/format.js';
 import { useTranslation } from '../hooks/useTranslation.js';
+import { useSwipe } from '../hooks/useSwipe.js';
 import OsintPanel from './OsintPanel.jsx';
 
 export default function DetailPanel({
@@ -11,9 +12,22 @@ export default function DetailPanel({
   target,
   allArticles,
   onSelectArticle,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  position,
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const { translated, loading, error } = useTranslation(article, target);
+  const panelRef = useRef(null);
+
+  // Touch-swipe: left = next, right = previous. Only fires on touch devices,
+  // so it never interferes with mouse-based text selection.
+  useSwipe(panelRef, {
+    onLeft:  hasNext ? onNext : undefined,
+    onRight: hasPrev ? onPrev : undefined,
+  });
 
   useEffect(() => {
     setImgFailed(false);
@@ -21,7 +35,7 @@ export default function DetailPanel({
 
   if (!article) {
     return (
-      <aside className="dcol">
+      <aside className="dcol" ref={panelRef}>
         <div className="dpanel">
           <div className="dphdr"><h3>Reader</h3></div>
           <div className="dph">
@@ -47,7 +61,7 @@ export default function DetailPanel({
   const showImage = article.image_url && !imgFailed;
 
   return (
-    <aside className="dcol">
+    <aside className="dcol" ref={panelRef}>
       <div className="dpanel">
         <div className="dphdr">
           <h3>
@@ -129,6 +143,40 @@ export default function DetailPanel({
                 <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
             </a>
+          )}
+
+          {(hasPrev || hasNext) && (
+            <nav className="dnav" aria-label="Article navigation">
+              <button
+                type="button"
+                className="dnav-btn"
+                onClick={onPrev}
+                disabled={!hasPrev}
+                aria-label="Previous story"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                <span className="dnav-label">Previous</span>
+              </button>
+              {position && (
+                <span className="dnav-pos">
+                  {position.current.toLocaleString()} <span className="dnav-of">of</span> {position.total.toLocaleString()}
+                </span>
+              )}
+              <button
+                type="button"
+                className="dnav-btn"
+                onClick={onNext}
+                disabled={!hasNext}
+                aria-label="Next story"
+              >
+                <span className="dnav-label">Next</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </nav>
           )}
         </div>
       </div>
