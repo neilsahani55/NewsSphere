@@ -1324,19 +1324,25 @@ button { font-family: inherit; }
        row reserves space for the floating theme toggle. */
     position: relative;
   }
-  .brand { padding-right: 3.25rem; }
+  /* Brand row gets a min-height that fully contains the absolute-positioned
+     theme toggle, so the toggle's bottom edge can't bleed into the search bar. */
+  .brand {
+    padding-right: 3.25rem;
+    min-height: 44px;
+    align-items: center;
+  }
   .ctrls > .icon-btn {
     position: absolute;
-    top: .55rem;
+    top: .65rem;
     right: 1rem;
     margin: 0;
   }
-  /* Make the bottom controls cluster wrap cleanly on a single row when it can
-     and to two rows on the very narrowest screens, with a comfortable gap. */
+  /* Spread the bottom cluster (All/Saved + Translate + Refresh) edge-to-edge
+     so there's no awkward empty space on the right. */
   .ctrls {
     width: 100%;
     gap: .5rem;
-    justify-content: flex-start;
+    justify-content: space-between;
   }
   .seg, .tr-global, .btn-p { flex: 0 1 auto; }
   .brand-name { font-size: 1.42rem; }
@@ -1376,7 +1382,7 @@ button { font-family: inherit; }
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */
 @media (max-width: 380px) {
   .hdr-in, .layout, .filters, .foot { padding-left: .85rem; padding-right: .85rem; }
-  .ctrls > .icon-btn { right: .85rem; top: .45rem; }
+  .ctrls > .icon-btn { right: .85rem; top: .55rem; }
   .brand { padding-right: 3rem; }
   .brand-name { font-size: 1.25rem; }
   .ctrls { gap: .45rem; }
