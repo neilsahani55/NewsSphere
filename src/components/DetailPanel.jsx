@@ -159,11 +159,6 @@ export default function DetailPanel({
                 </svg>
                 <span className="dnav-label">Previous</span>
               </button>
-              {position && (
-                <span className="dnav-pos">
-                  {position.current.toLocaleString()} <span className="dnav-of">of</span> {position.total.toLocaleString()}
-                </span>
-              )}
               <button
                 type="button"
                 className="dnav-btn"

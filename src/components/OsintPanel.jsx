@@ -19,16 +19,9 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
   const [enrichments, setEnrichments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedUrl, setExpandedUrl] = useState(null);
-  // Each OSINT section is independently collapsible so the panel can stay
-  // compact on mobile. Wikipedia + cross-refs default open (the most
-  // discovery-heavy parts), external chips default closed.
-  const [openSections, setOpenSections] = useState({
-    wikipedia: true,
-    related: true,
-    external: false,
-  });
-  const toggleSection = (key) =>
-    setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+  // Single top-level toggle for the entire panel. Defaults closed so the
+  // reader stays compact; user opens it on demand.
+  const [open, setOpen] = useState(false);
 
   const entities = useMemo(() => {
     if (!article) return [];
@@ -50,13 +43,16 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
   // row labels switch to the user's preferred language too.
   useBatchTranslation(related, target);
 
-  // Reset the inline expansion whenever the user moves to a different article.
+  // Reset the inline expansion + collapse the panel whenever the user moves
+  // to a different article.
   useEffect(() => {
     setExpandedUrl(null);
+    setOpen(false);
   }, [article?.article_url]);
 
-  // Fetch Wikipedia summaries for the entities, in parallel, with cancellation.
+  // Fetch Wikipedia summaries lazily — only after the user opens the panel.
   useEffect(() => {
+    if (!open) return;
     if (!article || entities.length === 0) {
       setEnrichments([]);
       setLoading(false);
@@ -79,159 +75,155 @@ export default function OsintPanel({ article, allArticles, target, onSelectArtic
     });
 
     return () => ctrl.abort();
-  }, [article?.article_url, entities]);
+  }, [open, article?.article_url, entities]);
 
   if (!article) return null;
-  const hasContent = enrichments.length > 0 || related.length > 0 || investigations.length > 0;
-  if (!hasContent && !loading) return null;
+  // Cheap pre-flight signal so the trigger button shows a count even when
+  // closed. We can't know enrichment counts until we open and fetch, but
+  // related + investigations are computed locally and free.
+  const totalSignals = related.length + investigations.length;
 
   return (
-    <section className="osint">
-      <header className="osint-hdr">
+    <section className={`osint ${open ? 'open' : 'closed'}`}>
+      <button
+        type="button"
+        className="osint-hdr"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
         <div className="osint-h">
           <span className="osint-badge" aria-hidden>OSINT</span>
           <h3>Open Source Intelligence</h3>
+          {!open && totalSignals > 0 && (
+            <span className="osint-count">{totalSignals}+</span>
+          )}
         </div>
-        {loading && <span className="osint-status">Looking up references…</span>}
-      </header>
+        <div className="osint-hdr-right">
+          {open && loading && <span className="osint-status">Looking up references…</span>}
+          <span className="osint-chev" aria-hidden>{open ? '▾' : '▸'}</span>
+        </div>
+      </button>
 
-      {enrichments.length > 0 && (
-        <OsintSection
-          title="Mentioned · Wikipedia"
-          count={enrichments.length}
-          open={openSections.wikipedia}
-          onToggle={() => toggleSection('wikipedia')}
-        >
-          <div className="osint-cards">
-            {enrichments.map((e) => (
-              <a
-                key={e.title}
-                className="osint-card"
-                href={e.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {e.thumbnail && (
-                  <img
-                    className="osint-thumb"
-                    src={e.thumbnail}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                <div className="osint-card-text">
-                  <div className="osint-card-title">{e.title}</div>
-                  {e.description && (
-                    <div className="osint-card-desc">{e.description}</div>
-                  )}
-                  <p className="osint-card-extract">{truncate(e.extract, 160)}</p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </OsintSection>
-      )}
-
-      {related.length > 0 && (
-        <OsintSection
-          title="Cross-references in your feed"
-          count={related.length}
-          open={openSections.related}
-          onToggle={() => toggleSection('related')}
-        >
-          <ul className="osint-related">
-            {related.map((r) => {
-              const isOpen = expandedUrl === r.article_url;
-              return (
-                <li key={r.article_url} className={isOpen ? 'open' : ''}>
-                  <div className="osint-related-row">
-                    <button
-                      type="button"
-                      className="osint-related-btn"
-                      aria-expanded={isOpen}
-                      onClick={() => setExpandedUrl(isOpen ? null : r.article_url)}
-                    >
-                      <span className="osint-related-title">{getCached(r, 'title', target)}</span>
-                      <span className="osint-related-meta">
-                        {r.source_name || 'Source'} · {relativeTime(r.published_at_ist || r.fetched_at_ist)}
-                      </span>
-                      <span className="osint-caret" aria-hidden>{isOpen ? '▾' : '▸'}</span>
-                    </button>
-                    {onSelectArticle && (
-                      <button
-                        type="button"
-                        className="osint-open-btn"
-                        title="Open in main reader"
-                        aria-label="Open this story in the main reader"
-                        onClick={() => onSelectArticle(r)}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M14 4h6v6" />
-                          <path d="M20 4 10 14" />
-                          <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
-                        </svg>
-                      </button>
+      {open && (
+        <div className="osint-body">
+          {enrichments.length > 0 && (
+            <div className="osint-block">
+              <h4 className="osint-sub">
+                Mentioned · Wikipedia
+                <span className="osint-count">{enrichments.length}</span>
+              </h4>
+              <div className="osint-cards">
+                {enrichments.map((e) => (
+                  <a
+                    key={e.title}
+                    className="osint-card"
+                    href={e.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {e.thumbnail && (
+                      <img
+                        className="osint-thumb"
+                        src={e.thumbnail}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
                     )}
-                  </div>
-                  {isOpen && <InlineReader article={r} target={target} />}
-                </li>
-              );
-            })}
-          </ul>
-        </OsintSection>
-      )}
+                    <div className="osint-card-text">
+                      <div className="osint-card-title">{e.title}</div>
+                      {e.description && (
+                        <div className="osint-card-desc">{e.description}</div>
+                      )}
+                      <p className="osint-card-extract">{truncate(e.extract, 160)}</p>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {investigations.length > 0 && (
-        <OsintSection
-          title="External investigations"
-          count={investigations.length}
-          open={openSections.external}
-          onToggle={() => toggleSection('external')}
-        >
-          <div className="osint-actions">
-            {investigations.map((a) => (
-              <a
-                key={a.id}
-                className="osint-action"
-                href={a.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={a.title}
-                data-icon={a.icon}
-              >
-                <ActionIcon name={a.icon} />
-                <span>{a.label}</span>
-              </a>
-            ))}
-          </div>
-        </OsintSection>
+          {related.length > 0 && (
+            <div className="osint-block">
+              <h4 className="osint-sub">
+                Cross-references in your feed
+                <span className="osint-count">{related.length}</span>
+              </h4>
+              <ul className="osint-related">
+                {related.map((r) => {
+                  const isOpen = expandedUrl === r.article_url;
+                  return (
+                    <li key={r.article_url} className={isOpen ? 'open' : ''}>
+                      <div className="osint-related-row">
+                        <button
+                          type="button"
+                          className="osint-related-btn"
+                          aria-expanded={isOpen}
+                          onClick={() => setExpandedUrl(isOpen ? null : r.article_url)}
+                        >
+                          <span className="osint-related-title">{getCached(r, 'title', target)}</span>
+                          <span className="osint-related-meta">
+                            {r.source_name || 'Source'} · {relativeTime(r.published_at_ist || r.fetched_at_ist)}
+                          </span>
+                          <span className="osint-caret" aria-hidden>{isOpen ? '▾' : '▸'}</span>
+                        </button>
+                        {onSelectArticle && (
+                          <button
+                            type="button"
+                            className="osint-open-btn"
+                            title="Open in main reader"
+                            aria-label="Open this story in the main reader"
+                            onClick={() => onSelectArticle(r)}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M14 4h6v6" />
+                              <path d="M20 4 10 14" />
+                              <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {isOpen && <InlineReader article={r} target={target} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {investigations.length > 0 && (
+            <div className="osint-block">
+              <h4 className="osint-sub">
+                External investigations
+                <span className="osint-count">{investigations.length}</span>
+              </h4>
+              <div className="osint-actions">
+                {investigations.map((a) => (
+                  <a
+                    key={a.id}
+                    className="osint-action"
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={a.title}
+                    data-icon={a.icon}
+                  >
+                    <ActionIcon name={a.icon} />
+                    <span>{a.label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!loading && enrichments.length === 0 && related.length === 0 && investigations.length === 0 && (
+            <div className="osint-empty">
+              No OSINT signals found for this article yet.
+            </div>
+          )}
+        </div>
       )}
     </section>
-  );
-}
-
-// Collapsible section header with a count badge and a chevron. The body is
-// only mounted when open, so collapsed sections cost nothing.
-function OsintSection({ title, count, open, onToggle, children }) {
-  return (
-    <div className={`osint-block ${open ? 'open' : 'closed'}`}>
-      <button
-        type="button"
-        className="osint-section-toggle"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
-        <span className="osint-sub">
-          {title}
-          {typeof count === 'number' && count > 0 && (
-            <span className="osint-count">{count}</span>
-          )}
-        </span>
-        <span className="osint-chev" aria-hidden>{open ? '▾' : '▸'}</span>
-      </button>
-      {open && <div className="osint-section-body">{children}</div>}
-    </div>
   );
 }
 

@@ -895,32 +895,53 @@ button { font-family: inherit; }
   margin-bottom: .65rem;
 }
 
-/* ─── OSINT panel ──────────────────────────────────────────────── */
+/* ─── OSINT panel — single top-level dropdown ──────────────────── */
 .osint {
   margin: 1.4rem 0;
-  padding: 1.1rem 1.2rem;
   background: var(--paper);
   border: 1px solid var(--border);
   border-radius: var(--rmd);
+  overflow: hidden;
+  transition: box-shadow .18s;
 }
+.osint.open { box-shadow: var(--shadow); }
+
+/* Header is the dropdown trigger — full-width clickable button. */
 .osint-hdr {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: .9rem;
-  flex-wrap: wrap;
+  gap: 12px;
+  padding: .9rem 1.2rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  transition: background .15s;
+}
+.osint-hdr:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.osint.open .osint-hdr {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .osint-h {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .osint-h h3 {
   font-family: var(--ffd);
   font-size: .95rem;
   font-weight: 700;
   color: var(--ink2);
+}
+.osint-hdr-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 .osint-badge {
   font-size: .58rem;
@@ -936,38 +957,27 @@ button { font-family: inherit; }
   color: var(--ink4);
   font-style: italic;
 }
-.osint-block {
-  margin-top: .65rem;
-  border: 1px solid var(--border);
-  border-radius: var(--rsm);
-  background: var(--paper2);
-  overflow: hidden;
-}
-.osint-block:first-of-type { margin-top: 0; }
 
-/* Collapsible section header — clicking toggles open/closed. */
-.osint-section-toggle {
-  width: 100%;
+/* Body — only mounted when panel is open. */
+.osint-body {
+  padding: 1rem 1.2rem 1.1rem;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: .65rem .85rem;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-family: inherit;
-  color: inherit;
-  text-align: left;
-  transition: background .15s;
+  flex-direction: column;
+  gap: 1rem;
 }
-.osint-section-toggle:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.osint-block.open .osint-section-toggle {
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
+.osint-empty {
+  font-size: .82rem;
+  color: var(--ink4);
+  font-style: italic;
+  padding: .5rem 0;
 }
-.osint-section-body { padding: .85rem; }
 
+/* Sub-section: a static block with a heading + content. No toggle. */
+.osint-block {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
 .osint-sub {
   font-size: .62rem;
   font-weight: 700;
@@ -990,11 +1000,13 @@ button { font-family: inherit; }
   text-align: center;
 }
 .osint-chev {
-  font-size: .85rem;
+  font-size: .9rem;
   color: var(--ink3);
   transition: transform .18s;
+  width: 14px;
+  text-align: center;
 }
-.osint-block.open .osint-chev { color: var(--accent); }
+.osint.open .osint-chev { color: var(--accent); }
 
 /* Wikipedia entity cards: horizontally scrollable on narrow screens */
 .osint-cards {
