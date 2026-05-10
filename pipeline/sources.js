@@ -3,8 +3,8 @@
 // Group 2 (pipeline-2.yml,:15/:45): Science, Health, Sports, Entertainment, Crypto, Politics, Environment, Crime — 13 sources
 export const SOURCES = [
   // ── INDIA (4) — Group 1 ─────────────────────────────────────────────
-  // NDTV direct RSS (feedburner retired)
-  { id: 'ndtv-top',    group: 1, url: 'https://www.ndtv.com/rss/top-stories',                                   type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  // NDTV blocks bots — replaced with The Wire (reliable Indian RSS)
+  { id: 'thewire',     group: 1, url: 'https://thewire.in/feed',                                                type: 'rss', lang: 'en', country: 'in', category: 'India' },
   { id: 'toi-top',     group: 1, url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',              type: 'rss', lang: 'en', country: 'in', category: 'India' },
   // India Today replaced with Hindustan Times (more bot-friendly)
   { id: 'ht-india',    group: 1, url: 'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml',         type: 'rss', lang: 'en', country: 'in', category: 'India' },
@@ -13,7 +13,8 @@ export const SOURCES = [
   // ── WORLD (4) — Group 1 ─────────────────────────────────────────────
   { id: 'bbc-world',   group: 1, url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                            type: 'rss', lang: 'en', country: 'gb', category: 'World' },
   { id: 'aljazeera',   group: 1, url: 'https://www.aljazeera.com/xml/rss/all.xml',                              type: 'rss', lang: 'en', country: 'qa', category: 'World' },
-  { id: 'reuters-world', group: 1, url: 'https://feeds.reuters.com/reuters/worldNews',                          type: 'rss', lang: 'en', country: 'us', category: 'World' },
+  // Reuters public RSS is dead (DNS ENOTFOUND) — replaced with AP News
+  { id: 'ap-world',    group: 1, url: 'https://feeds.apnews.com/apnews/apf-topnews',                            type: 'rss', lang: 'en', country: 'us', category: 'World' },
   { id: 'guardian-world', group: 1, url: 'https://www.theguardian.com/world/rss',                               type: 'rss', lang: 'en', country: 'gb', category: 'World' },
 
   // ── TECH (3) — Group 1 ──────────────────────────────────────────────
@@ -22,8 +23,8 @@ export const SOURCES = [
   { id: 'hn-front',    group: 1, url: 'https://hn.algolia.com/api/v1/search?tags=front_page',                   type: 'hn',  lang: 'en', country: 'us', category: 'Tech' },
 
   // ── BUSINESS (3) — Group 1 ──────────────────────────────────────────
-  // Bloomberg replaced with Reuters Business (Bloomberg blocks bots)
-  { id: 'reuters-biz', group: 1, url: 'https://feeds.reuters.com/reuters/businessNews',                         type: 'rss', lang: 'en', country: 'us', category: 'Business' },
+  // Reuters business RSS also dead — replaced with Guardian Business
+  { id: 'guardian-biz', group: 1, url: 'https://www.theguardian.com/business/rss',                              type: 'rss', lang: 'en', country: 'gb', category: 'Business' },
   { id: 'livemint',    group: 1, url: 'https://www.livemint.com/rss/markets',                                   type: 'rss', lang: 'en', country: 'in', category: 'Business' },
   { id: 'et-markets',  group: 1, url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',   type: 'rss', lang: 'en', country: 'in', category: 'Business' },
 

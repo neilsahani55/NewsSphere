@@ -30,7 +30,7 @@ export const ITEMS_PER_FEED   = 8;     // items fetched per RSS feed
 export const PARALLEL_NVIDIA  = 5;     // concurrent NVIDIA requests per batch
 export const BATCH_SLEEP_MS   = 6000;  // ms between NVIDIA batches
 export const RETRY_SLEEP_MS   = 20000; // ms before retrying a 429
-export const NVIDIA_TIMEOUT_MS = 50000; // ms per NVIDIA API call (fail fast)
+export const NVIDIA_TIMEOUT_MS = 70000; // ms per NVIDIA API call (70b model needs more time)
 export const MIN_CONTENT_LEN  = 200;   // minimum AI content chars to accept
 export const RETENTION_DAYS   = 30;    // delete articles older than this
 
