@@ -1,4 +1,4 @@
-import { NVIDIA_KEY, NVIDIA_MODEL, NVIDIA_URL, MIN_CONTENT_LEN, CATEGORIES, BATCH_SLEEP_MS, RETRY_SLEEP_MS, PARALLEL_NVIDIA } from './config.js';
+import { NVIDIA_KEY, NVIDIA_MODEL, NVIDIA_URL, MIN_CONTENT_LEN, CATEGORIES, BATCH_SLEEP_MS, RETRY_SLEEP_MS, PARALLEL_NVIDIA, NVIDIA_TIMEOUT_MS } from './config.js';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -45,7 +45,7 @@ async function callNvidia(prompt) {
       temperature: 0.5,
       top_p: 0.9,
     }),
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(NVIDIA_TIMEOUT_MS),
   });
   return res;
 }
