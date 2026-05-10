@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
-import { SOURCES, ITEMS_PER_FEED } from './config.js';
+import { ITEMS_PER_FEED } from './config.js';
+import { SOURCES } from './sources.js';
 
 const rssParser = new Parser({
   timeout: 15000,
