@@ -194,6 +194,18 @@ export default function App() {
           <span className="foot-dot" aria-hidden />
           <span className="foot-tag">News intelligence beyond the headline</span>
         </div>
+        <nav className="foot-cats" aria-label="Browse by category">
+          {['India','World','Tech','Business','Science','Health','Sports','Entertainment','Crypto','Politics','Environment','Crime'].map(cat => (
+            <button
+              key={cat}
+              type="button"
+              className={`foot-cat${topic === cat ? ' active' : ''}`}
+              onClick={() => { setTopic(cat); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            >
+              {cat}
+            </button>
+          ))}
+        </nav>
         <div className="foot-pillars">
           <span>Aggregate</span>
           <span aria-hidden>·</span>

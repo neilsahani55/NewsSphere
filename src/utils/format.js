@@ -41,7 +41,24 @@ export function truncate(str, n) {
 
 export function stripHtml(str) {
   if (!str) return '';
-  return String(str).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  return String(str)
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&hellip;/g, '…')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function readingTime(content) {
+  if (!content) return 1;
+  const words = stripHtml(content).split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
 }
 
 // Splits the raw key_points cell into individual bullet strings. Handles
@@ -62,9 +79,12 @@ export function parseKeyPoints(value) {
 // Whitespace-only and HTML-only values count as missing.
 export function hasFullArticle(article) {
   if (!article) return false;
-  const content    = stripHtml(article.content);
-  const keyPoints  = String(article.key_points || '').trim();
-  return content.length > 0 && keyPoints.length > 0;
+  const description = String(article.description || '').trim();
+  const content     = stripHtml(article.content);
+  const keyPoints   = String(article.key_points || '').trim();
+  if (description.length >= 50) return true;
+  if (content.length >= 50 && keyPoints.length > 0) return true;
+  return false;
 }
 
 export function formatRelativeUpdate(date) {

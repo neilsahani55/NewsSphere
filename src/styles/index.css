@@ -1233,10 +1233,8 @@ button { font-family: inherit; }
   margin: 0 auto;
   padding: 1.4rem 2rem 2.5rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: .9rem;
   font-size: .75rem;
   color: var(--ink3);
   border-top: 1px solid var(--border);
@@ -1274,6 +1272,30 @@ button { font-family: inherit; }
   color: var(--ink4);
 }
 .foot-pillars span[aria-hidden] { color: var(--border2); }
+.foot-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.foot-cat {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 3px 11px;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--ink3);
+  cursor: pointer;
+  letter-spacing: .03em;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.foot-cat:hover { background: var(--hl); color: #fff; border-color: var(--hl); }
+.foot-cat.active { background: var(--hl); color: #fff; border-color: var(--hl); }
+.read-time { color: var(--ink4); font-size: .78rem; }
 
 /* ─── Responsive ───────────────────────────────────────────────── */
 

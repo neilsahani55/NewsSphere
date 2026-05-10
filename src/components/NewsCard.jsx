@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
-import { relativeTime, stripHtml, truncate } from '../utils/format.js';
+import { readingTime, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
 export default function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target }) {
@@ -85,6 +85,8 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
               <span className="cc">{String(article.country).toUpperCase()}</span>
             </>
           )}
+          <span className="dot-sep" aria-hidden>·</span>
+          <span className="read-time">{readingTime(article.content)} min read</span>
         </div>
       </div>
       {showImage ? (
