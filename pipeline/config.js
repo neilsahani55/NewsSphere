@@ -25,7 +25,7 @@ export const OPENAI_URL    = 'https://api.openai.com/v1/chat/completions';
 
 // Enrich-first: AI writes content BEFORE inserting into Supabase.
 // Only fully-enriched articles ever touch the DB — no blank rows.
-export const MAX_NEW_PER_RUN  = 20;    // articles per run — keeps total runtime ~7 min
+export const MAX_NEW_PER_RUN  = 100;   // process all new articles per run (both groups ~88 each)
 export const ITEMS_PER_FEED   = 8;     // items fetched per RSS feed
 export const PARALLEL_NVIDIA  = 5;     // concurrent NVIDIA requests per batch
 export const BATCH_SLEEP_MS   = 6000;  // ms between NVIDIA batches
