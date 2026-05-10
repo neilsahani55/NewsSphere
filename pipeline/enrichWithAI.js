@@ -1,4 +1,10 @@
-import { NVIDIA_KEY, NVIDIA_MODEL, NVIDIA_URL, MIN_CONTENT_LEN, CATEGORIES, BATCH_SLEEP_MS, RETRY_SLEEP_MS, PARALLEL_NVIDIA, NVIDIA_TIMEOUT_MS } from './config.js';
+import {
+  NVIDIA_KEY, NVIDIA_MODEL, NVIDIA_URL,
+  GEMINI_KEY, GEMINI_URL,
+  OPENAI_KEY, OPENAI_MODEL, OPENAI_URL,
+  MIN_CONTENT_LEN, CATEGORIES,
+  BATCH_SLEEP_MS, RETRY_SLEEP_MS, PARALLEL_NVIDIA, NVIDIA_TIMEOUT_MS,
+} from './config.js';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -31,13 +37,12 @@ Topic title: ${title}
 Brief context (for background only — do NOT copy this text): ${(briefContext || '').slice(0, 600)}`;
 }
 
+// ── Provider calls ────────────────────────────────────────────────────────────
+
 async function callNvidia(prompt) {
-  const res = await fetch(NVIDIA_URL, {
+  return fetch(NVIDIA_URL, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${NVIDIA_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${NVIDIA_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: NVIDIA_MODEL,
       messages: [{ role: 'user', content: prompt }],
@@ -47,8 +52,36 @@ async function callNvidia(prompt) {
     }),
     signal: AbortSignal.timeout(NVIDIA_TIMEOUT_MS),
   });
-  return res;
 }
+
+async function callGemini(prompt) {
+  return fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 2000, temperature: 0.5, topP: 0.9 },
+    }),
+    signal: AbortSignal.timeout(NVIDIA_TIMEOUT_MS),
+  });
+}
+
+async function callOpenAI(prompt) {
+  return fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+      temperature: 0.5,
+      top_p: 0.9,
+    }),
+    signal: AbortSignal.timeout(NVIDIA_TIMEOUT_MS),
+  });
+}
+
+// ── Response parsing (provider-agnostic) ──────────────────────────────────────
 
 function parseResponse(raw) {
   try {
@@ -77,46 +110,87 @@ function parseResponse(raw) {
   } catch { return null; }
 }
 
-async function enrichOne(article) {
-  const prompt = buildPrompt(article.title, article.description || '');
-
-  let res;
-  try {
-    res = await callNvidia(prompt);
-  } catch (e) {
-    console.warn(`    ✗ NVIDIA error "${article.title.slice(0, 50)}": ${e.message}`);
-    return null;
+// Extract the text string from a provider's JSON response
+function extractRaw(json, provider) {
+  if (provider === 'Gemini') {
+    return json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
-
-  // One retry on rate-limit
-  if (res.status === 429) {
-    console.warn(`    429 rate-limit — waiting ${RETRY_SLEEP_MS / 1000}s...`);
-    await sleep(RETRY_SLEEP_MS);
-    try { res = await callNvidia(prompt); }
-    catch (e) { console.warn(`    Retry failed: ${e.message}`); return null; }
-  }
-
-  if (res.status !== 200) {
-    console.warn(`    ✗ NVIDIA ${res.status} for "${article.title.slice(0, 50)}"`);
-    return null;
-  }
-
-  let json;
-  try { json = await res.json(); }
-  catch { return null; }
-
-  const raw = json.choices?.[0]?.message?.content || '';
-  const result = parseResponse(raw);
-
-  if (result) {
-    console.log(`    ✓ "${article.title.slice(0, 65)}"`);
-  } else {
-    console.warn(`    ✗ Parse failed: "${article.title.slice(0, 50)}"`);
-  }
-  return result;
+  // NVIDIA and OpenAI both use the same OpenAI-compatible format
+  return json?.choices?.[0]?.message?.content || '';
 }
 
-// Process articles in parallel batches of PARALLEL_NVIDIA (default 3).
+// ── Enrichment with 3-provider fallback ──────────────────────────────────────
+
+async function enrichOne(article) {
+  const prompt = buildPrompt(article.title, article.description || '');
+  const label  = article.title.slice(0, 50);
+
+  // ── 1. NVIDIA (primary) — one retry on 429 ──────────────────────────
+  let nvidiaRes = null;
+  try {
+    nvidiaRes = await callNvidia(prompt);
+  } catch (e) {
+    console.warn(`    ✗ NVIDIA network error "${label}": ${e.message}`);
+  }
+
+  if (nvidiaRes?.status === 429) {
+    console.warn(`    429 NVIDIA rate-limit — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
+    await sleep(RETRY_SLEEP_MS);
+    try { nvidiaRes = await callNvidia(prompt); }
+    catch (e) { console.warn(`    NVIDIA retry failed: ${e.message}`); nvidiaRes = null; }
+  }
+
+  if (nvidiaRes?.status === 200) {
+    let json;
+    try { json = await nvidiaRes.json(); } catch { json = null; }
+    const result = parseResponse(extractRaw(json, 'NVIDIA'));
+    if (result) { console.log(`    ✓ [NVIDIA] "${article.title.slice(0, 65)}"`); return result; }
+    console.warn(`    ✗ [NVIDIA] parse failed — trying Gemini`);
+  } else if (nvidiaRes) {
+    console.warn(`    ✗ NVIDIA ${nvidiaRes.status} — trying Gemini`);
+  }
+
+  // ── 2. Gemini fallback ───────────────────────────────────────────────
+  if (GEMINI_KEY) {
+    try {
+      const gRes = await callGemini(prompt);
+      if (gRes.status === 200) {
+        let json;
+        try { json = await gRes.json(); } catch { json = null; }
+        const result = parseResponse(extractRaw(json, 'Gemini'));
+        if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
+        console.warn(`    ✗ [Gemini] parse failed — trying OpenAI`);
+      } else {
+        console.warn(`    ✗ Gemini ${gRes.status} — trying OpenAI`);
+      }
+    } catch (e) {
+      console.warn(`    ✗ Gemini error: ${e.message} — trying OpenAI`);
+    }
+  }
+
+  // ── 3. OpenAI fallback ───────────────────────────────────────────────
+  if (OPENAI_KEY) {
+    try {
+      const oRes = await callOpenAI(prompt);
+      if (oRes.status === 200) {
+        let json;
+        try { json = await oRes.json(); } catch { json = null; }
+        const result = parseResponse(extractRaw(json, 'OpenAI'));
+        if (result) { console.log(`    ✓ [OpenAI] "${article.title.slice(0, 65)}"`); return result; }
+        console.warn(`    ✗ [OpenAI] parse failed`);
+      } else {
+        console.warn(`    ✗ OpenAI ${oRes.status}`);
+      }
+    } catch (e) {
+      console.warn(`    ✗ OpenAI error: ${e.message}`);
+    }
+  }
+
+  console.warn(`    ✗ All providers failed: "${label}"`);
+  return null;
+}
+
+// Process articles in parallel batches of PARALLEL_NVIDIA (default 5).
 // Returns Map<article_url, enrichedData> for articles that succeeded.
 export async function enrichBatch(articles) {
   const results = new Map();

@@ -34,4 +34,6 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           NVIDIA_KEY:           ${{ secrets.NVIDIA_KEY }}
+          GEMINI_KEY:           ${{ secrets.GEMINI_KEY }}
+          OPENAI_KEY:           ${{ secrets.OPENAI_KEY }}
           PIPELINE_GROUP:       '2'

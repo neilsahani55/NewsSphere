@@ -5,13 +5,22 @@ const required = (key) => {
   if (!v) throw new Error(`Missing env var: ${key}`);
   return v;
 };
+const optional = (key) => process.env[key] || null;
 
 export const SUPABASE_URL         = required('SUPABASE_URL');
 export const SUPABASE_SERVICE_KEY = required('SUPABASE_SERVICE_KEY');
 export const NVIDIA_KEY           = required('NVIDIA_KEY');
 
-export const NVIDIA_MODEL    = 'meta/llama-3.1-8b-instruct';
-export const NVIDIA_URL      = 'https://integrate.api.nvidia.com/v1/chat/completions';
+// Optional fallback providers — pipeline works without them but uses them when available
+export const GEMINI_KEY   = optional('GEMINI_KEY');
+export const OPENAI_KEY   = optional('OPENAI_KEY');
+
+export const NVIDIA_MODEL  = 'meta/llama-3.1-8b-instruct';
+export const NVIDIA_URL    = 'https://integrate.api.nvidia.com/v1/chat/completions';
+export const GEMINI_MODEL  = 'gemini-1.5-flash';
+export const GEMINI_URL    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+export const OPENAI_MODEL  = 'gpt-4o-mini';
+export const OPENAI_URL    = 'https://api.openai.com/v1/chat/completions';
 
 // Enrich-first: AI writes content BEFORE inserting into Supabase.
 // Only fully-enriched articles ever touch the DB — no blank rows.
