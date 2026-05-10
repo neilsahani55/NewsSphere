@@ -143,9 +143,11 @@ async function enrichOne(article) {
   if (nvidiaRes?.status === 200) {
     let json;
     try { json = await nvidiaRes.json(); } catch { json = null; }
-    const result = parseResponse(extractRaw(json, 'NVIDIA'));
+    const raw = extractRaw(json, 'NVIDIA');
+    const result = parseResponse(raw);
     if (result) { console.log(`    ✓ [NVIDIA] "${article.title.slice(0, 65)}"`); return result; }
     console.warn(`    ✗ [NVIDIA] parse failed — trying Gemini`);
+    console.warn(`    ⚠ NVIDIA raw (first 300): ${raw.slice(0, 300)}`);
   } else if (nvidiaRes) {
     console.warn(`    ✗ NVIDIA ${nvidiaRes.status} — trying Gemini`);
   }
@@ -161,24 +163,34 @@ async function enrichOne(article) {
         if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
         console.warn(`    ✗ [Gemini] parse failed — trying OpenAI`);
       } else {
-        console.warn(`    ✗ Gemini ${gRes.status} — trying OpenAI`);
+        let body = '';
+        try { body = await gRes.text(); } catch { /**/ }
+        console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying OpenAI`);
       }
     } catch (e) {
       console.warn(`    ✗ Gemini error: ${e.message} — trying OpenAI`);
     }
   }
 
-  // ── 3. OpenAI fallback ───────────────────────────────────────────────
+  // ── 3. OpenAI fallback (sequential — free tier allows only 3 RPM) ────
   if (OPENAI_KEY) {
+    // Brief pause so parallel articles don't all hit OpenAI simultaneously
+    await sleep(3000);
     try {
-      const oRes = await callOpenAI(prompt);
-      if (oRes.status === 200) {
+      let oRes = await callOpenAI(prompt);
+      // One retry on 429
+      if (oRes.status === 429) {
+        console.warn(`    429 OpenAI rate-limit — waiting 20s then retrying...`);
+        await sleep(20000);
+        try { oRes = await callOpenAI(prompt); } catch (e) { oRes = null; }
+      }
+      if (oRes?.status === 200) {
         let json;
         try { json = await oRes.json(); } catch { json = null; }
         const result = parseResponse(extractRaw(json, 'OpenAI'));
         if (result) { console.log(`    ✓ [OpenAI] "${article.title.slice(0, 65)}"`); return result; }
         console.warn(`    ✗ [OpenAI] parse failed`);
-      } else {
+      } else if (oRes) {
         console.warn(`    ✗ OpenAI ${oRes.status}`);
       }
     } catch (e) {

@@ -15,10 +15,11 @@ export const NVIDIA_KEY           = required('NVIDIA_KEY');
 export const GEMINI_KEY   = optional('GEMINI_KEY');
 export const OPENAI_KEY   = optional('OPENAI_KEY');
 
-export const NVIDIA_MODEL  = 'meta/llama-3.1-8b-instruct';
+// 70b model follows JSON instructions far more reliably than 8b
+export const NVIDIA_MODEL  = 'meta/llama-3.3-70b-instruct';
 export const NVIDIA_URL    = 'https://integrate.api.nvidia.com/v1/chat/completions';
-export const GEMINI_MODEL  = 'gemini-1.5-flash';
-export const GEMINI_URL    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+export const GEMINI_MODEL  = 'gemini-2.0-flash';
+export const GEMINI_URL    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 export const OPENAI_MODEL  = 'gpt-4o-mini';
 export const OPENAI_URL    = 'https://api.openai.com/v1/chat/completions';
 
