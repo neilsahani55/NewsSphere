@@ -3,8 +3,8 @@
 // Group 2 (pipeline-2.yml,:15/:45): Science, Health, Sports, Entertainment, Crypto, Politics, Environment, Crime — 13 sources
 export const SOURCES = [
   // ── INDIA (4) — Group 1 ─────────────────────────────────────────────
-  // NDTV blocks bots — replaced with The Wire (reliable Indian RSS)
-  { id: 'thewire',     group: 1, url: 'https://thewire.in/feed',                                                type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  // The Wire has malformed XML — replaced with Firstpost India
+  { id: 'firstpost',   group: 1, url: 'https://www.firstpost.com/rss/india.xml',                                type: 'rss', lang: 'en', country: 'in', category: 'India' },
   { id: 'toi-top',     group: 1, url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',              type: 'rss', lang: 'en', country: 'in', category: 'India' },
   // India Today replaced with Hindustan Times (more bot-friendly)
   { id: 'ht-india',    group: 1, url: 'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml',         type: 'rss', lang: 'en', country: 'in', category: 'India' },
@@ -13,8 +13,8 @@ export const SOURCES = [
   // ── WORLD (4) — Group 1 ─────────────────────────────────────────────
   { id: 'bbc-world',   group: 1, url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                            type: 'rss', lang: 'en', country: 'gb', category: 'World' },
   { id: 'aljazeera',   group: 1, url: 'https://www.aljazeera.com/xml/rss/all.xml',                              type: 'rss', lang: 'en', country: 'qa', category: 'World' },
-  // Reuters public RSS is dead (DNS ENOTFOUND) — replaced with AP News
-  { id: 'ap-world',    group: 1, url: 'https://feeds.apnews.com/apnews/apf-topnews',                            type: 'rss', lang: 'en', country: 'us', category: 'World' },
+  // AP News subdomain blocked — replaced with CNN World RSS
+  { id: 'cnn-world',   group: 1, url: 'https://rss.cnn.com/rss/edition_world.rss',                              type: 'rss', lang: 'en', country: 'us', category: 'World' },
   { id: 'guardian-world', group: 1, url: 'https://www.theguardian.com/world/rss',                               type: 'rss', lang: 'en', country: 'gb', category: 'World' },
 
   // ── TECH (3) — Group 1 ──────────────────────────────────────────────
