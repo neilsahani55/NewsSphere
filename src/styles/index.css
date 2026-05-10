@@ -1297,6 +1297,163 @@ button { font-family: inherit; }
 .foot-cat.active { background: var(--hl); color: #fff; border-color: var(--hl); }
 .read-time { color: var(--ink4); font-size: .78rem; }
 
+/* AI badge + Original link on cards */
+.ai-badge {
+  display: inline-block;
+  background: var(--hl);
+  color: #fff;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.src-link {
+  display: inline-block;
+  margin-top: 5px;
+  font-size: .72rem;
+  color: var(--hl);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: .8;
+  transition: opacity .15s;
+}
+.src-link:hover { opacity: 1; text-decoration: underline; }
+
+/* Footer legal links */
+.foot-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: .72rem;
+  color: var(--ink4);
+}
+.foot-legal a { color: var(--ink3); text-decoration: none; }
+.foot-legal a:hover { color: var(--hl); text-decoration: underline; }
+.foot-legal span[aria-hidden] { color: var(--border2); }
+
+/* ─── Legal / static pages ──────────────────────────────────────── */
+.pg-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+.pg-hdr {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+.pg-back {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--hl);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pg-back:hover { text-decoration: underline; }
+.pg-title {
+  font-family: var(--ffd);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink1);
+}
+.pg-body {
+  flex: 1;
+  color: var(--ink2);
+  line-height: 1.75;
+}
+.pg-body h2 {
+  font-family: var(--ffd);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink1);
+  margin: 2rem 0 .6rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--border);
+}
+.pg-body p, .pg-body li { font-size: .93rem; margin-bottom: .6rem; }
+.pg-body ul, .pg-body ol { padding-left: 1.4rem; margin-bottom: 1rem; }
+.pg-body a { color: var(--hl); }
+.pg-body code {
+  background: var(--surface2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: .85em;
+}
+.pg-updated {
+  font-size: .82rem;
+  color: var(--ink4);
+  margin-bottom: 1.5rem;
+  font-style: italic;
+}
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+  margin: 1rem 0 1.5rem;
+}
+.pg-table th, .pg-table td {
+  padding: .55rem .8rem;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.pg-table th { background: var(--surface2); font-weight: 600; color: var(--ink1); }
+.pg-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--border);
+  font-size: .75rem;
+  color: var(--ink4);
+  margin-top: 2rem;
+}
+.pg-foot a { color: var(--ink3); text-decoration: none; }
+.pg-foot a:hover { color: var(--hl); }
+.pg-foot span[aria-hidden] { color: var(--border2); }
+.pg-loading, .pg-err { color: var(--ink3); font-style: italic; padding: 2rem 0; }
+
+/* Status page */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.stat-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.stat-num {
+  font-family: var(--ffd);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--hl);
+  line-height: 1;
+}
+.stat-lbl { font-size: .75rem; color: var(--ink3); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.stat-bars { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 2rem; }
+.stat-bar-row { display: flex; align-items: center; gap: .75rem; font-size: .82rem; }
+.stat-bar-lbl { width: 160px; color: var(--ink2); flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-bar-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.stat-bar-fill { height: 100%; background: var(--hl); border-radius: 4px; transition: width .4s; }
+.stat-bar-val { width: 30px; text-align: right; color: var(--ink3); font-size: .78rem; }
+
 /* ─── Responsive ───────────────────────────────────────────────── */
 
 /* Narrow desktop / large tablet — header collapses to a single column

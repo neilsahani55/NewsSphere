@@ -8,12 +8,19 @@ import { useTheme } from './hooks/useTheme.js';
 import { useBookmarks } from './hooks/useBookmarks.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
+import { useRoute } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
+import Privacy from './pages/Privacy.jsx';
+import Terms from './pages/Terms.jsx';
+import Grievance from './pages/Grievance.jsx';
+import Methodology from './pages/Methodology.jsx';
+import Status from './pages/Status.jsx';
 
 const PAGE_SIZE = 60;
 
 export default function App() {
+  const route = useRoute();
   const { articles, status, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
@@ -120,6 +127,12 @@ export default function App() {
     setSelectedUrl(filtered[nextIdx].article_url);
   }, [selectedIndex, filtered, visibleCount]);
 
+  if (route === '#/privacy')     return <Privacy />;
+  if (route === '#/terms')       return <Terms />;
+  if (route === '#/grievance')   return <Grievance />;
+  if (route === '#/methodology') return <Methodology />;
+  if (route === '#/status')      return <Status />;
+
   return (
     <div className="app">
       <Header
@@ -213,6 +226,17 @@ export default function App() {
           <span aria-hidden>·</span>
           <span>Investigate</span>
         </div>
+        <nav className="foot-legal" aria-label="Legal">
+          <a href="#/privacy">Privacy</a>
+          <span aria-hidden>·</span>
+          <a href="#/terms">Terms</a>
+          <span aria-hidden>·</span>
+          <a href="#/grievance">Grievance</a>
+          <span aria-hidden>·</span>
+          <a href="#/methodology">How it works</a>
+          <span aria-hidden>·</span>
+          <a href="#/status">Status</a>
+        </nav>
       </footer>
     </div>
   );

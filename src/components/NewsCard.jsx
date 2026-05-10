@@ -76,6 +76,7 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
         <h3 className="chl">{title || 'Untitled'}</h3>
         {preview && <p className="cprev">{preview}</p>}
         <div className="cmeta">
+          <span className="ai-badge" title="AI-written original summary">AI</span>
           <span className="csrc">{article.source_name || 'Unknown'}</span>
           <span className="dot-sep" aria-hidden>·</span>
           <span>{relativeTime(article.published_at_ist || article.fetched_at_ist)}</span>
@@ -88,6 +89,16 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
           <span className="dot-sep" aria-hidden>·</span>
           <span className="read-time">{readingTime(article.content)} min read</span>
         </div>
+        <a
+          className="src-link"
+          href={article.article_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="Read original article"
+        >
+          Original ↗
+        </a>
       </div>
       {showImage ? (
         <img
