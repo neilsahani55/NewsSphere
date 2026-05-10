@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadNews, queries } from '../services/sheetService.js';
+import { loadNews } from '../services/supabaseService.js';
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -18,7 +18,7 @@ export function useNews({ auto = true } = {}) {
     setStatus('loading');
     setError(null);
     try {
-      const data = await loadNews({ query: queries.recent(), signal: ctrl.signal });
+      const data = await loadNews({ signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       setArticles(data);
       setLastUpdated(new Date());

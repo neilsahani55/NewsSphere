@@ -1,0 +1,15 @@
+{
+  "name": "newssphere-pipeline",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "NewsSphere data pipeline — fetch RSS, enrich with AI, store in Supabase",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --env-file=.env index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "rss-parser": "^3.13.0"
+  }
+}

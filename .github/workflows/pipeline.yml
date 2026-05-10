@@ -1,0 +1,37 @@
+name: NewsSphere News Pipeline
+
+on:
+  schedule:
+    # Runs every 30 minutes — fetches news, enriches with AI, stores in Supabase
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    # Also allows manual trigger from GitHub Actions tab
+
+jobs:
+  run-pipeline:
+    name: Fetch → Enrich → Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package.json
+
+      - name: Install pipeline dependencies
+        run: npm install
+        working-directory: pipeline
+
+      - name: Run pipeline
+        run: node index.js
+        working-directory: pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVIDIA_KEY:           ${{ secrets.NVIDIA_KEY }}
