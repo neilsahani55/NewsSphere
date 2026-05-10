@@ -87,9 +87,6 @@ export default function NewsFeed({
           </div>
         )}
       </div>
-      {!hasMore && articles.length > 0 && (
-        <div className="sentinel done">End of feed · {articles.length} stories</div>
-      )}
     </>
   );
 }

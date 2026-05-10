@@ -120,9 +120,12 @@ async function fetchSpaceflight(source) {
   }
 }
 
-export async function fetchAllSources() {
+export async function fetchAllSources(group = null) {
+  const activeSources = group ? SOURCES.filter(s => s.group === group) : SOURCES;
+  console.log(`  Sources active: ${activeSources.length}${group ? ` (group ${group})` : ''}`);
+
   const results = await Promise.allSettled(
-    SOURCES.map(src => {
+    activeSources.map(src => {
       if (src.type === 'hn')          return fetchHackerNews(src);
       if (src.type === 'spaceflight') return fetchSpaceflight(src);
       return fetchRSS(src);
@@ -132,10 +135,10 @@ export async function fetchAllSources() {
   const articles = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') {
-      console.log(`  [${SOURCES[i].id}] ${r.value.length} articles`);
+      console.log(`  [${activeSources[i].id}] ${r.value.length} articles`);
       articles.push(...r.value);
     } else {
-      console.warn(`  [${SOURCES[i].id}] rejected: ${r.reason?.message}`);
+      console.warn(`  [${activeSources[i].id}] rejected: ${r.reason?.message}`);
     }
   });
 

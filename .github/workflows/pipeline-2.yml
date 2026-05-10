@@ -1,14 +1,14 @@
-name: NewsSphere Pipeline — Group 1 (India · World · Tech · Business)
+name: NewsSphere Pipeline — Group 2 (Science · Health · Sports · Entertainment · Crypto · Politics · Environment · Crime)
 
 on:
   schedule:
-    # Runs at :00 and :30 every hour
-    - cron: '0,30 * * * *'
+    # Runs at :15 and :45 every hour — staggered from Group 1
+    - cron: '15,45 * * * *'
   workflow_dispatch:
 
 jobs:
   run-pipeline:
-    name: Fetch → Enrich → Store [Group 1]
+    name: Fetch → Enrich → Store [Group 2]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -34,4 +34,4 @@ jobs:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           NVIDIA_KEY:           ${{ secrets.NVIDIA_KEY }}
-          PIPELINE_GROUP:       '1'
+          PIPELINE_GROUP:       '2'

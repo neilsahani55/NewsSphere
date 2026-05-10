@@ -11,14 +11,16 @@ import { MAX_NEW_PER_RUN } from './config.js';
 
 async function main() {
   const start = Date.now();
+  const pipelineGroup = process.env.PIPELINE_GROUP ? parseInt(process.env.PIPELINE_GROUP) : null;
+
   console.log('═══════════════════════════════════════════');
-  console.log('  NewsSphere Pipeline v3  (enrich-first)');
+  console.log(`  NewsSphere Pipeline v4  (enrich-first)${pipelineGroup ? `  [Group ${pipelineGroup}]` : ''}`);
   console.log(`  ${new Date().toISOString()}`);
   console.log('═══════════════════════════════════════════');
 
-  // ── 1. Fetch all RSS / API sources ──────────────────────────────────
+  // ── 1. Fetch RSS / API sources for this pipeline group ──────────────
   console.log('\n[1/5] Fetching news sources...');
-  const allArticles = await fetchAllSources();
+  const allArticles = await fetchAllSources(pipelineGroup);
   console.log(`      Fetched: ${allArticles.length} articles across all sources`);
 
   // ── 2. Deduplicate against Supabase (last 7 days) ───────────────────
@@ -28,6 +30,10 @@ async function main() {
 
   const newArticles = allArticles.filter(a => !existingUrls.has(a.article_url));
   console.log(`      New this run:  ${newArticles.length}`);
+  if (newArticles.length === 0 && allArticles.length > 0) {
+    console.log(`      ℹ All ${allArticles.length} fetched articles are already in DB (enriched=true).`);
+    console.log(`      ℹ This is normal — sources haven't published new stories since last run.`);
+  }
 
   if (newArticles.length === 0) {
     console.log('\n  No new articles. Pipeline complete.');

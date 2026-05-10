@@ -15,8 +15,8 @@ export const NVIDIA_URL      = 'https://integrate.api.nvidia.com/v1/chat/complet
 
 // Enrich-first: AI writes content BEFORE inserting into Supabase.
 // Only fully-enriched articles ever touch the DB — no blank rows.
-export const MAX_NEW_PER_RUN  = 15;    // articles per run — keeps total runtime ~5 min
-export const ITEMS_PER_FEED   = 5;     // items fetched per RSS feed
+export const MAX_NEW_PER_RUN  = 20;    // articles per run — keeps total runtime ~7 min
+export const ITEMS_PER_FEED   = 8;     // items fetched per RSS feed
 export const PARALLEL_NVIDIA  = 5;     // concurrent NVIDIA requests per batch
 export const BATCH_SLEEP_MS   = 6000;  // ms between NVIDIA batches
 export const RETRY_SLEEP_MS   = 20000; // ms before retrying a 429
