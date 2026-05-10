@@ -17,6 +17,7 @@ export async function getRecentUrls(days = 7) {
     const { data, error } = await supabase
       .from('news')
       .select('article_url')
+      .eq('enriched', true)   // only count properly-enriched articles as "seen"
       .gte('created_at', cutoff)
       .range(from, from + PAGE - 1);
 
@@ -53,9 +54,11 @@ export async function insertEnrichedArticles(articles) {
     enriched:         true,   // always true — we only insert complete articles
   }));
 
+  // ignoreDuplicates: false so that any old blank row gets overwritten with
+  // the fully-enriched version if the same URL appears again.
   const { error } = await supabase
     .from('news')
-    .upsert(rows, { onConflict: 'article_url', ignoreDuplicates: true });
+    .upsert(rows, { onConflict: 'article_url', ignoreDuplicates: false });
 
   if (error) throw new Error(`insertEnrichedArticles: ${error.message}`);
   return rows.length;
