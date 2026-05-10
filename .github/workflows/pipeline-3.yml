@@ -1,0 +1,39 @@
+name: NewsSphere Pipeline — Group 3 (India Deep Coverage)
+
+on:
+  schedule:
+    # Runs at :10 and :40 every hour — staggered from Group 1 (:00/:30) and Group 2 (:15/:45)
+    - cron: '10,40 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    name: Fetch → Enrich → Store [Group 3 — India]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: pipeline/package.json
+
+      - name: Install pipeline dependencies
+        run: npm install
+        working-directory: pipeline
+
+      - name: Run pipeline
+        run: node index.js
+        working-directory: pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVIDIA_KEY:           ${{ secrets.NVIDIA_KEY }}
+          GEMINI_KEY:           ${{ secrets.GEMINI_KEY }}
+          OPENAI_KEY:           ${{ secrets.OPENAI_KEY }}
+          PIPELINE_GROUP:       '3'

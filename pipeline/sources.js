@@ -1,19 +1,17 @@
-// 27 curated sources — split into two groups for staggered pipelines.
-// Group 1 (pipeline.yml,  :00/:30): India, World, Tech, Business  — 14 sources
-// Group 2 (pipeline-2.yml,:15/:45): Science, Health, Sports, Entertainment, Crypto, Politics, Environment, Crime — 13 sources
+// Sources split into three groups for staggered pipelines.
+// Group 1 (pipeline.yml,   :00/:30): India, World, Tech, Business       — 14 sources
+// Group 2 (pipeline-2.yml, :15/:45): Science, Health, Sports, Entertainment, Crypto, Politics, Environment, Crime — 13 sources
+// Group 3 (pipeline-3.yml, :10/:40): India-focused deep coverage         — 10 sources
 export const SOURCES = [
   // ── INDIA (4) — Group 1 ─────────────────────────────────────────────
-  // The Wire has malformed XML — replaced with Firstpost India
   { id: 'firstpost',   group: 1, url: 'https://www.firstpost.com/rss/india.xml',                                type: 'rss', lang: 'en', country: 'in', category: 'India' },
   { id: 'toi-top',     group: 1, url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',              type: 'rss', lang: 'en', country: 'in', category: 'India' },
-  // India Today replaced with Hindustan Times (more bot-friendly)
   { id: 'ht-india',    group: 1, url: 'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml',         type: 'rss', lang: 'en', country: 'in', category: 'India' },
   { id: 'the-hindu',   group: 1, url: 'https://www.thehindu.com/feeder/default.rss',                             type: 'rss', lang: 'en', country: 'in', category: 'India' },
 
   // ── WORLD (4) — Group 1 ─────────────────────────────────────────────
   { id: 'bbc-world',   group: 1, url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                            type: 'rss', lang: 'en', country: 'gb', category: 'World' },
   { id: 'aljazeera',   group: 1, url: 'https://www.aljazeera.com/xml/rss/all.xml',                              type: 'rss', lang: 'en', country: 'qa', category: 'World' },
-  // AP News subdomain blocked — replaced with CNN World RSS
   { id: 'cnn-world',   group: 1, url: 'https://rss.cnn.com/rss/edition_world.rss',                              type: 'rss', lang: 'en', country: 'us', category: 'World' },
   { id: 'guardian-world', group: 1, url: 'https://www.theguardian.com/world/rss',                               type: 'rss', lang: 'en', country: 'gb', category: 'World' },
 
@@ -23,7 +21,6 @@ export const SOURCES = [
   { id: 'hn-front',    group: 1, url: 'https://hn.algolia.com/api/v1/search?tags=front_page',                   type: 'hn',  lang: 'en', country: 'us', category: 'Tech' },
 
   // ── BUSINESS (3) — Group 1 ──────────────────────────────────────────
-  // Reuters business RSS also dead — replaced with Guardian Business
   { id: 'guardian-biz', group: 1, url: 'https://www.theguardian.com/business/rss',                              type: 'rss', lang: 'en', country: 'gb', category: 'Business' },
   { id: 'livemint',    group: 1, url: 'https://www.livemint.com/rss/markets',                                   type: 'rss', lang: 'en', country: 'in', category: 'Business' },
   { id: 'et-markets',  group: 1, url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',   type: 'rss', lang: 'en', country: 'in', category: 'Business' },
@@ -57,4 +54,17 @@ export const SOURCES = [
 
   // ── CRIME (1) — Group 2 ─────────────────────────────────────────────
   { id: 'krebs',       group: 2, url: 'https://krebsonsecurity.com/feed/',                                      type: 'rss', lang: 'en', country: 'us', category: 'Crime' },
+
+  // ── INDIA DEEP COVERAGE (10) — Group 3 (:10/:40) ────────────────────
+  // Dedicated India pipeline for maximum local news coverage
+  { id: 'indian-express', group: 3, url: 'https://indianexpress.com/feed/',                                     type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'india-today',    group: 3, url: 'https://www.indiatoday.in/rss/home',                                  type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'ndtv-latest',    group: 3, url: 'https://www.ndtv.com/rss/latest',                                     type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'scroll-in',      group: 3, url: 'https://scroll.in/feed',                                              type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'deccan-herald',  group: 3, url: 'https://www.deccanherald.com/rss-feeds/national.rss',                 type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'news18-india',   group: 3, url: 'https://www.news18.com/rss/india.xml',                                type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'the-quint',      group: 3, url: 'https://www.thequint.com/feeds/stories.rss',                          type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'thenewsminute',  group: 3, url: 'https://www.thenewsminute.com/feed',                                  type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'biz-standard',   group: 3, url: 'https://www.business-standard.com/rss/home_page_top_stories.rss',     type: 'rss', lang: 'en', country: 'in', category: 'India' },
+  { id: 'outlook-india',  group: 3, url: 'https://www.outlookindia.com/rss',                                    type: 'rss', lang: 'en', country: 'in', category: 'India' },
 ];
