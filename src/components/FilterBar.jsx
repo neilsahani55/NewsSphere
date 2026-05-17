@@ -1,23 +1,34 @@
 import { memo } from 'react';
 import { TOPIC_CATEGORIES } from '../utils/categories.js';
 
-function FilterBar({ topic, onTopicChange }) {
+function FilterBar({ topics, onTopicToggle, onTopicClear }) {
+  const allSelected = topics.length === 0;
+
   return (
     <div className="filters">
-      <div className="filter-row" role="tablist" aria-label="Topic">
+      <div className="filter-row" role="group" aria-label="Topic filter">
         <span className="filter-label">Topic</span>
         <div className="chips">
-          {TOPIC_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              role="tab"
-              aria-selected={topic === cat.id}
-              className={`chip ${topic === cat.id ? 'on' : ''}`}
-              onClick={() => onTopicChange(cat.id)}
-            >
-              {cat.label}
-            </button>
-          ))}
+          <button
+            className={`chip ${allSelected ? 'on' : ''}`}
+            onClick={onTopicClear}
+            aria-pressed={allSelected}
+          >
+            All
+          </button>
+          {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map((cat) => {
+            const active = topics.includes(cat.id);
+            return (
+              <button
+                key={cat.id}
+                aria-pressed={active}
+                className={`chip ${active ? 'on' : ''}`}
+                onClick={() => onTopicToggle(cat.id)}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

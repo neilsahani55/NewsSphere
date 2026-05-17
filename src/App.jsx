@@ -25,7 +25,7 @@ export default function App() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
 
-  const [topic, setTopic] = useState('All');
+  const [topics, setTopics] = useState([]);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
   const [target, setTarget] = useState('en'); // global preferred language
@@ -50,7 +50,7 @@ export default function App() {
     const q = debouncedSearch.trim().toLowerCase();
 
     return base
-      .filter((a) => matchesTopic(a.category, topic))
+      .filter((a) => topics.length === 0 || topics.some((t) => matchesTopic(a.category, t)))
       .filter((a) => {
         if (!q) return true;
         return (
@@ -70,12 +70,12 @@ export default function App() {
         const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
         return bf - af;
       });
-  }, [completeArticles, topic, debouncedSearch, view, isBookmarked]);
+  }, [completeArticles, topics, debouncedSearch, view, isBookmarked]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [topic, debouncedSearch, view]);
+  }, [topics, debouncedSearch, view]);
 
   // Translate the slice that's actually rendered. As the user scrolls and
   // visibleCount grows, more articles are queued for background translation.
@@ -150,7 +150,13 @@ export default function App() {
         translatePending={translatePending}
       />
 
-      <FilterBar topic={topic} onTopicChange={setTopic} />
+      <FilterBar
+        topics={topics}
+        onTopicToggle={(t) => setTopics((prev) =>
+          prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+        )}
+        onTopicClear={() => setTopics([])}
+      />
 
       <main className="layout">
         <section>
@@ -158,11 +164,11 @@ export default function App() {
             <h2 className="feed-title">
               {view === 'bookmarks' ? 'Saved stories' : 'Latest stories'}
             </h2>
-            {(topic !== 'All' || search) && (
+            {(topics.length > 0 || search) && (
               <button
                 type="button"
                 className="reset-link"
-                onClick={() => { setTopic('All'); setSearch(''); }}
+                onClick={() => { setTopics([]); setSearch(''); }}
               >
                 Clear filters
               </button>
@@ -207,18 +213,6 @@ export default function App() {
           <span className="foot-dot" aria-hidden />
           <span className="foot-tag">News intelligence beyond the headline</span>
         </div>
-        <nav className="foot-cats" aria-label="Browse by category">
-          {['India','World','Tech','Business','Science','Health','Sports','Entertainment','Crypto','Politics','Environment','Crime'].map(cat => (
-            <button
-              key={cat}
-              type="button"
-              className={`foot-cat${topic === cat ? ' active' : ''}`}
-              onClick={() => { setTopic(cat); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-            >
-              {cat}
-            </button>
-          ))}
-        </nav>
         <div className="foot-pillars">
           <span>Aggregate</span>
           <span aria-hidden>·</span>
