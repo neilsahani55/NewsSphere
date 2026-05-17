@@ -58,13 +58,6 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     if (onAutoSelect) onAutoSelect(null);
   }, [panel, onAutoSelect]);
 
-  // Auto-select the first article of the active panel when logged in and nothing selected.
-  useEffect(() => {
-    if (!user || !onAutoSelect || selectedUrl) return;
-    const first = panel === 'topics' ? feedArticles[0] : savedArticles[0];
-    if (first) onAutoSelect(first.article_url);
-  }, [user, panel, feedArticles, savedArticles, selectedUrl, onAutoSelect]);
-
   const toggleSource = async (src) => {
     if (!user) return;
     const followed = !followedSources.includes(src);
@@ -99,6 +92,14 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     () => articles.filter(a => isBookmarked(a.article_url)),
     [articles, isBookmarked]
   );
+
+  // Auto-select the first article of the active panel when logged in and nothing selected.
+  // Must be declared AFTER feedArticles and savedArticles (deps array is evaluated synchronously).
+  useEffect(() => {
+    if (!user || !onAutoSelect || selectedUrl) return;
+    const first = panel === 'topics' ? feedArticles[0] : savedArticles[0];
+    if (first) onAutoSelect(first.article_url);
+  }, [user, panel, feedArticles, savedArticles, selectedUrl, onAutoSelect]);
 
   // Shared props for NewsFeed in both panels
   const feedProps = {
