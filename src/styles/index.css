@@ -709,11 +709,19 @@ button { font-family: inherit; }
   box-shadow: var(--shadowmd);
 }
 .dphdr {
-  padding: 1rem 1.4rem;
+  padding: .85rem 1.4rem;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.dphdr-btns {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-shrink: 0;
 }
 .dphdr h3 {
   font-family: var(--ffd);
@@ -1717,8 +1725,8 @@ button { font-family: inherit; }
 }
 .hcard-src { font-weight: 500; color: var(--ink3); }
 
-/* Speak / Share buttons in reader header */
-.speak-btn, .share-btn {
+/* ── Reader header action buttons ── */
+.tts-cog, .speak-btn, .share-btn {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
@@ -1728,22 +1736,65 @@ button { font-family: inherit; }
   background: none;
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: .3rem .7rem;
+  padding: .3rem .65rem;
   cursor: pointer;
   transition: color .15s, border-color .15s, background .15s;
+  white-space: nowrap;
 }
-.speak-btn:hover, .share-btn:hover { color: var(--accent); border-color: var(--accent2); }
+.tts-cog { padding: .3rem .45rem; }
+.tts-cog:hover, .speak-btn:hover, .share-btn:hover { color: var(--accent); border-color: var(--accent2); }
+.tts-cog.on { color: var(--accent); border-color: var(--accent2); background: var(--bluebg); }
 .speak-btn.on {
   color: var(--hl);
   border-color: var(--hl);
   background: color-mix(in srgb, var(--hl) 10%, transparent);
   animation: speak-pulse 1.4s ease-in-out infinite;
 }
-@keyframes speak-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: .65; }
-}
+@keyframes speak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }
 .share-btn.copied { color: #16a34a; border-color: #16a34a; }
+
+/* ── TTS controls bar ── */
+.tts-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: .55rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--paper3);
+}
+.tts-bar-group { display: flex; align-items: center; gap: .5rem; }
+.tts-bar-label {
+  font-size: .7rem; font-weight: 700; color: var(--ink4);
+  text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+}
+.tts-speeds { display: flex; gap: .25rem; }
+.tts-speed-btn {
+  padding: .2rem .5rem; border-radius: 6px;
+  border: 1px solid var(--border2); background: none;
+  font-size: .75rem; font-weight: 500; color: var(--ink3); cursor: pointer;
+  transition: all .15s;
+}
+.tts-speed-btn:hover { color: var(--accent); border-color: var(--accent2); }
+.tts-speed-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tts-voice-sel {
+  padding: .25rem .5rem; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--paper2);
+  font-size: .78rem; color: var(--ink); cursor: pointer;
+  max-width: 180px;
+}
+.tts-bar-note { font-size: .74rem; color: var(--ink4); font-style: italic; }
+
+/* ── Word highlight ── */
+mark.tts-hl {
+  background: rgba(251, 191, 36, 0.4);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+  text-decoration: underline;
+  text-decoration-color: #d97706;
+  text-decoration-thickness: 2px;
+}
 
 /* Responsive: home page */
 @media (max-width: 720px) {
