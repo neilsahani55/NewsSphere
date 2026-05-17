@@ -65,7 +65,8 @@ export default function DetailPanel({
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [showTTSCtrl, setShowTTSCtrl]       = useState(false);
 
-  const panelRef = useRef(null);
+  const panelRef  = useRef(null);
+  const timerRef  = useRef(null);   // fallback word-advance timer
   const { translated, loading, error } = useTranslation(article, target);
 
   useSwipe(panelRef, {
@@ -81,17 +82,21 @@ export default function DetailPanel({
     return () => window.speechSynthesis?.removeEventListener('voiceschanged', load);
   }, []);
 
-  // Stop speech when article or language changes
+  // Stop speech + timer when article or language changes
   useEffect(() => {
     window.speechSynthesis?.cancel();
+    clearTimeout(timerRef.current);
     setSpeaking(false);
     setWordBoundary(null);
   }, [article?.article_url, target]);
 
   useEffect(() => { setImgFailed(false); }, [article?.article_url]);
 
-  // Cancel on unmount
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+  // Cancel speech + timer on unmount
+  useEffect(() => () => {
+    window.speechSynthesis?.cancel();
+    clearTimeout(timerRef.current);
+  }, []);
 
   // ── Build view ──────────────────────────────────────────────────────────
   const view = article ? {
@@ -116,6 +121,11 @@ export default function DetailPanel({
   const langVoices = voices.filter(v => v.lang.toLowerCase().startsWith(prefix));
   const chosenVoice = langVoices.find(v => v.voiceURI === selectedVoiceURI) || langVoices[0] || null;
 
+  // TTS is unavailable if the API doesn't exist, OR voices have loaded but
+  // none match the current language (some devices lack non-English voices).
+  const ttsUnavailable = !window.speechSynthesis
+    || (voices.length > 0 && langVoices.length === 0 && target !== 'en');
+
   // Highlight range per section
   const getRange = (key) => {
     const part = ttsParts.find(p => p.key === key);
@@ -127,38 +137,80 @@ export default function DetailPanel({
     if (!window.speechSynthesis) return;
     if (speaking) {
       window.speechSynthesis.cancel();
+      clearTimeout(timerRef.current);
       setSpeaking(false);
       setWordBoundary(null);
       return;
     }
-    const utt = new SpeechSynthesisUtterance(ttsText);
+
+    // Snapshot the text used for this utterance so closure is stable
+    const text = ttsText;
+
+    // Build word position list for the timer-based fallback
+    const words = [];
+    const re = /\S+/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      words.push({ start: m.index, end: m.index + m[0].length });
+    }
+
+    // Timer-based fallback: advances one word at a time using estimated
+    // character rate. onboundary overrides this when the browser supports it.
+    let usingNativeBoundary = false;
+    let wordIdx = 0;
+    // ~13 chars/sec at 1× rate (avg ~150 wpm, ~5 chars/word)
+    const charsPerMs = (13 * rate) / 1000;
+
+    const advanceWord = () => {
+      if (usingNativeBoundary || wordIdx >= words.length) return;
+      setWordBoundary(words[wordIdx]);
+      wordIdx++;
+      if (wordIdx < words.length) {
+        const gap = words[wordIdx].start - words[wordIdx - 1].start;
+        timerRef.current = setTimeout(advanceWord, Math.max(80, gap / charsPerMs));
+      }
+    };
+    // Short lead-in delay then start advancing
+    timerRef.current = setTimeout(advanceWord, 250);
+
+    const utt = new SpeechSynthesisUtterance(text);
     utt.rate = rate;
     utt.lang = LANG_BCP47[target] || 'en-US';
     if (chosenVoice) utt.voice = chosenVoice;
 
     utt.onboundary = (e) => {
       if (e.name !== 'word') return;
+      // Native boundary works — cancel the timer fallback
+      if (!usingNativeBoundary) {
+        usingNativeBoundary = true;
+        clearTimeout(timerRef.current);
+      }
       const start = e.charIndex;
-      const rest  = ttsText.slice(start);
+      const rest  = text.slice(start);
       const spaceAt = rest.search(/[\s.,!?;:\n]/);
       const len = (e.charLength > 0 ? e.charLength : null)
                ?? (spaceAt >= 0 ? spaceAt : rest.length);
       setWordBoundary({ start, end: start + len });
     };
-    utt.onend   = () => { setSpeaking(false); setWordBoundary(null); };
-    utt.onerror = () => { setSpeaking(false); setWordBoundary(null); };
+    const finish = () => {
+      clearTimeout(timerRef.current);
+      setSpeaking(false);
+      setWordBoundary(null);
+    };
+    utt.onend   = finish;
+    utt.onerror = finish;
 
     window.speechSynthesis.speak(utt);
     setSpeaking(true);
   };
 
   const handleRateChange = (r) => {
-    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); setWordBoundary(null); }
+    if (speaking) { window.speechSynthesis.cancel(); clearTimeout(timerRef.current); setSpeaking(false); setWordBoundary(null); }
     setRate(r);
   };
 
   const handleVoiceChange = (uri) => {
-    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); setWordBoundary(null); }
+    if (speaking) { window.speechSynthesis.cancel(); clearTimeout(timerRef.current); setSpeaking(false); setWordBoundary(null); }
     setSelectedVoiceURI(uri);
   };
 
@@ -226,8 +278,10 @@ export default function DetailPanel({
             {/* Speak */}
             <button
               type="button"
-              className={`speak-btn${speaking ? ' on' : ''}`}
-              aria-label={speaking ? 'Stop speaking' : 'Read aloud'}
+              className={`speak-btn${speaking ? ' on' : ''}${ttsUnavailable ? ' disabled' : ''}`}
+              aria-label={ttsUnavailable ? `TTS not available for this language` : speaking ? 'Stop speaking' : 'Read aloud'}
+              title={ttsUnavailable ? 'No voice available for this language on your device' : speaking ? 'Stop' : 'Speak'}
+              disabled={ttsUnavailable}
               onClick={toggleSpeak}
             >
               {speaking ? (

@@ -1751,6 +1751,9 @@ button { font-family: inherit; }
   animation: speak-pulse 1.4s ease-in-out infinite;
 }
 @keyframes speak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }
+.speak-btn:disabled, .speak-btn.disabled {
+  opacity: .4; cursor: not-allowed; pointer-events: none;
+}
 .share-btn.copied { color: #16a34a; border-color: #16a34a; }
 
 /* ── TTS controls bar ── */
