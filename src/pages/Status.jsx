@@ -54,31 +54,32 @@ export default function Status() {
   }
 
   return (
-    <PageShell title="Pipeline Status">
-      {loading && <p className="pg-loading">Loading stats…</p>}
-      {!loading && !stats && <p className="pg-err">Could not load stats from Supabase.</p>}
+    <PageShell title="Service Status">
+      <p className="pg-updated">Live stats — updated automatically throughout the day.</p>
+      {loading && <p className="pg-loading">Loading status…</p>}
+      {!loading && !stats && <p className="pg-err">Could not load status information at this time.</p>}
       {stats && (
         <>
           <div className="stat-grid">
             <div className="stat-card">
               <span className="stat-num">{stats.total.toLocaleString()}</span>
-              <span className="stat-lbl">Articles in DB</span>
+              <span className="stat-lbl">Articles available</span>
             </div>
             <div className="stat-card">
               <span className="stat-num">{stats.lastFetch ? age(stats.lastFetch) : '—'}</span>
               <span className="stat-lbl">Last updated</span>
             </div>
             <div className="stat-card">
-              <span className="stat-num">3</span>
-              <span className="stat-lbl">Active pipelines</span>
+              <span className="stat-num">{stats.topCats.length}</span>
+              <span className="stat-lbl">Topic categories</span>
             </div>
             <div className="stat-card">
-              <span className="stat-num">37</span>
+              <span className="stat-num">{stats.topSources.length}+</span>
               <span className="stat-lbl">News sources</span>
             </div>
           </div>
 
-          <h2>Articles by category</h2>
+          <h2>Articles by topic</h2>
           <div className="stat-bars">
             {stats.topCats.map(([cat, n]) => (
               <div key={cat} className="stat-bar-row">
@@ -109,16 +110,6 @@ export default function Status() {
               </div>
             ))}
           </div>
-
-          <h2>Pipeline schedule</h2>
-          <table className="pg-table">
-            <thead><tr><th>Pipeline</th><th>Coverage</th><th>Runs at</th></tr></thead>
-            <tbody>
-              <tr><td>Group 1</td><td>India · World · Tech · Business</td><td>:00 and :30 every hour</td></tr>
-              <tr><td>Group 2</td><td>Science · Health · Sports · Entertainment · Crypto · Politics · Environment · Crime</td><td>:15 and :45 every hour</td></tr>
-              <tr><td>Group 3</td><td>India deep coverage (10 sources)</td><td>:10 and :40 every hour</td></tr>
-            </tbody>
-          </table>
         </>
       )}
     </PageShell>

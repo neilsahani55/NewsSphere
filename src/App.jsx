@@ -254,29 +254,42 @@ export default function App() {
       </main>
 
       <footer className="foot">
-        <div className="foot-brand">
-          <span className="foot-name">NewsSphere</span>
-          <span className="foot-dot" aria-hidden />
-          <span className="foot-tag">News intelligence beyond the headline</span>
+        <div className="foot-grid">
+          <div className="foot-col foot-col--brand">
+            <span className="foot-name">NewsSphere</span>
+            <p className="foot-desc">AI-powered news intelligence — aggregated, enriched, and delivered around the clock across 12 categories and 37+ sources.</p>
+            <p className="foot-copy">© {new Date().getFullYear()} NewsSphere. All rights reserved.</p>
+          </div>
+
+          <div className="foot-col">
+            <span className="foot-col-hd">Explore</span>
+            <nav className="foot-col-links">
+              <button className="foot-nav-btn" onClick={() => setNavTab('home')}>Home</button>
+              <button className="foot-nav-btn" onClick={() => setNavTab('allnews')}>All News</button>
+              <button className="foot-nav-btn" onClick={() => setNavTab('special')}>Your Special</button>
+              <button className="foot-nav-btn" onClick={() => setNavTab('feedback')}>Feedback</button>
+            </nav>
+          </div>
+
+          <div className="foot-col">
+            <span className="foot-col-hd">Company</span>
+            <nav className="foot-col-links">
+              <a href="/methodology">How it works</a>
+              <a href="/status">Service status</a>
+              <a href="/privacy">Privacy policy</a>
+              <a href="/terms">Terms of use</a>
+              <a href="/grievance">Grievance officer</a>
+            </nav>
+          </div>
+
+          <div className="foot-col">
+            <span className="foot-col-hd">Contact</span>
+            <div className="foot-col-links">
+              <a href="mailto:grievance@newssphere.in" className="foot-email">grievance@newssphere.in</a>
+              <p className="foot-response">We respond within 72 hours</p>
+            </div>
+          </div>
         </div>
-        <div className="foot-pillars">
-          <span>Aggregate</span>
-          <span aria-hidden>·</span>
-          <span>Translate</span>
-          <span aria-hidden>·</span>
-          <span>Investigate</span>
-        </div>
-        <nav className="foot-legal" aria-label="Legal">
-          <a href="/privacy">Privacy</a>
-          <span aria-hidden>·</span>
-          <a href="/terms">Terms</a>
-          <span aria-hidden>·</span>
-          <a href="/grievance">Grievance</a>
-          <span aria-hidden>·</span>
-          <a href="/methodology">How it works</a>
-          <span aria-hidden>·</span>
-          <a href="/status">Status</a>
-        </nav>
       </footer>
     </div>
   );
