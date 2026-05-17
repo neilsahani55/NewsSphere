@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES } from '../utils/categories.js';
+import { matchesTopic } from '../utils/categories.js';
 import { relativeTime, isBoilerplate, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
@@ -34,6 +35,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
   const { user, loading, authError, signIn, signOut } = useAuth();
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
+  const [editing, setEditing] = useState(false);
   const [savedSearches, setSavedSearches] = useState([]);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
@@ -79,6 +81,16 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
     setSavedSearches(prev => prev.filter(s => s.id !== id));
     await authSupabase.from('saved_searches').delete().eq('id', id);
   };
+
+  // Personalised feed: articles matching any followed topic OR any followed source
+  const feedArticles = useMemo(() => {
+    if (followedTopics.length === 0 && followedSources.length === 0) return [];
+    return articles.filter(a => {
+      const topicMatch = followedTopics.length > 0 && followedTopics.some(t => matchesTopic(a.category, t));
+      const sourceMatch = followedSources.length > 0 && followedSources.includes(a.source_name);
+      return topicMatch || sourceMatch;
+    });
+  }, [articles, followedTopics, followedSources]);
 
   const savedArticles = articles.filter(a => isBookmarked(a.article_url));
 
@@ -162,11 +174,11 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
       {/* Sub-panel tabs */}
       <div className="sp-tabs">
         {[
-          ['topics',   '🎯', 'Topics & Sources'],
+          ['topics',   '🎯', 'My Feed'],
           ['searches', '🔍', 'Saved Searches'],
           ['saved',    '🔖', 'Saved Stories'],
         ].map(([id, icon, label]) => (
-          <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => setPanel(id)}>
+          <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); if (id !== 'topics') setEditing(false); }}>
             <span className="sp-tab-icon">{icon}</span>
             <span className="sp-tab-label">{label}</span>
             {id === 'saved' && savedArticles.length > 0 && (
@@ -176,61 +188,173 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
         ))}
       </div>
 
-      {/* ── Topics & Sources panel ─────────────────────────────────────── */}
+      {/* ── My Feed panel ─────────────────────────────────────────────── */}
       {panel === 'topics' && (
         <div className="sp-panel">
-          <div className="sp-section">
-            <div className="sp-section-hdr">
-              <h3 className="sp-sec-title">Topics</h3>
-              <span className="sp-sec-hint">{followedTopics.length} followed</span>
+
+          {/* Feed header row */}
+          <div className="sp-feed-hdr">
+            <div className="sp-feed-hdr-left">
+              {editing ? (
+                <>
+                  <span className="sp-feed-hdr-title">Edit Preferences</span>
+                  <span className="sp-feed-hdr-sub">Toggle topics and sources for your feed</span>
+                </>
+              ) : (
+                <>
+                  <span className="sp-feed-hdr-title">Your Feed</span>
+                  {feedArticles.length > 0
+                    ? <span className="sp-feed-hdr-sub">{feedArticles.length} stories from your followed topics & sources</span>
+                    : <span className="sp-feed-hdr-sub">Follow topics or sources to build your personalised feed</span>
+                  }
+                </>
+              )}
             </div>
-            <div className="sp-topic-grid">
-              {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map(c => {
-                const active = followedTopics.includes(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    className={`sp-topic-card${active ? ' on' : ''}`}
-                    onClick={() => toggleTopic(c.id)}
-                    aria-pressed={active}
-                  >
-                    <span className="sp-topic-icon">{TOPIC_ICONS[c.id] || '📌'}</span>
-                    <span className="sp-topic-label">{c.label}</span>
-                    <span className="sp-topic-check">{active ? '✓' : '+'}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              className={`sp-edit-btn${editing ? ' done' : ''}`}
+              onClick={() => setEditing(e => !e)}
+            >
+              {editing ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  Done
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Edit Preferences
+                </>
+              )}
+            </button>
           </div>
 
-          <div className="sp-section">
-            <div className="sp-section-hdr">
-              <h3 className="sp-sec-title">Sources</h3>
-              <span className="sp-sec-hint">{followedSources.length} followed</span>
-            </div>
-            <div className="sp-source-groups">
-              {SOURCE_GROUPS.map(group => (
-                <div key={group.label} className="sp-source-group">
-                  <div className="sp-source-group-label">{group.label}</div>
-                  <div className="sp-source-group-list">
-                    {group.sources.map(src => {
-                      const followed = followedSources.includes(src);
-                      return (
-                        <button
-                          key={src}
-                          className={`sp-source-pill${followed ? ' on' : ''}`}
-                          onClick={() => toggleSource(src)}
-                          aria-pressed={followed}
-                        >
-                          {followed ? '✓ ' : ''}{src}
-                        </button>
-                      );
-                    })}
-                  </div>
+          {/* ── Edit mode: topic + source toggles ── */}
+          {editing && (
+            <>
+              <div className="sp-section">
+                <div className="sp-section-hdr">
+                  <h3 className="sp-sec-title">Topics</h3>
+                  <span className="sp-sec-hint">{followedTopics.length} followed</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="sp-topic-grid">
+                  {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map(c => {
+                    const active = followedTopics.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        className={`sp-topic-card${active ? ' on' : ''}`}
+                        onClick={() => toggleTopic(c.id)}
+                        aria-pressed={active}
+                      >
+                        <span className="sp-topic-icon">{TOPIC_ICONS[c.id] || '📌'}</span>
+                        <span className="sp-topic-label">{c.label}</span>
+                        <span className="sp-topic-check">{active ? '✓' : '+'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="sp-section">
+                <div className="sp-section-hdr">
+                  <h3 className="sp-sec-title">Sources</h3>
+                  <span className="sp-sec-hint">{followedSources.length} followed</span>
+                </div>
+                <div className="sp-source-groups">
+                  {SOURCE_GROUPS.map(group => (
+                    <div key={group.label} className="sp-source-group">
+                      <div className="sp-source-group-label">{group.label}</div>
+                      <div className="sp-source-group-list">
+                        {group.sources.map(src => {
+                          const followed = followedSources.includes(src);
+                          return (
+                            <button
+                              key={src}
+                              className={`sp-source-pill${followed ? ' on' : ''}`}
+                              onClick={() => toggleSource(src)}
+                              aria-pressed={followed}
+                            >
+                              {followed ? '✓ ' : ''}{src}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Feed mode: personalised articles ── */}
+          {!editing && (
+            followedTopics.length === 0 && followedSources.length === 0 ? (
+              <div className="sp-empty-state">
+                <div className="sp-empty-icon">🎯</div>
+                <h3>Your feed is empty</h3>
+                <p>Tap <strong>Edit Preferences</strong> above to follow topics and sources you care about.</p>
+              </div>
+            ) : feedArticles.length === 0 ? (
+              <div className="sp-empty-state">
+                <div className="sp-empty-icon">📭</div>
+                <h3>No recent stories</h3>
+                <p>No new articles yet from your followed topics and sources. Check back soon.</p>
+              </div>
+            ) : (
+              <ul className="sp-feed-list">
+                {feedArticles.map(a => {
+                  const title = getCached(a, 'title', target) || a.title || 'Untitled';
+                  const rawDesc = getCached(a, 'description', target);
+                  const desc = isBoilerplate(rawDesc) ? null : rawDesc;
+                  const preview = truncate(stripHtml(desc || a.content), 120);
+                  const showImg = a.image_url && !imgFailed[a.article_url];
+                  const isTopicMatch = followedTopics.some(t => matchesTopic(a.category, t));
+                  return (
+                    <li
+                      key={a.article_url}
+                      className={`sp-saved-card${a.article_url === selectedUrl ? ' on' : ''}`}
+                      onClick={() => onSelect(a)}
+                      tabIndex={0}
+                      role="button"
+                      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a); }}
+                    >
+                      {showImg && (
+                        <img
+                          className="sp-saved-img"
+                          src={a.image_url}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={() => setImgFailed(prev => ({ ...prev, [a.article_url]: true }))}
+                        />
+                      )}
+                      <div className="sp-saved-body">
+                        <div className="sp-saved-source">
+                          {a.source_name || 'Unknown'}
+                          {!isTopicMatch && followedSources.includes(a.source_name) && (
+                            <span className="sp-feed-tag">source</span>
+                          )}
+                          {isTopicMatch && (
+                            <span className="sp-feed-tag">{a.category?.split(',')[0]?.trim() || 'topic'}</span>
+                          )}
+                        </div>
+                        <h4 className="sp-saved-title">{title}</h4>
+                        {preview && <p className="sp-saved-prev">{preview}</p>}
+                        <div className="sp-saved-meta">
+                          <span>{relativeTime(a.published_at_ist || a.fetched_at_ist)}</span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          )}
         </div>
       )}
 
