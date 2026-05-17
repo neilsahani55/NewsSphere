@@ -25,12 +25,19 @@ export const OPENAI_URL    = 'https://api.openai.com/v1/chat/completions';
 
 // Enrich-first: AI writes content BEFORE inserting into Supabase.
 // Only fully-enriched articles ever touch the DB — no blank rows.
-export const MAX_NEW_PER_RUN  = 60;    // safe ceiling: 60÷5=12 batches × ~30s avg = ~6 min
+//
+// Timing budget (worst case, all NVIDIA timeouts + one retry per batch):
+//   30 articles ÷ 6 parallel = 5 batches
+//   5 × (40s timeout + 10s retry-wait + 40s retry) = 450s ≈ 7.5 min
+//   + 4 × 4s batch sleeps = 16s
+//   + Gemini/OpenAI fallbacks on stragglers ≈ 2 min
+//   Total worst case ≈ 10 min  →  well under the 30-min GitHub Actions limit
+export const MAX_NEW_PER_RUN  = 30;    // reduced from 60; keeps runtime ~10 min worst case
 export const ITEMS_PER_FEED   = 8;     // items fetched per RSS feed
-export const PARALLEL_NVIDIA  = 5;     // concurrent NVIDIA requests per batch
-export const BATCH_SLEEP_MS   = 6000;  // ms between NVIDIA batches
-export const RETRY_SLEEP_MS   = 20000; // ms before retrying a 429
-export const NVIDIA_TIMEOUT_MS = 70000; // ms per NVIDIA API call (70b model needs more time)
+export const PARALLEL_NVIDIA  = 6;     // concurrent NVIDIA requests per batch (was 5)
+export const BATCH_SLEEP_MS   = 4000;  // ms between NVIDIA batches (was 6000)
+export const RETRY_SLEEP_MS   = 10000; // ms before retrying a 429 (was 20000)
+export const NVIDIA_TIMEOUT_MS = 40000; // ms per NVIDIA API call (was 70000)
 export const MIN_CONTENT_LEN  = 200;   // minimum AI content chars to accept
 export const RETENTION_DAYS   = 30;    // delete articles older than this
 
