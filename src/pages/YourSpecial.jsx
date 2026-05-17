@@ -5,27 +5,41 @@ import { TOPIC_CATEGORIES } from '../utils/categories.js';
 import { relativeTime, isBoilerplate, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
-const ALL_SOURCES = [
-  'Times of India','Hindustan Times','The Hindu','Firstpost','Indian Express',
-  'India Today','Scroll.in','Deccan Herald','News18','The Quint',
-  'The News Minute','Business Standard','Outlook India',
-  'BBC','Al Jazeera','CNN','The Guardian',
-  'TechCrunch','The Verge','Hacker News',
-  'Livemint','Economic Times','ScienceDaily',
-  'ESPNcricinfo','ESPN','Variety','Bollywood Hungama',
-  'CoinDesk','CoinTelegraph','The Print','Politico','Krebs on Security',
+const TOPIC_ICONS = {
+  India: '🇮🇳', World: '🌍', Tech: '💻', Business: '📈',
+  Science: '🔬', Health: '🏥', Sports: '🏏', Entertainment: '🎬',
+  Crypto: '₿', Politics: '🏛️', Environment: '🌿', Crime: '⚖️',
+};
+
+const SOURCE_GROUPS = [
+  { label: 'India', sources: ['Times of India','Hindustan Times','The Hindu','Firstpost','Indian Express','India Today','Scroll.in','Deccan Herald','News18','The Quint','The News Minute','Business Standard','Outlook India'] },
+  { label: 'World', sources: ['BBC','Al Jazeera','CNN','The Guardian'] },
+  { label: 'Tech', sources: ['TechCrunch','The Verge','Hacker News'] },
+  { label: 'Business', sources: ['Livemint','Economic Times','Guardian Business'] },
+  { label: 'Science & Health', sources: ['ScienceDaily','BBC Health'] },
+  { label: 'Sports', sources: ['ESPNcricinfo','ESPN'] },
+  { label: 'Entertainment', sources: ['Variety','Bollywood Hungama'] },
+  { label: 'Crypto', sources: ['CoinDesk','CoinTelegraph'] },
+  { label: 'Politics', sources: ['The Print','Politico'] },
+  { label: 'Other', sources: ['Krebs on Security'] },
 ];
 
-export default function YourSpecial({ articles, selectedUrl, onSelect, target, onSeeAll }) {
+const FEATURES = [
+  { icon: '🎯', title: 'Follow topics', desc: 'Pin the categories you care about most' },
+  { icon: '📰', title: 'Follow sources', desc: 'Choose which publications you trust' },
+  { icon: '🔖', title: 'Save stories', desc: 'Bookmark articles and read them later' },
+];
+
+export default function YourSpecial({ articles, selectedUrl, onSelect, target }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
-  const [panel, setPanel] = useState('topics'); // 'topics' | 'searches' | 'saved'
+  const [panel, setPanel] = useState('topics');
   const [savedSearches, setSavedSearches] = useState([]);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
   const [ssLoading, setSsLoading] = useState(false);
+  const [imgFailed, setImgFailed] = useState({});
 
-  // Load saved searches + prefs from Supabase when logged in
   useEffect(() => {
     if (!user) return;
     setSsLoading(true);
@@ -66,20 +80,41 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
     await authSupabase.from('saved_searches').delete().eq('id', id);
   };
 
-  // Saved articles (bookmarks)
   const savedArticles = articles.filter(a => isBookmarked(a.article_url));
 
-  if (loading) return <div className="sp-loading">Loading…</div>;
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="sp-loading-screen">
+        <div className="sp-spinner" aria-hidden />
+        <span>Loading your profile…</span>
+      </div>
+    );
+  }
 
+  // ── Login gate ───────────────────────────────────────────────────────────
   if (!user) {
     return (
       <div className="sp-gate">
-        <div className="sp-gate-card">
-          <div className="sp-gate-icon" aria-hidden>✦</div>
-          <h2>Your Special</h2>
-          <p>Sign in to personalise your feed — follow topics and sources, save searches, and access your bookmarks from any device.</p>
+        <div className="sp-gate-hero">
+          <div className="sp-gate-badge">✦ Personalised</div>
+          <h1 className="sp-gate-title">Your Special</h1>
+          <p className="sp-gate-sub">Sign in to get a news experience built around what matters to you.</p>
+
+          <div className="sp-gate-features">
+            {FEATURES.map(f => (
+              <div key={f.title} className="sp-gate-feat">
+                <span className="sp-gate-feat-icon">{f.icon}</span>
+                <div>
+                  <div className="sp-gate-feat-title">{f.title}</div>
+                  <div className="sp-gate-feat-desc">{f.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <button className="sp-google-btn" onClick={signIn}>
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+            <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden>
               <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.6 2.2 30.1 0 24 0 14.7 0 6.7 5.3 2.7 13l7.8 6c1.8-5.4 6.8-9.5 13.5-9.5z"/>
               <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.2-4.5 6.8l7 5.5c4.1-3.8 6.5-9.4 6.5-16.3z"/>
               <path fill="#FBBC05" d="M10.5 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.7 10.5l7.8-6z"/>
@@ -87,88 +122,145 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
             </svg>
             Continue with Google
           </button>
-          {/* Fallback target for Google's rendered button if One Tap is suppressed */}
           <div id="g-signin-btn" />
           {authError && <p className="sp-auth-err">{authError}</p>}
-          <p className="sp-gate-note">Your preferences are stored securely in your account.</p>
+          <p className="sp-gate-note">Free · No spam · Stored securely in your account</p>
         </div>
       </div>
     );
   }
 
+  // ── Logged-in ────────────────────────────────────────────────────────────
+  const avatarUrl = user.user_metadata?.avatar_url;
+  const displayName = user.user_metadata?.full_name || user.email.split('@')[0];
+
   return (
     <div className="sp-wrap">
-      {/* User header */}
-      <div className="sp-user-bar">
-        {user.user_metadata?.avatar_url && (
-          <img className="sp-avatar" src={user.user_metadata.avatar_url} alt="" referrerPolicy="no-referrer" />
-        )}
-        <div className="sp-user-info">
-          <span className="sp-user-name">{user.user_metadata?.full_name || user.email}</span>
-          <span className="sp-user-email">{user.email}</span>
+
+      {/* Profile card */}
+      <div className="sp-profile-card">
+        <div className="sp-profile-left">
+          {avatarUrl
+            ? <img className="sp-avatar-lg" src={avatarUrl} alt="" referrerPolicy="no-referrer" />
+            : <div className="sp-avatar-lg sp-avatar-fallback">{displayName[0].toUpperCase()}</div>
+          }
+          <div className="sp-profile-info">
+            <span className="sp-profile-name">{displayName}</span>
+            <span className="sp-profile-email">{user.email}</span>
+            <div className="sp-profile-stats">
+              <span><strong>{followedTopics.length}</strong> topics</span>
+              <span aria-hidden>·</span>
+              <span><strong>{followedSources.length}</strong> sources</span>
+              <span aria-hidden>·</span>
+              <span><strong>{savedArticles.length}</strong> saved</span>
+            </div>
+          </div>
         </div>
         <button className="sp-signout" onClick={signOut}>Sign out</button>
       </div>
 
       {/* Sub-panel tabs */}
       <div className="sp-tabs">
-        {[['topics','Topics & Sources'],['searches','Saved Searches'],['saved','Saved Stories']].map(([id, label]) => (
+        {[
+          ['topics',   '🎯', 'Topics & Sources'],
+          ['searches', '🔍', 'Saved Searches'],
+          ['saved',    '🔖', 'Saved Stories'],
+        ].map(([id, icon, label]) => (
           <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => setPanel(id)}>
-            {label}
+            <span className="sp-tab-icon">{icon}</span>
+            <span className="sp-tab-label">{label}</span>
+            {id === 'saved' && savedArticles.length > 0 && (
+              <span className="sp-tab-badge">{savedArticles.length}</span>
+            )}
           </button>
         ))}
       </div>
 
+      {/* ── Topics & Sources panel ─────────────────────────────────────── */}
       {panel === 'topics' && (
         <div className="sp-panel">
           <div className="sp-section">
-            <h3 className="sp-sec-title">Topics</h3>
-            <div className="sp-chips">
-              {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map(c => (
-                <button
-                  key={c.id}
-                  className={`sp-chip${followedTopics.includes(c.id) ? ' on' : ''}`}
-                  onClick={() => toggleTopic(c.id)}
-                >
-                  {followedTopics.includes(c.id) ? '✓ ' : ''}{c.label}
-                </button>
-              ))}
+            <div className="sp-section-hdr">
+              <h3 className="sp-sec-title">Topics</h3>
+              <span className="sp-sec-hint">{followedTopics.length} followed</span>
+            </div>
+            <div className="sp-topic-grid">
+              {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map(c => {
+                const active = followedTopics.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    className={`sp-topic-card${active ? ' on' : ''}`}
+                    onClick={() => toggleTopic(c.id)}
+                    aria-pressed={active}
+                  >
+                    <span className="sp-topic-icon">{TOPIC_ICONS[c.id] || '📌'}</span>
+                    <span className="sp-topic-label">{c.label}</span>
+                    <span className="sp-topic-check">{active ? '✓' : '+'}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
           <div className="sp-section">
-            <h3 className="sp-sec-title">Sources</h3>
-            <div className="sp-source-list">
-              {ALL_SOURCES.map(src => (
-                <label key={src} className="sp-source-row">
-                  <input
-                    type="checkbox"
-                    checked={followedSources.includes(src)}
-                    onChange={() => toggleSource(src)}
-                    className="sp-source-check"
-                  />
-                  <span className="sp-source-name">{src}</span>
-                </label>
+            <div className="sp-section-hdr">
+              <h3 className="sp-sec-title">Sources</h3>
+              <span className="sp-sec-hint">{followedSources.length} followed</span>
+            </div>
+            <div className="sp-source-groups">
+              {SOURCE_GROUPS.map(group => (
+                <div key={group.label} className="sp-source-group">
+                  <div className="sp-source-group-label">{group.label}</div>
+                  <div className="sp-source-group-list">
+                    {group.sources.map(src => {
+                      const followed = followedSources.includes(src);
+                      return (
+                        <button
+                          key={src}
+                          className={`sp-source-pill${followed ? ' on' : ''}`}
+                          onClick={() => toggleSource(src)}
+                          aria-pressed={followed}
+                        >
+                          {followed ? '✓ ' : ''}{src}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Saved Searches panel ──────────────────────────────────────── */}
       {panel === 'searches' && (
         <div className="sp-panel">
-          {ssLoading ? <p className="sp-loading-sm">Loading…</p>
-          : savedSearches.length === 0 ? (
-            <div className="sp-empty">
-              <p>No saved searches yet.</p>
-              <p className="sp-empty-sub">Use the search bar and save searches to find them here.</p>
+          {ssLoading ? (
+            <div className="sp-panel-loading"><div className="sp-spinner" /><span>Loading…</span></div>
+          ) : savedSearches.length === 0 ? (
+            <div className="sp-empty-state">
+              <div className="sp-empty-icon">🔍</div>
+              <h3>No saved searches yet</h3>
+              <p>Use the search bar to find topics, then save them here for quick access.</p>
             </div>
           ) : (
             <ul className="sp-search-list">
               {savedSearches.map(s => (
                 <li key={s.id} className="sp-search-row">
-                  <span className="sp-search-q">{s.query}</span>
-                  {s.topics?.length > 0 && <span className="sp-search-topics">{s.topics.join(', ')}</span>}
-                  <button className="sp-search-del" onClick={() => deleteSavedSearch(s.id)} aria-label="Delete">✕</button>
+                  <span className="sp-search-icon">🔍</span>
+                  <div className="sp-search-body">
+                    <span className="sp-search-q">{s.query}</span>
+                    {s.topics?.length > 0 && (
+                      <span className="sp-search-topics">{s.topics.join(' · ')}</span>
+                    )}
+                  </div>
+                  <button className="sp-search-del" onClick={() => deleteSavedSearch(s.id)} aria-label="Delete search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -176,12 +268,14 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
         </div>
       )}
 
+      {/* ── Saved Stories panel ───────────────────────────────────────── */}
       {panel === 'saved' && (
         <div className="sp-panel">
           {savedArticles.length === 0 ? (
-            <div className="sp-empty">
-              <p>No saved stories yet.</p>
-              <p className="sp-empty-sub">Tap ☆ on any article to save it here.</p>
+            <div className="sp-empty-state">
+              <div className="sp-empty-icon">🔖</div>
+              <h3>No saved stories yet</h3>
+              <p>Tap the ☆ star on any article to save it here and read later.</p>
             </div>
           ) : (
             <ul className="sp-saved-list">
@@ -189,25 +283,40 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
                 const title = getCached(a, 'title', target) || a.title || 'Untitled';
                 const rawDesc = getCached(a, 'description', target);
                 const desc = isBoilerplate(rawDesc) ? null : rawDesc;
-                const preview = truncate(stripHtml(desc || a.content), 120);
+                const preview = truncate(stripHtml(desc || a.content), 130);
+                const showImg = a.image_url && !imgFailed[a.article_url];
                 return (
                   <li
                     key={a.article_url}
-                    className={`sp-saved-row${a.article_url === selectedUrl ? ' on' : ''}`}
+                    className={`sp-saved-card${a.article_url === selectedUrl ? ' on' : ''}`}
                     onClick={() => onSelect(a)}
                     tabIndex={0}
                     role="button"
                     onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a); }}
                   >
+                    {showImg && (
+                      <img
+                        className="sp-saved-img"
+                        src={a.image_url}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={() => setImgFailed(prev => ({ ...prev, [a.article_url]: true }))}
+                      />
+                    )}
                     <div className="sp-saved-body">
-                      <span className="sp-saved-title">{title}</span>
-                      {preview && <span className="sp-saved-prev">{preview}</span>}
-                      <span className="sp-saved-meta">{a.source_name} · {relativeTime(a.published_at_ist || a.fetched_at_ist)}</span>
+                      <div className="sp-saved-source">{a.source_name || 'Unknown'}</div>
+                      <h4 className="sp-saved-title">{title}</h4>
+                      {preview && <p className="sp-saved-prev">{preview}</p>}
+                      <div className="sp-saved-meta">
+                        <span>{relativeTime(a.published_at_ist || a.fetched_at_ist)}</span>
+                      </div>
                     </div>
                     <button
-                      className="sp-saved-bm"
+                      className="sp-saved-bm on"
                       onClick={(e) => { e.stopPropagation(); toggleBookmark(a.article_url); }}
                       aria-label="Remove bookmark"
+                      title="Remove from saved"
                     >★</button>
                   </li>
                 );
