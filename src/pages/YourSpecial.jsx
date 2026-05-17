@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
+import { navigate } from '../hooks/useRoute.js';
 import NewsFeed from '../components/NewsFeed.jsx';
 
 const TOPIC_ICONS = {
@@ -179,7 +180,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
           ['topics', '🎯', 'My Feed'],
           ['saved',  '🔖', 'Saved Stories'],
         ].map(([id, icon, label]) => (
-          <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); if (id !== 'topics') setEditing(false); }}>
+          <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); setEditing(false); navigate('/special'); }}>
             <span className="sp-tab-icon">{icon}</span>
             <span className="sp-tab-label">{label}</span>
             {id === 'saved' && savedArticles.length > 0 && (

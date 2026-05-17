@@ -9,9 +9,6 @@ function Header({
   onToggleTheme,
   search,
   onSearchChange,
-  view,
-  onViewChange,
-  bookmarkCount,
   target,
   onTargetChange,
   translatePending,
@@ -28,26 +25,6 @@ function Header({
         <SearchBar value={search} onChange={onSearchChange} />
 
         <div className="ctrls">
-          <div className="seg" role="tablist" aria-label="View">
-            <button
-              role="tab"
-              aria-selected={view === 'all'}
-              className={`seg-btn ${view === 'all' ? 'on' : ''}`}
-              onClick={() => onViewChange('all')}
-            >
-              All
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'bookmarks'}
-              className={`seg-btn ${view === 'bookmarks' ? 'on' : ''}`}
-              onClick={() => onViewChange('bookmarks')}
-            >
-              Saved
-              {bookmarkCount > 0 && <span className="seg-count">{bookmarkCount}</span>}
-            </button>
-          </div>
-
           <button
             type="button"
             className="icon-btn"

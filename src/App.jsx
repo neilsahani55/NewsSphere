@@ -186,9 +186,6 @@ export default function App() {
         onToggleTheme={toggleTheme}
         search={search}
         onSearchChange={setSearch}
-        view={view}
-        onViewChange={setView}
-        bookmarkCount={bookmarkCount}
         target={target}
         onTargetChange={setTarget}
         translatePending={translatePending}
