@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
-import { TOPIC_CATEGORIES } from '../utils/categories.js';
-import { matchesTopic } from '../utils/categories.js';
+import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
 import { relativeTime, isBoilerplate, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
@@ -36,24 +35,18 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
   const [editing, setEditing] = useState(false);
-  const [savedSearches, setSavedSearches] = useState([]);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
-  const [ssLoading, setSsLoading] = useState(false);
   const [imgFailed, setImgFailed] = useState({});
 
   useEffect(() => {
     if (!user) return;
-    setSsLoading(true);
     Promise.all([
-      authSupabase.from('saved_searches').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       authSupabase.from('source_prefs').select('*').eq('user_id', user.id),
       authSupabase.from('topic_prefs').select('*').eq('user_id', user.id),
-    ]).then(([ss, sp, tp]) => {
-      setSavedSearches(ss.data || []);
+    ]).then(([sp, tp]) => {
       setFollowedSources((sp.data || []).filter(r => r.followed).map(r => r.source_name));
       setFollowedTopics((tp.data || []).filter(r => r.followed).map(r => r.topic));
-      setSsLoading(false);
     });
   }, [user]);
 
@@ -75,11 +68,6 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
       { user_id: user.id, topic, followed },
       { onConflict: 'user_id,topic' }
     );
-  };
-
-  const deleteSavedSearch = async (id) => {
-    setSavedSearches(prev => prev.filter(s => s.id !== id));
-    await authSupabase.from('saved_searches').delete().eq('id', id);
   };
 
   // Personalised feed: articles matching any followed topic OR any followed source
@@ -174,9 +162,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
       {/* Sub-panel tabs */}
       <div className="sp-tabs">
         {[
-          ['topics',   '🎯', 'My Feed'],
-          ['searches', '🔍', 'Saved Searches'],
-          ['saved',    '🔖', 'Saved Stories'],
+          ['topics', '🎯', 'My Feed'],
+          ['saved',  '🔖', 'Saved Stories'],
         ].map(([id, icon, label]) => (
           <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); if (id !== 'topics') setEditing(false); }}>
             <span className="sp-tab-icon">{icon}</span>
@@ -354,40 +341,6 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
                 })}
               </ul>
             )
-          )}
-        </div>
-      )}
-
-      {/* ── Saved Searches panel ──────────────────────────────────────── */}
-      {panel === 'searches' && (
-        <div className="sp-panel">
-          {ssLoading ? (
-            <div className="sp-panel-loading"><div className="sp-spinner" /><span>Loading…</span></div>
-          ) : savedSearches.length === 0 ? (
-            <div className="sp-empty-state">
-              <div className="sp-empty-icon">🔍</div>
-              <h3>No saved searches yet</h3>
-              <p>Use the search bar to find topics, then save them here for quick access.</p>
-            </div>
-          ) : (
-            <ul className="sp-search-list">
-              {savedSearches.map(s => (
-                <li key={s.id} className="sp-search-row">
-                  <span className="sp-search-icon">🔍</span>
-                  <div className="sp-search-body">
-                    <span className="sp-search-q">{s.query}</span>
-                    {s.topics?.length > 0 && (
-                      <span className="sp-search-topics">{s.topics.join(' · ')}</span>
-                    )}
-                  </div>
-                  <button className="sp-search-del" onClick={() => deleteSavedSearch(s.id)} aria-label="Delete search">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
           )}
         </div>
       )}

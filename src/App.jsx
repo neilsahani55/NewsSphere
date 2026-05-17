@@ -135,13 +135,20 @@ export default function App() {
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
-    // If on Home/Special/Feedback, switch to All News so the Reader is visible
-    if (navTab === 'home' || navTab === 'special' || navTab === 'feedback') {
+    if (navTab === 'home' || navTab === 'feedback') {
+      // Home/Feedback don't show a reader — jump to All News
       setNavTabState('allnews');
-    }
-    if (article.id && article.title) {
-      const slug = slugify(article.title);
-      navigate(`/news/${slug}-${article.id}`);
+      if (article.id && article.title) {
+        navigate(`/news/${slugify(article.title)}-${article.id}`);
+      }
+    } else if (navTab === 'special') {
+      // Stay on Your Special — reader appears on the right, URL stays /special
+      navigate('/special');
+    } else {
+      // All News — update the article URL normally
+      if (article.id && article.title) {
+        navigate(`/news/${slugify(article.title)}-${article.id}`);
+      }
     }
   }, [navTab]);
 
@@ -236,7 +243,7 @@ export default function App() {
           )}
         </section>
 
-        {!showHomePage && !showSpecial && !showFeedback && (
+        {!showHomePage && !showFeedback && (
           <DetailPanel
             article={selected}
             bookmarked={selected ? isBookmarked(selected.article_url) : false}
