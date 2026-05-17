@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header.jsx';
-import FilterBar from './components/FilterBar.jsx';
+import TopNav from './components/TopNav.jsx';
 import NewsFeed from './components/NewsFeed.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import { useNews } from './hooks/useNews.js';
@@ -16,16 +16,17 @@ import Terms from './pages/Terms.jsx';
 import Grievance from './pages/Grievance.jsx';
 import Methodology from './pages/Methodology.jsx';
 import Status from './pages/Status.jsx';
+import HomePage from './pages/HomePage.jsx';
 
 const PAGE_SIZE = 60;
 
 export default function App() {
-  const route = useRoute();
+  const { route, articleId } = useRoute();
   const { articles, status, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
 
-  const [topics, setTopics] = useState([]);
+  const [navTab, setNavTab] = useState('home');
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
   const [target, setTarget] = useState('en'); // global preferred language
@@ -50,7 +51,7 @@ export default function App() {
     const q = debouncedSearch.trim().toLowerCase();
 
     return base
-      .filter((a) => topics.length === 0 || topics.some((t) => matchesTopic(a.category, t)))
+      .filter((a) => navTab === 'home' || matchesTopic(a.category, navTab))
       .filter((a) => {
         if (!q) return true;
         return (
@@ -70,12 +71,12 @@ export default function App() {
         const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
         return bf - af;
       });
-  }, [completeArticles, topics, debouncedSearch, view, isBookmarked]);
+  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [topics, debouncedSearch, view]);
+  }, [navTab, debouncedSearch, view]);
 
   // Translate the slice that's actually rendered. As the user scrolls and
   // visibleCount grows, more articles are queued for background translation.
@@ -87,14 +88,23 @@ export default function App() {
 
   // Keep the selected article coherent: if the chosen article scrolls out of
   // the filtered set (e.g. user changed topic), fall back to the first visible.
+  // Skip when navigating via a direct article URL — the separate effect handles that.
   useEffect(() => {
+    if (articleId) return;
     if (filtered.length === 0) {
       setSelectedUrl(null);
       return;
     }
     const stillVisible = filtered.some((a) => a.article_url === selectedUrl);
     if (!stillVisible) setSelectedUrl(filtered[0].article_url);
-  }, [filtered, selectedUrl]);
+  }, [filtered, selectedUrl, articleId]);
+
+  // Auto-select article from URL on load
+  useEffect(() => {
+    if (!articleId || completeArticles.length === 0) return;
+    const found = completeArticles.find(a => a.id === articleId);
+    if (found) setSelectedUrl(found.article_url);
+  }, [articleId, completeArticles]);
 
   const selectedIndex = selectedUrl
     ? filtered.findIndex((a) => a.article_url === selectedUrl)
@@ -108,6 +118,9 @@ export default function App() {
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
+    if (article.id) {
+      window.history.replaceState(null, '', `#/article/${article.id}`);
+    }
   }, []);
 
   // Prev/Next navigation across the filtered list — used by the bottom buttons
@@ -132,6 +145,15 @@ export default function App() {
   if (route === '#/grievance')   return <Grievance />;
   if (route === '#/methodology') return <Methodology />;
   if (route === '#/status')      return <Status />;
+  // '#/article' and '#/' both fall through to the main app
+
+  const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();
+
+  const feedTitle = view === 'bookmarks'
+    ? 'Saved stories'
+    : navTab !== 'home'
+      ? navTab
+      : 'All stories';
 
   return (
     <div className="app">
@@ -150,47 +172,53 @@ export default function App() {
         translatePending={translatePending}
       />
 
-      <FilterBar
-        topics={topics}
-        onTopicToggle={(t) => setTopics((prev) =>
-          prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-        )}
-        onTopicClear={() => setTopics([])}
-      />
+      <TopNav tab={navTab} onTabChange={setNavTab} />
 
       <main className="layout">
-        <section>
-          <div className="feed-hdr">
-            <h2 className="feed-title">
-              {view === 'bookmarks' ? 'Saved stories' : 'Latest stories'}
-            </h2>
-            {(topics.length > 0 || search) && (
-              <button
-                type="button"
-                className="reset-link"
-                onClick={() => { setTopics([]); setSearch(''); }}
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
+        {showHomePage ? (
+          <section>
+            <HomePage
+              articles={completeArticles}
+              selectedUrl={selected?.article_url}
+              onSelect={handleSelect}
+              target={target}
+              onSeeAll={(cat) => { setNavTab(cat); }}
+            />
+          </section>
+        ) : (
+          <section>
+            <div className="feed-hdr">
+              <h2 className="feed-title">
+                {feedTitle}
+              </h2>
+              {(navTab !== 'home' || search) && (
+                <button
+                  type="button"
+                  className="reset-link"
+                  onClick={() => { setNavTab('home'); setSearch(''); }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
 
-          <NewsFeed
-            articles={filtered}
-            visibleCount={visibleCount}
-            onLoadMore={handleLoadMore}
-            status={status}
-            error={error}
-            selectedUrl={selected?.article_url}
-            onSelect={handleSelect}
-            isBookmarked={isBookmarked}
-            onToggleBookmark={toggleBookmark}
-            target={target}
-            emptyTitle={view === 'bookmarks' ? 'No saved stories yet' : undefined}
-            emptySubtitle={view === 'bookmarks' ? 'Tap the star on any article to save it here.' : undefined}
-            onRefresh={refresh}
-          />
-        </section>
+            <NewsFeed
+              articles={filtered}
+              visibleCount={visibleCount}
+              onLoadMore={handleLoadMore}
+              status={status}
+              error={error}
+              selectedUrl={selected?.article_url}
+              onSelect={handleSelect}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={toggleBookmark}
+              target={target}
+              emptyTitle={view === 'bookmarks' ? 'No saved stories yet' : undefined}
+              emptySubtitle={view === 'bookmarks' ? 'Tap the star on any article to save it here.' : undefined}
+              onRefresh={refresh}
+            />
+          </section>
+        )}
 
         <DetailPanel
           article={selected}

@@ -7,6 +7,7 @@ const supabase = createClient(
 );
 
 const COLUMNS = [
+  'id',
   'fetched_at_ist',
   'category',
   'article_url',
@@ -23,34 +24,21 @@ const COLUMNS = [
 ].join(', ');
 
 export async function loadNews({ signal } = {}) {
-  // Fetch all enriched articles, newest first.
-  // Supabase returns rows up to the postgrest limit (1000 by default) so we
-  // page through everything to match the previous sheet behaviour.
-  const PAGE = 1000;
-  let all = [];
-  let from = 0;
+  let query = supabase
+    .from('news')
+    .select(COLUMNS)
+    .eq('enriched', true)
+    .order('published_at_ist', { ascending: false })
+    .limit(300);
 
-  while (true) {
-    let query = supabase
-      .from('news')
-      .select(COLUMNS)
-      .eq('enriched', true)
-      .order('published_at_ist', { ascending: false })
-      .range(from, from + PAGE - 1);
+  if (signal) query = query.abortSignal(signal);
 
-    if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query;
 
-    const { data, error } = await query;
-
-    if (error) {
-      if (error.message?.includes('abort')) throw new DOMException('Aborted', 'AbortError');
-      throw new Error(error.message);
-    }
-
-    all = all.concat(data || []);
-    if (!data || data.length < PAGE) break;
-    from += PAGE;
+  if (error) {
+    if (error.message?.includes('abort')) throw new DOMException('Aborted', 'AbortError');
+    throw new Error(error.message);
   }
 
-  return all.filter(a => a.article_url && a.title);
+  return (data || []).filter(a => a.article_url && a.title);
 }

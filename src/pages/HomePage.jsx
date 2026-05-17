@@ -1,0 +1,121 @@
+import { useMemo } from 'react';
+import { matchesTopic } from '../utils/categories.js';
+import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../utils/format.js';
+import { getCached } from '../services/translateService.js';
+
+const SECTIONS = ['India','World','Tech','Business','Science','Health','Sports','Entertainment','Crypto','Politics','Environment','Crime'];
+
+function HomeCard({ article, featured, selected, onSelect, target }) {
+  const title = getCached(article, 'title', target) || article.title || 'Untitled';
+  const rawDesc = getCached(article, 'description', target);
+  const desc = isBoilerplate(rawDesc) ? null : rawDesc;
+  const preview = truncate(stripHtml(desc || article.content), featured ? 200 : 110);
+
+  return (
+    <article
+      className={`hcard${featured ? ' hcard-feat' : ''}${selected ? ' hcard-on' : ''}`}
+      onClick={() => onSelect(article)}
+      tabIndex={0}
+      role="button"
+      aria-pressed={selected}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(article); } }}
+    >
+      {article.image_url && (
+        <img className="hcard-img" src={article.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      )}
+      <div className="hcard-body">
+        <h3 className="hcard-title">{title}</h3>
+        {preview && <p className="hcard-prev">{preview}</p>}
+        <div className="hcard-meta">
+          <span className="hcard-src">{article.source_name || 'Unknown'}</span>
+          <span className="dot-sep" aria-hidden>·</span>
+          <span>{relativeTime(article.published_at_ist || article.fetched_at_ist)}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export default function HomePage({ articles, selectedUrl, onSelect, target, onSeeAll }) {
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const now = Date.now();
+
+  const topStories = useMemo(() => {
+    const last24h = articles.filter(a => {
+      const d = parseDate(a.published_at_ist || a.fetched_at_ist);
+      return d && (now - d.getTime()) < 86400000;
+    });
+    // If fewer than 4 in last 24h, fill from all articles
+    return last24h.length >= 4 ? last24h.slice(0, 4) : articles.slice(0, 4);
+  }, [articles]);
+
+  const sections = useMemo(() =>
+    SECTIONS.map(cat => ({
+      cat,
+      items: articles.filter(a => matchesTopic(a.category, cat)).slice(0, 4),
+    })).filter(s => s.items.length > 0),
+    [articles]
+  );
+
+  const [featured, ...sideStories] = topStories;
+
+  return (
+    <div className="home-pg">
+      <div className="home-briefing">
+        <h2 className="home-briefing-title">Your briefing</h2>
+        <span className="home-briefing-date">{today}</span>
+      </div>
+
+      {topStories.length > 0 && (
+        <section className="home-sec">
+          <div className="home-sec-hdr">
+            <h3>Top stories</h3>
+            <button className="home-see-all" onClick={() => onSeeAll('home')}>See all</button>
+          </div>
+          <div className="home-top-grid">
+            {featured && (
+              <HomeCard
+                article={featured}
+                featured
+                selected={featured.article_url === selectedUrl}
+                onSelect={onSelect}
+                target={target}
+              />
+            )}
+            <div className="home-top-side">
+              {sideStories.map(a => (
+                <HomeCard
+                  key={a.article_url}
+                  article={a}
+                  selected={a.article_url === selectedUrl}
+                  onSelect={onSelect}
+                  target={target}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {sections.map(({ cat, items }) => (
+        <section key={cat} className="home-sec">
+          <div className="home-sec-hdr">
+            <h3>{cat}</h3>
+            <button className="home-see-all" onClick={() => onSeeAll(cat)}>See all →</button>
+          </div>
+          <div className="home-cat-grid">
+            {items.map(a => (
+              <HomeCard
+                key={a.article_url}
+                article={a}
+                selected={a.article_url === selectedUrl}
+                onSelect={onSelect}
+                target={target}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}

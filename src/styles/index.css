@@ -1558,6 +1558,193 @@ button { font-family: inherit; }
   .dnav-pos { font-size: .68rem; }
 }
 
+/* ─── Top navigation (Google News style) ──────────────────────── */
+.top-nav {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 2px solid var(--border);
+  background: var(--paper2);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  padding: 0 2rem;
+  max-width: 100%;
+}
+.top-nav::-webkit-scrollbar { display: none; }
+.tnav-tab {
+  padding: .75rem 1.1rem;
+  font-size: .84rem;
+  font-family: var(--ffb);
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  color: var(--ink3);
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
+  transition: color .15s, border-color .15s;
+}
+.tnav-tab:hover { color: var(--ink2); }
+.tnav-tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+
+/* ─── Home page ─────────────────────────────────────────────────── */
+.home-pg {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  overflow-y: auto;
+  padding-bottom: 2rem;
+}
+.home-briefing {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--border);
+}
+.home-briefing-title {
+  font-family: var(--ffd);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+.home-briefing-date {
+  font-size: .88rem;
+  color: var(--ink3);
+}
+.home-sec { display: flex; flex-direction: column; gap: .75rem; }
+.home-sec-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.home-sec-hdr h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -.01em;
+}
+.home-see-all {
+  font-size: .8rem;
+  color: var(--accent2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+.home-see-all:hover { text-decoration: underline; }
+
+/* Top stories: featured (left big) + 3 side stories (right column) */
+.home-top-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  overflow: hidden;
+}
+.home-top-side {
+  display: flex;
+  flex-direction: column;
+}
+.home-top-side .hcard {
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+.home-top-side .hcard:last-child { border-bottom: none; }
+
+/* Category section: 2×2 grid */
+.home-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  overflow: hidden;
+}
+
+/* Home story card */
+.hcard {
+  cursor: pointer;
+  background: var(--paper2);
+  padding: .9rem 1rem;
+  transition: background .15s;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.hcard:hover, .hcard-on { background: var(--paper3); }
+.hcard-feat {
+  padding: 1.2rem 1.4rem;
+}
+.hcard-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.hcard-body { display: flex; flex-direction: column; gap: .35rem; }
+.hcard-title {
+  font-size: .9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.hcard-feat .hcard-title {
+  font-size: 1.22rem;
+  font-family: var(--ffd);
+  font-weight: 700;
+  line-height: 1.25;
+}
+.hcard-prev {
+  font-size: .82rem;
+  color: var(--ink3);
+  line-height: 1.5;
+}
+.hcard-meta {
+  font-size: .75rem;
+  color: var(--ink4);
+  display: flex;
+  gap: .35rem;
+  align-items: center;
+  margin-top: .1rem;
+}
+.hcard-src { font-weight: 500; color: var(--ink3); }
+
+/* Share button in reader */
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--ink3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .3rem .7rem;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.share-btn:hover { color: var(--accent); border-color: var(--accent2); }
+
+/* Responsive: home page */
+@media (max-width: 720px) {
+  .top-nav { padding: 0 1.25rem; }
+  .home-top-grid { grid-template-columns: 1fr; }
+  .home-top-side { display: none; }
+  .home-cat-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 540px) {
+  .top-nav { padding: 0 1rem; }
+}
+
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */
 @media (max-width: 380px) {
   .hdr-in, .layout, .filters, .foot { padding-left: .85rem; padding-right: .85rem; }
