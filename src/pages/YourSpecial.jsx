@@ -2,8 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
-import { relativeTime, isBoilerplate, stripHtml, truncate } from '../utils/format.js';
-import { getCached } from '../services/translateService.js';
+import NewsFeed from '../components/NewsFeed.jsx';
 
 const TOPIC_ICONS = {
   India: '🇮🇳', World: '🌍', Tech: '💻', Business: '📈',
@@ -37,7 +36,6 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
   const [editing, setEditing] = useState(false);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
-  const [imgFailed, setImgFailed] = useState({});
 
   useEffect(() => {
     if (!user) return;
@@ -80,7 +78,23 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
     });
   }, [articles, followedTopics, followedSources]);
 
-  const savedArticles = articles.filter(a => isBookmarked(a.article_url));
+  const savedArticles = useMemo(
+    () => articles.filter(a => isBookmarked(a.article_url)),
+    [articles, isBookmarked]
+  );
+
+  // Shared props for NewsFeed in both panels
+  const feedProps = {
+    visibleCount: Infinity,
+    onLoadMore: () => {},
+    status: 'idle',
+    error: null,
+    selectedUrl,
+    onSelect,
+    isBookmarked,
+    onToggleBookmark: toggleBookmark,
+    target,
+  };
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -278,7 +292,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
             </>
           )}
 
-          {/* ── Feed mode: personalised articles ── */}
+          {/* ── Feed mode: horizontal scrolling cards ── */}
           {!editing && (
             followedTopics.length === 0 && followedSources.length === 0 ? (
               <div className="sp-empty-state">
@@ -286,60 +300,13 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
                 <h3>Your feed is empty</h3>
                 <p>Tap <strong>Edit Preferences</strong> above to follow topics and sources you care about.</p>
               </div>
-            ) : feedArticles.length === 0 ? (
-              <div className="sp-empty-state">
-                <div className="sp-empty-icon">📭</div>
-                <h3>No recent stories</h3>
-                <p>No new articles yet from your followed topics and sources. Check back soon.</p>
-              </div>
             ) : (
-              <ul className="sp-feed-list">
-                {feedArticles.map(a => {
-                  const title = getCached(a, 'title', target) || a.title || 'Untitled';
-                  const rawDesc = getCached(a, 'description', target);
-                  const desc = isBoilerplate(rawDesc) ? null : rawDesc;
-                  const preview = truncate(stripHtml(desc || a.content), 120);
-                  const showImg = a.image_url && !imgFailed[a.article_url];
-                  const isTopicMatch = followedTopics.some(t => matchesTopic(a.category, t));
-                  return (
-                    <li
-                      key={a.article_url}
-                      className={`sp-saved-card${a.article_url === selectedUrl ? ' on' : ''}`}
-                      onClick={() => onSelect(a)}
-                      tabIndex={0}
-                      role="button"
-                      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a); }}
-                    >
-                      {showImg && (
-                        <img
-                          className="sp-saved-img"
-                          src={a.image_url}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onError={() => setImgFailed(prev => ({ ...prev, [a.article_url]: true }))}
-                        />
-                      )}
-                      <div className="sp-saved-body">
-                        <div className="sp-saved-source">
-                          {a.source_name || 'Unknown'}
-                          {!isTopicMatch && followedSources.includes(a.source_name) && (
-                            <span className="sp-feed-tag">source</span>
-                          )}
-                          {isTopicMatch && (
-                            <span className="sp-feed-tag">{a.category?.split(',')[0]?.trim() || 'topic'}</span>
-                          )}
-                        </div>
-                        <h4 className="sp-saved-title">{title}</h4>
-                        {preview && <p className="sp-saved-prev">{preview}</p>}
-                        <div className="sp-saved-meta">
-                          <span>{relativeTime(a.published_at_ist || a.fetched_at_ist)}</span>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <NewsFeed
+                {...feedProps}
+                articles={feedArticles}
+                emptyTitle="No recent stories"
+                emptySubtitle="No new articles yet from your followed topics and sources."
+              />
             )
           )}
         </div>
@@ -348,58 +315,12 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
       {/* ── Saved Stories panel ───────────────────────────────────────── */}
       {panel === 'saved' && (
         <div className="sp-panel">
-          {savedArticles.length === 0 ? (
-            <div className="sp-empty-state">
-              <div className="sp-empty-icon">🔖</div>
-              <h3>No saved stories yet</h3>
-              <p>Tap the ☆ star on any article to save it here and read later.</p>
-            </div>
-          ) : (
-            <ul className="sp-saved-list">
-              {savedArticles.map(a => {
-                const title = getCached(a, 'title', target) || a.title || 'Untitled';
-                const rawDesc = getCached(a, 'description', target);
-                const desc = isBoilerplate(rawDesc) ? null : rawDesc;
-                const preview = truncate(stripHtml(desc || a.content), 130);
-                const showImg = a.image_url && !imgFailed[a.article_url];
-                return (
-                  <li
-                    key={a.article_url}
-                    className={`sp-saved-card${a.article_url === selectedUrl ? ' on' : ''}`}
-                    onClick={() => onSelect(a)}
-                    tabIndex={0}
-                    role="button"
-                    onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a); }}
-                  >
-                    {showImg && (
-                      <img
-                        className="sp-saved-img"
-                        src={a.image_url}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={() => setImgFailed(prev => ({ ...prev, [a.article_url]: true }))}
-                      />
-                    )}
-                    <div className="sp-saved-body">
-                      <div className="sp-saved-source">{a.source_name || 'Unknown'}</div>
-                      <h4 className="sp-saved-title">{title}</h4>
-                      {preview && <p className="sp-saved-prev">{preview}</p>}
-                      <div className="sp-saved-meta">
-                        <span>{relativeTime(a.published_at_ist || a.fetched_at_ist)}</span>
-                      </div>
-                    </div>
-                    <button
-                      className="sp-saved-bm on"
-                      onClick={(e) => { e.stopPropagation(); toggleBookmark(a.article_url); }}
-                      aria-label="Remove bookmark"
-                      title="Remove from saved"
-                    >★</button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <NewsFeed
+            {...feedProps}
+            articles={savedArticles}
+            emptyTitle="No saved stories yet"
+            emptySubtitle="Tap the ☆ star on any article to save it here and read later."
+          />
         </div>
       )}
     </div>
