@@ -28,11 +28,12 @@ function parseHash(hash) {
   return { route: h, tab, slug: null, articleId: null };
 }
 
-export const TAB_URLS = {
-  home:     '#/',
-  special:  '#/special',
-  allnews:  '#/allnews',
-  feedback: '#/feedback',
+// Values are WITHOUT the leading # — window.location.hash setter adds it
+export const TAB_HASHES = {
+  home:     '/',
+  special:  '/special',
+  allnews:  '/allnews',
+  feedback: '/feedback',
 };
 
 export function useRoute() {

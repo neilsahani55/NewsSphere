@@ -7,7 +7,7 @@ import { useTheme } from './hooks/useTheme.js';
 import { useBookmarks } from './hooks/useBookmarks.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
-import { useRoute, TAB_URLS } from './hooks/useRoute.js';
+import { useRoute, TAB_HASHES } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
@@ -36,10 +36,9 @@ export default function App() {
     if (routeTab && routeTab !== navTab) setNavTabState(routeTab);
   }, [routeTab]);
 
-  // Tab change: update state AND push the tab's URL
+  // Tab change: update hash — hashchange fires automatically and updates useRoute
   const setNavTab = useCallback((tab) => {
-    setNavTabState(tab);
-    window.history.pushState(null, '', TAB_URLS[tab] || '#/');
+    window.location.hash = TAB_HASHES[tab] || '/';
   }, []);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
@@ -142,7 +141,7 @@ export default function App() {
     }
     if (article.id && article.title) {
       const slug = slugify(article.title);
-      window.history.pushState(null, '', `#/news/${slug}-${article.id}`);
+      window.location.hash = `/news/${slug}-${article.id}`;
     }
   }, [navTab]);
 
