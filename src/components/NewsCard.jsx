@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
-import { relativeTime, stripHtml, truncate } from '../utils/format.js';
+import { isBoilerplate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
 export default function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target }) {
@@ -25,7 +25,10 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
 
   // Translated fields fall through to the originals until the cache is filled.
   const title = getCached(article, 'title', target);
-  const description = getCached(article, 'description', target);
+  const rawDesc = getCached(article, 'description', target);
+  // If the description is an RSS feed boilerplate (e.g. "Source: Latest News...
+  // Breaking news, Top Headlines...") skip it and use the AI article content.
+  const description = isBoilerplate(rawDesc) ? null : rawDesc;
   const preview = truncate(stripHtml(description || article.content), 160);
   const showImage = article.image_url && !imgFailed;
 

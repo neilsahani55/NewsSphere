@@ -55,6 +55,21 @@ export function stripHtml(str) {
     .trim();
 }
 
+// Returns true when text looks like an RSS feed's boilerplate site description
+// rather than an actual article summary (e.g. "The Hindu: Latest News today
+// from India and the World, Breaking news, Top Headlines and Trending News Videos.")
+export function isBoilerplate(text) {
+  if (!text || text.length < 10) return true;
+  const t = text.toLowerCase();
+  return (
+    (t.includes('latest news') && t.includes('headlines')) ||
+    (t.includes('breaking news') && t.includes('trending')) ||
+    t.includes('top headlines and trending') ||
+    t.includes('news today from india and the world') ||
+    (t.includes('latest news') && t.includes('top stories'))
+  );
+}
+
 export function readingTime(content) {
   if (!content) return 1;
   const words = stripHtml(content).split(/\s+/).filter(Boolean).length;
