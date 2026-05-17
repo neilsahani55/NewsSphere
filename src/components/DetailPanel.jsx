@@ -85,7 +85,7 @@ export default function DetailPanel({
               title="Copy link"
               onClick={() => {
                 const slug = slugify(article.title || '');
-                const url = `${window.location.origin}${window.location.pathname}#/news/${slug}-${article.id}`;
+                const url = `${window.location.origin}/news/${slug}-${article.id}`;
                 navigator.clipboard.writeText(url).catch(() => {});
               }}
             >

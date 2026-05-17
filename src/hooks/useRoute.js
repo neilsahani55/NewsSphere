@@ -1,34 +1,32 @@
 import { useEffect, useState } from 'react';
 
-const TAB_ROUTES = {
-  '#/':         'home',
-  '#/special':  'special',
-  '#/allnews':  'allnews',
-  '#/feedback': 'feedback',
+const TAB_PATHS = {
+  '/':          'home',
+  '/special':   'special',
+  '/allnews':   'allnews',
+  '/feedback':  'feedback',
 };
 
-function parseHash(hash) {
-  const h = hash || '#/';
+function parsePath(pathname) {
+  const p = pathname || '/';
 
-  // Article URL: #/news/{slug}-{id}
-  const articleMatch = h.match(/^#\/news\/(.+)-(\d+)$/);
+  // Article: /news/{slug}-{id}
+  const articleMatch = p.match(/^\/news\/(.+)-(\d+)$/);
   if (articleMatch) {
-    return { route: '#/news', tab: 'allnews', slug: articleMatch[1], articleId: +articleMatch[2] };
+    return { route: '/news', tab: 'allnews', slug: articleMatch[1], articleId: +articleMatch[2] };
   }
 
   // Legal/static pages
-  if (h.startsWith('#/privacy'))     return { route: '#/privacy',     tab: null, slug: null, articleId: null };
-  if (h.startsWith('#/terms'))       return { route: '#/terms',       tab: null, slug: null, articleId: null };
-  if (h.startsWith('#/grievance'))   return { route: '#/grievance',   tab: null, slug: null, articleId: null };
-  if (h.startsWith('#/methodology')) return { route: '#/methodology', tab: null, slug: null, articleId: null };
-  if (h.startsWith('#/status'))      return { route: '#/status',      tab: null, slug: null, articleId: null };
+  if (p.startsWith('/privacy'))     return { route: '/privacy',     tab: null, slug: null, articleId: null };
+  if (p.startsWith('/terms'))       return { route: '/terms',       tab: null, slug: null, articleId: null };
+  if (p.startsWith('/grievance'))   return { route: '/grievance',   tab: null, slug: null, articleId: null };
+  if (p.startsWith('/methodology')) return { route: '/methodology', tab: null, slug: null, articleId: null };
+  if (p.startsWith('/status'))      return { route: '/status',      tab: null, slug: null, articleId: null };
 
-  // Tab routes
-  const tab = TAB_ROUTES[h] || 'home';
-  return { route: h, tab, slug: null, articleId: null };
+  const tab = TAB_PATHS[p] || 'home';
+  return { route: p, tab, slug: null, articleId: null };
 }
 
-// Values are WITHOUT the leading # — window.location.hash setter adds it
 export const TAB_HASHES = {
   home:     '/',
   special:  '/special',
@@ -36,12 +34,19 @@ export const TAB_HASHES = {
   feedback: '/feedback',
 };
 
+export function navigate(path) {
+  window.history.pushState(null, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 export function useRoute() {
-  const [parsed, setParsed] = useState(() => parseHash(window.location.hash));
+  const [parsed, setParsed] = useState(() => parsePath(window.location.pathname));
+
   useEffect(() => {
-    const handler = () => setParsed(parseHash(window.location.hash));
-    window.addEventListener('hashchange', handler);
-    return () => window.removeEventListener('hashchange', handler);
+    const handler = () => setParsed(parsePath(window.location.pathname));
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
   }, []);
+
   return parsed;
 }

@@ -7,7 +7,7 @@ import { useTheme } from './hooks/useTheme.js';
 import { useBookmarks } from './hooks/useBookmarks.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
-import { useRoute, TAB_HASHES } from './hooks/useRoute.js';
+import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
@@ -36,9 +36,9 @@ export default function App() {
     if (routeTab && routeTab !== navTab) setNavTabState(routeTab);
   }, [routeTab]);
 
-  // Tab change: update hash — hashchange fires automatically and updates useRoute
+  // Tab change: pushState to clean URL — popstate fires and updates useRoute
   const setNavTab = useCallback((tab) => {
-    window.location.hash = TAB_HASHES[tab] || '/';
+    navigate(TAB_HASHES[tab] || '/');
   }, []);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
@@ -141,7 +141,7 @@ export default function App() {
     }
     if (article.id && article.title) {
       const slug = slugify(article.title);
-      window.location.hash = `/news/${slug}-${article.id}`;
+      navigate(`/news/${slug}-${article.id}`);
     }
   }, [navTab]);
 
@@ -162,11 +162,11 @@ export default function App() {
     setSelectedUrl(filtered[nextIdx].article_url);
   }, [selectedIndex, filtered, visibleCount]);
 
-  if (route === '#/privacy')     return <Privacy />;
-  if (route === '#/terms')       return <Terms />;
-  if (route === '#/grievance')   return <Grievance />;
-  if (route === '#/methodology') return <Methodology />;
-  if (route === '#/status')      return <Status />;
+  if (route === '/privacy')     return <Privacy />;
+  if (route === '/terms')       return <Terms />;
+  if (route === '/grievance')   return <Grievance />;
+  if (route === '/methodology') return <Methodology />;
+  if (route === '/status')      return <Status />;
   // '#/news' and '#/' both fall through to the main app
 
   const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();
@@ -267,15 +267,15 @@ export default function App() {
           <span>Investigate</span>
         </div>
         <nav className="foot-legal" aria-label="Legal">
-          <a href="#/privacy">Privacy</a>
+          <a href="/privacy">Privacy</a>
           <span aria-hidden>·</span>
-          <a href="#/terms">Terms</a>
+          <a href="/terms">Terms</a>
           <span aria-hidden>·</span>
-          <a href="#/grievance">Grievance</a>
+          <a href="/grievance">Grievance</a>
           <span aria-hidden>·</span>
-          <a href="#/methodology">How it works</a>
+          <a href="/methodology">How it works</a>
           <span aria-hidden>·</span>
-          <a href="#/status">Status</a>
+          <a href="/status">Status</a>
         </nav>
       </footer>
     </div>
