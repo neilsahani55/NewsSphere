@@ -38,8 +38,9 @@ export default function App() {
     if (routeTab && routeTab !== navTab) setNavTabState(routeTab);
   }, [routeTab]);
 
-  // Tab change: pushState to clean URL — popstate fires and updates useRoute
+  // Tab change: clear selection (stops TTS, resets reader) then navigate
   const setNavTab = useCallback((tab) => {
+    setSelectedUrl(null);
     navigate(TAB_HASHES[tab] || '/');
   }, []);
   const [search, setSearch] = useState('');
@@ -105,18 +106,15 @@ export default function App() {
   );
   const { pending: translatePending } = useBatchTranslation(translatableSlice, target);
 
-  // Keep the selected article coherent: if the chosen article scrolls out of
-  // the filtered set (e.g. user changed topic), fall back to the first visible.
-  // Skip when navigating via a direct article URL — the separate effect handles that.
+  // Auto-select first article for All News only.
+  // Other tabs (Special) manage their own selection via onAutoSelect.
   useEffect(() => {
+    if (navTab !== 'allnews') return;
     if (articleId) return;
-    if (filtered.length === 0) {
-      setSelectedUrl(null);
-      return;
-    }
+    if (filtered.length === 0) { setSelectedUrl(null); return; }
     const stillVisible = filtered.some((a) => a.article_url === selectedUrl);
     if (!stillVisible) setSelectedUrl(filtered[0].article_url);
-  }, [filtered, selectedUrl, articleId]);
+  }, [navTab, filtered, selectedUrl, articleId]);
 
   // Auto-select article from URL on load
   useEffect(() => {
@@ -125,9 +123,11 @@ export default function App() {
     if (found) setSelectedUrl(found.article_url);
   }, [articleId, completeArticles]);
 
+  // selectedIndex is -1 when nothing is explicitly selected.
+  // All News auto-select effect above handles the first-article default for allnews.
   const selectedIndex = selectedUrl
     ? filtered.findIndex((a) => a.article_url === selectedUrl)
-    : (filtered.length ? 0 : -1);
+    : -1;
 
   const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
 
@@ -212,6 +212,7 @@ export default function App() {
               articles={completeArticles}
               selectedUrl={selected?.article_url}
               onSelect={handleSelect}
+              onAutoSelect={setSelectedUrl}
               target={target}
             />
           )}
@@ -236,7 +237,7 @@ export default function App() {
           )}
         </section>
 
-        {!showHomePage && !showFeedback && (!showSpecial || selected) && (
+        {!showHomePage && !showFeedback && (!showSpecial || selectedUrl) && (
           <DetailPanel
             article={selected}
             bookmarked={selected ? isBookmarked(selected.article_url) : false}

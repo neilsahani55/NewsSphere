@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
@@ -30,11 +30,12 @@ const FEATURES = [
   { icon: '🔖', title: 'Save stories', desc: 'Bookmark articles and read them later' },
 ];
 
-export default function YourSpecial({ articles, selectedUrl, onSelect, target }) {
+export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
   const [editing, setEditing] = useState(false);
+  const prevPanel = useRef(panel);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
 
@@ -48,6 +49,21 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target })
       setFollowedTopics((tp.data || []).filter(r => r.followed).map(r => r.topic));
     });
   }, [user]);
+
+  // When switching between My Feed / Saved Stories sub-tabs, clear the current
+  // selection so the auto-select below picks the first article of the new panel.
+  useEffect(() => {
+    if (prevPanel.current === panel) return;
+    prevPanel.current = panel;
+    if (onAutoSelect) onAutoSelect(null);
+  }, [panel, onAutoSelect]);
+
+  // Auto-select the first article of the active panel when logged in and nothing selected.
+  useEffect(() => {
+    if (!user || !onAutoSelect || selectedUrl) return;
+    const first = panel === 'topics' ? feedArticles[0] : savedArticles[0];
+    if (first) onAutoSelect(first.article_url);
+  }, [user, panel, feedArticles, savedArticles, selectedUrl, onAutoSelect]);
 
   const toggleSource = async (src) => {
     if (!user) return;
