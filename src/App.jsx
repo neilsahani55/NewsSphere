@@ -7,7 +7,7 @@ import { useTheme } from './hooks/useTheme.js';
 import { useBookmarks } from './hooks/useBookmarks.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
-import { useRoute } from './hooks/useRoute.js';
+import { useRoute, TAB_URLS } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
@@ -24,12 +24,23 @@ import Feedback from './pages/Feedback.jsx';
 const PAGE_SIZE = 60;
 
 export default function App() {
-  const { route, articleId } = useRoute();
+  const { route, tab: routeTab, articleId } = useRoute();
   const { articles, status, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
 
-  const [navTab, setNavTab] = useState('home');
+  const [navTab, setNavTabState] = useState(routeTab || 'home');
+
+  // Keep navTab in sync when the user presses Back/Forward
+  useEffect(() => {
+    if (routeTab && routeTab !== navTab) setNavTabState(routeTab);
+  }, [routeTab]);
+
+  // Tab change: update state AND push the tab's URL
+  const setNavTab = useCallback((tab) => {
+    setNavTabState(tab);
+    window.history.pushState(null, '', TAB_URLS[tab] || '#/');
+  }, []);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
   const [target, setTarget] = useState('en'); // global preferred language
@@ -127,14 +138,13 @@ export default function App() {
     setSelectedUrl(article.article_url);
     // If on Home/Special/Feedback, switch to All News so the Reader is visible
     if (navTab === 'home' || navTab === 'special' || navTab === 'feedback') {
-      setNavTab('allnews');
-      setAllNewsTopics([]);
+      setNavTabState('allnews');
     }
     if (article.id && article.title) {
       const slug = slugify(article.title);
-      window.history.replaceState(null, '', `#/news/${slug}-${article.id}`);
+      window.history.pushState(null, '', `#/news/${slug}-${article.id}`);
     }
-  }, []);
+  }, [navTab]);
 
   // Prev/Next navigation across the filtered list — used by the bottom buttons
   // and the mobile swipe gesture. Auto-extends the visible window when the user
