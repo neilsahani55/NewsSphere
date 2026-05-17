@@ -1,19 +1,10 @@
 import { memo } from 'react';
 
 const TABS = [
-  { id: 'home', label: 'Home' },
-  { id: 'India', label: 'India' },
-  { id: 'World', label: 'World' },
-  { id: 'Tech', label: 'Tech' },
-  { id: 'Business', label: 'Business' },
-  { id: 'Science', label: 'Science' },
-  { id: 'Health', label: 'Health' },
-  { id: 'Sports', label: 'Sports' },
-  { id: 'Entertainment', label: 'Entertainment' },
-  { id: 'Crypto', label: 'Crypto' },
-  { id: 'Politics', label: 'Politics' },
-  { id: 'Environment', label: 'Environment' },
-  { id: 'Crime', label: 'Crime' },
+  { id: 'home',     label: 'Home' },
+  { id: 'special',  label: 'Your Special' },
+  { id: 'allnews',  label: 'All News' },
+  { id: 'feedback', label: 'Feedback' },
 ];
 
 function TopNav({ tab, onTabChange }) {

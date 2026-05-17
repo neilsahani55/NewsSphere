@@ -3,6 +3,7 @@ import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
 import { formatDate, parseKeyPoints, stripHtml } from '../utils/format.js';
 import { useTranslation } from '../hooks/useTranslation.js';
 import { useSwipe } from '../hooks/useSwipe.js';
+import { slugify } from '../utils/slug.js';
 import OsintPanel from './OsintPanel.jsx';
 
 export default function DetailPanel({
@@ -83,7 +84,8 @@ export default function DetailPanel({
               className="share-btn"
               title="Copy link"
               onClick={() => {
-                const url = `${window.location.origin}${window.location.pathname}#/article/${article.id}`;
+                const slug = slugify(article.title || '');
+                const url = `${window.location.origin}${window.location.pathname}#/news/${slug}-${article.id}`;
                 navigator.clipboard.writeText(url).catch(() => {});
               }}
             >

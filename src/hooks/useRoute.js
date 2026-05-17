@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 
 function parseHash(hash) {
   const h = hash || '#/';
-  const m = h.match(/^#\/article\/(\d+)$/);
-  if (m) return { route: '#/article', articleId: +m[1] };
-  return { route: h, articleId: null };
+  // Format: #/news/{slug}-{id}  e.g.  #/news/ipl-super-sunday-1234
+  const m = h.match(/^#\/news\/(.+)-(\d+)$/);
+  if (m) return { route: '#/news', slug: m[1], articleId: +m[2] };
+  return { route: h, slug: null, articleId: null };
 }
 
 export function useRoute() {

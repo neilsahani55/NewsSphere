@@ -5,22 +5,22 @@ import { getCached } from '../services/translateService.js';
 
 const SECTIONS = ['India','World','Tech','Business','Science','Health','Sports','Entertainment','Crypto','Politics','Environment','Crime'];
 
-function HomeCard({ article, featured, selected, onSelect, target }) {
+function HomeCard({ article, featured, compact, selected, onSelect, target }) {
   const title = getCached(article, 'title', target) || article.title || 'Untitled';
   const rawDesc = getCached(article, 'description', target);
   const desc = isBoilerplate(rawDesc) ? null : rawDesc;
-  const preview = truncate(stripHtml(desc || article.content), featured ? 200 : 110);
+  const preview = !compact && truncate(stripHtml(desc || article.content), featured ? 180 : 100);
 
   return (
     <article
-      className={`hcard${featured ? ' hcard-feat' : ''}${selected ? ' hcard-on' : ''}`}
+      className={`hcard${featured ? ' hcard-feat' : ''}${compact ? ' hcard-compact' : ''}${selected ? ' hcard-on' : ''}`}
       onClick={() => onSelect(article)}
       tabIndex={0}
       role="button"
       aria-pressed={selected}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(article); } }}
     >
-      {article.image_url && (
+      {!compact && article.image_url && (
         <img className="hcard-img" src={article.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
       )}
       <div className="hcard-body">
@@ -45,7 +45,6 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
       const d = parseDate(a.published_at_ist || a.fetched_at_ist);
       return d && (now - d.getTime()) < 86400000;
     });
-    // If fewer than 4 in last 24h, fill from all articles
     return last24h.length >= 4 ? last24h.slice(0, 4) : articles.slice(0, 4);
   }, [articles]);
 
@@ -70,7 +69,7 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
         <section className="home-sec">
           <div className="home-sec-hdr">
             <h3>Top stories</h3>
-            <button className="home-see-all" onClick={() => onSeeAll('home')}>See all</button>
+            <button className="home-see-all" onClick={() => onSeeAll(null)}>See all →</button>
           </div>
           <div className="home-top-grid">
             {featured && (
@@ -87,6 +86,7 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
                 <HomeCard
                   key={a.article_url}
                   article={a}
+                  compact
                   selected={a.article_url === selectedUrl}
                   onSelect={onSelect}
                   target={target}
@@ -108,6 +108,7 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
               <HomeCard
                 key={a.article_url}
                 article={a}
+                compact
                 selected={a.article_url === selectedUrl}
                 onSelect={onSelect}
                 target={target}

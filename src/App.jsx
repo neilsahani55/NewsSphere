@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
-import NewsFeed from './components/NewsFeed.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import { useNews } from './hooks/useNews.js';
 import { useTheme } from './hooks/useTheme.js';
@@ -11,12 +10,16 @@ import { useBatchTranslation } from './hooks/useBatchTranslation.js';
 import { useRoute } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
+import { slugify } from './utils/slug.js';
 import Privacy from './pages/Privacy.jsx';
 import Terms from './pages/Terms.jsx';
 import Grievance from './pages/Grievance.jsx';
 import Methodology from './pages/Methodology.jsx';
 import Status from './pages/Status.jsx';
 import HomePage from './pages/HomePage.jsx';
+import AllNews from './pages/AllNews.jsx';
+import YourSpecial from './pages/YourSpecial.jsx';
+import Feedback from './pages/Feedback.jsx';
 
 const PAGE_SIZE = 60;
 
@@ -32,6 +35,7 @@ export default function App() {
   const [target, setTarget] = useState('en'); // global preferred language
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [allNewsTopics, setAllNewsTopics] = useState([]);
 
   const debouncedSearch = useDebounce(search, 200);
 
@@ -51,7 +55,10 @@ export default function App() {
     const q = debouncedSearch.trim().toLowerCase();
 
     return base
-      .filter((a) => navTab === 'home' || matchesTopic(a.category, navTab))
+      .filter((a) => {
+        if (navTab !== 'allnews') return true; // home/special/feedback: no category filter on reader panel
+        return allNewsTopics.length === 0 || allNewsTopics.some(t => matchesTopic(a.category, t));
+      })
       .filter((a) => {
         if (!q) return true;
         return (
@@ -71,12 +78,12 @@ export default function App() {
         const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
         return bf - af;
       });
-  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked]);
+  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked, allNewsTopics]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [navTab, debouncedSearch, view]);
+  }, [navTab, debouncedSearch, view, allNewsTopics]);
 
   // Translate the slice that's actually rendered. As the user scrolls and
   // visibleCount grows, more articles are queued for background translation.
@@ -118,8 +125,9 @@ export default function App() {
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
-    if (article.id) {
-      window.history.replaceState(null, '', `#/article/${article.id}`);
+    if (article.id && article.title) {
+      const slug = slugify(article.title);
+      window.history.replaceState(null, '', `#/news/${slug}-${article.id}`);
     }
   }, []);
 
@@ -145,15 +153,12 @@ export default function App() {
   if (route === '#/grievance')   return <Grievance />;
   if (route === '#/methodology') return <Methodology />;
   if (route === '#/status')      return <Status />;
-  // '#/article' and '#/' both fall through to the main app
+  // '#/news' and '#/' both fall through to the main app
 
   const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();
-
-  const feedTitle = view === 'bookmarks'
-    ? 'Saved stories'
-    : navTab !== 'home'
-      ? navTab
-      : 'All stories';
+  const showSpecial  = navTab === 'special';
+  const showAllNews  = navTab === 'allnews' && view !== 'bookmarks';
+  const showFeedback = navTab === 'feedback';
 
   return (
     <div className="app">
@@ -175,34 +180,30 @@ export default function App() {
       <TopNav tab={navTab} onTabChange={setNavTab} />
 
       <main className="layout">
-        {showHomePage ? (
-          <section>
+        <section>
+          {showHomePage && (
             <HomePage
               articles={completeArticles}
               selectedUrl={selected?.article_url}
               onSelect={handleSelect}
               target={target}
-              onSeeAll={(cat) => { setNavTab(cat); }}
+              onSeeAll={(cat) => {
+                setNavTab('allnews');
+                setAllNewsTopics(cat ? [cat] : []);
+              }}
             />
-          </section>
-        ) : (
-          <section>
-            <div className="feed-hdr">
-              <h2 className="feed-title">
-                {feedTitle}
-              </h2>
-              {(navTab !== 'home' || search) && (
-                <button
-                  type="button"
-                  className="reset-link"
-                  onClick={() => { setNavTab('home'); setSearch(''); }}
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-
-            <NewsFeed
+          )}
+          {showSpecial && (
+            <YourSpecial
+              articles={completeArticles}
+              selectedUrl={selected?.article_url}
+              onSelect={handleSelect}
+              target={target}
+            />
+          )}
+          {showFeedback && <Feedback />}
+          {!showHomePage && !showSpecial && !showFeedback && (
+            <AllNews
               articles={filtered}
               visibleCount={visibleCount}
               onLoadMore={handleLoadMore}
@@ -213,12 +214,13 @@ export default function App() {
               isBookmarked={isBookmarked}
               onToggleBookmark={toggleBookmark}
               target={target}
-              emptyTitle={view === 'bookmarks' ? 'No saved stories yet' : undefined}
-              emptySubtitle={view === 'bookmarks' ? 'Tap the star on any article to save it here.' : undefined}
               onRefresh={refresh}
+              topics={allNewsTopics}
+              onTopicToggle={(t) => setAllNewsTopics(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
+              onTopicClear={() => setAllNewsTopics([])}
             />
-          </section>
-        )}
+          )}
+        </section>
 
         <DetailPanel
           article={selected}
