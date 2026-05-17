@@ -11,9 +11,12 @@ function parsePath(pathname) {
   const p = pathname || '/';
 
   // Article: /news/{slug}-{id}
+  // tab is null so the currently active tab is preserved when navigating
+  // to an article URL (e.g. from Your Special). Direct deep-links are
+  // handled in App.jsx via the articleId field.
   const articleMatch = p.match(/^\/news\/(.+)-(\d+)$/);
   if (articleMatch) {
-    return { route: '/news', tab: 'allnews', slug: articleMatch[1], articleId: +articleMatch[2] };
+    return { route: '/news', tab: null, slug: articleMatch[1], articleId: +articleMatch[2] };
   }
 
   // Legal/static pages

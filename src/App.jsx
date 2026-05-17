@@ -29,7 +29,9 @@ export default function App() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
 
-  const [navTab, setNavTabState] = useState(routeTab || 'home');
+  // When visiting a /news/slug-id URL directly, routeTab is null (tab is
+  // preserved, not forced). Default to 'allnews' so the reader is visible.
+  const [navTab, setNavTabState] = useState(routeTab || (articleId ? 'allnews' : 'home'));
 
   // Keep navTab in sync when the user presses Back/Forward
   useEffect(() => {
@@ -138,17 +140,11 @@ export default function App() {
     if (navTab === 'home' || navTab === 'feedback') {
       // Home/Feedback don't show a reader — jump to All News
       setNavTabState('allnews');
-      if (article.id && article.title) {
-        navigate(`/news/${slugify(article.title)}-${article.id}`);
-      }
-    } else if (navTab === 'special') {
-      // Stay on Your Special — reader appears on the right, URL stays /special
-      navigate('/special');
-    } else {
-      // All News — update the article URL normally
-      if (article.id && article.title) {
-        navigate(`/news/${slugify(article.title)}-${article.id}`);
-      }
+    }
+    // Always push the canonical news URL so sharing works from any tab.
+    // useRoute returns tab:null for /news/* URLs so the active tab is preserved.
+    if (article.id && article.title) {
+      navigate(`/news/${slugify(article.title)}-${article.id}`);
     }
   }, [navTab]);
 
