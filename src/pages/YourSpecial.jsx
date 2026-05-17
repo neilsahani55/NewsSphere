@@ -87,6 +87,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
             </svg>
             Continue with Google
           </button>
+          {/* Fallback target for Google's rendered button if One Tap is suppressed */}
+          <div id="g-signin-btn" />
           <p className="sp-gate-note">Your preferences are stored securely in your account.</p>
         </div>
       </div>
