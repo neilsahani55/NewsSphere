@@ -34,7 +34,7 @@ export default function Privacy() {
       <p>NewsSphere is a general news platform not directed at children under 13. We do not knowingly collect data from children.</p>
 
       <h2>Contact</h2>
-      <p>For privacy questions, email <a href="mailto:grievance@newssphere.in">grievance@newssphere.in</a>. We respond within 72 hours.</p>
+      <p>For privacy questions, email <a href="mailto:newssphere55@gmail.com">newssphere55@gmail.com</a>. We respond within 72 hours.</p>
     </PageShell>
   );
 }

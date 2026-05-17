@@ -285,7 +285,7 @@ export default function App() {
           <div className="foot-col">
             <span className="foot-col-hd">Contact</span>
             <div className="foot-col-links">
-              <a href="mailto:grievance@newssphere.in" className="foot-email">grievance@newssphere.in</a>
+              <a href="mailto:newssphere55@gmail.com" className="foot-email">newssphere55@gmail.com</a>
               <p className="foot-response">We respond within 72 hours</p>
             </div>
           </div>

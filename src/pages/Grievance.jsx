@@ -12,7 +12,7 @@ export default function Grievance() {
         <tbody>
           <tr><td>Name</td><td>Neil Sahani</td></tr>
           <tr><td>Designation</td><td>Founder, NewsSphere</td></tr>
-          <tr><td>Email</td><td><a href="mailto:grievance@newssphere.in">grievance@newssphere.in</a></td></tr>
+          <tr><td>Email</td><td><a href="mailto:newssphere55@gmail.com">newssphere55@gmail.com</a></td></tr>
           <tr><td>Response time</td><td>Within 72 hours of receipt</td></tr>
           <tr><td>Resolution time</td><td>Within 15 days of receipt</td></tr>
         </tbody>

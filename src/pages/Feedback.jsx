@@ -66,7 +66,7 @@ export default function Feedback() {
         </ul>
         <div className="fb-brand-contact">
           <p className="fb-brand-contact-lbl">Or reach us directly</p>
-          <a href="mailto:grievance@newssphere.in" className="fb-brand-email">grievance@newssphere.in</a>
+          <a href="mailto:newssphere55@gmail.com" className="fb-brand-email">newssphere55@gmail.com</a>
         </div>
       </aside>
 
@@ -122,7 +122,7 @@ export default function Feedback() {
 
           {status === 'error' && !FORMSPREE_ID && (
             <div className="fb-err">
-              Feedback is not configured yet. Please contact us at <strong>grievance@newssphere.in</strong> directly.
+              Feedback is not configured yet. Please contact us at <strong>newssphere55@gmail.com</strong> directly.
             </div>
           )}
           {status === 'error' && FORMSPREE_ID && (
