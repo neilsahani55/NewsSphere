@@ -125,6 +125,11 @@ export default function App() {
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
+    // If on Home/Special/Feedback, switch to All News so the Reader is visible
+    if (navTab === 'home' || navTab === 'special' || navTab === 'feedback') {
+      setNavTab('allnews');
+      setAllNewsTopics([]);
+    }
     if (article.id && article.title) {
       const slug = slugify(article.title);
       window.history.replaceState(null, '', `#/news/${slug}-${article.id}`);
@@ -222,19 +227,21 @@ export default function App() {
           )}
         </section>
 
-        <DetailPanel
-          article={selected}
-          bookmarked={selected ? isBookmarked(selected.article_url) : false}
-          onToggleBookmark={toggleBookmark}
-          target={target}
-          allArticles={completeArticles}
-          onSelectArticle={handleSelect}
-          onPrev={handlePrev}
-          onNext={handleNext}
-          hasPrev={selectedIndex > 0}
-          hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
-          position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
-        />
+        {!showHomePage && !showSpecial && !showFeedback && (
+          <DetailPanel
+            article={selected}
+            bookmarked={selected ? isBookmarked(selected.article_url) : false}
+            onToggleBookmark={toggleBookmark}
+            target={target}
+            allArticles={completeArticles}
+            onSelectArticle={handleSelect}
+            onPrev={handlePrev}
+            onNext={handleNext}
+            hasPrev={selectedIndex > 0}
+            hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
+            position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
+          />
+        )}
       </main>
 
       <footer className="foot">
