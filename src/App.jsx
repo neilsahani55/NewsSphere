@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -11,11 +11,12 @@ import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
-import Privacy from './pages/Privacy.jsx';
-import Terms from './pages/Terms.jsx';
-import Grievance from './pages/Grievance.jsx';
-import Methodology from './pages/Methodology.jsx';
-import Status from './pages/Status.jsx';
+// Legal pages are rarely visited — load them only when navigated to.
+const Privacy     = lazy(() => import('./pages/Privacy.jsx'));
+const Terms       = lazy(() => import('./pages/Terms.jsx'));
+const Grievance   = lazy(() => import('./pages/Grievance.jsx'));
+const Methodology = lazy(() => import('./pages/Methodology.jsx'));
+const Status      = lazy(() => import('./pages/Status.jsx'));
 import HomePage from './pages/HomePage.jsx';
 import AllNews from './pages/AllNews.jsx';
 import YourSpecial from './pages/YourSpecial.jsx';
@@ -165,11 +166,11 @@ export default function App() {
     setSelectedUrl(filtered[nextIdx].article_url);
   }, [selectedIndex, filtered, visibleCount]);
 
-  if (route === '/privacy')     return <Privacy />;
-  if (route === '/terms')       return <Terms />;
-  if (route === '/grievance')   return <Grievance />;
-  if (route === '/methodology') return <Methodology />;
-  if (route === '/status')      return <Status />;
+  if (route === '/privacy')     return <Suspense fallback={null}><Privacy /></Suspense>;
+  if (route === '/terms')       return <Suspense fallback={null}><Terms /></Suspense>;
+  if (route === '/grievance')   return <Suspense fallback={null}><Grievance /></Suspense>;
+  if (route === '/methodology') return <Suspense fallback={null}><Methodology /></Suspense>;
+  if (route === '/status')      return <Suspense fallback={null}><Status /></Suspense>;
   // '#/news' and '#/' both fall through to the main app
 
   const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();

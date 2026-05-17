@@ -48,10 +48,16 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Load fonts asynchronously — avoids a render-blocking network round-trip.
+         The browser paints with system fonts first, then swaps in web fonts. -->
     <link
+      rel="preload" as="style"
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
 import { formatDate, parseKeyPoints, stripHtml } from '../utils/format.js';
 import { useTranslation } from '../hooks/useTranslation.js';
 import { useSwipe } from '../hooks/useSwipe.js';
 import { slugify } from '../utils/slug.js';
 import OsintPanel from './OsintPanel.jsx';
+import { fetchArticleContent } from '../services/supabaseService.js';
 
 // BCP-47 language tags for Web Speech API
 const LANG_BCP47 = {
@@ -65,9 +66,23 @@ export default function DetailPanel({
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [showTTSCtrl, setShowTTSCtrl]       = useState(false);
 
-  const panelRef  = useRef(null);
-  const timerRef  = useRef(null);   // fallback word-advance timer
-  const { translated, loading, error } = useTranslation(article, target);
+  const panelRef     = useRef(null);
+  const timerRef     = useRef(null);   // fallback word-advance timer
+  // Cache fetched content so re-opening the same article is instant
+  const contentCache = useRef(new Map()); // id → content string
+  const [fetchedContent, setFetchedContent] = useState(null);
+
+  // Merge lazily-fetched content so useTranslation sees it
+  const articleWithContent = useMemo(() => {
+    if (!article) return null;
+    if (article.content) return article;
+    const cached = contentCache.current.get(article.id);
+    if (cached) return { ...article, content: cached };
+    if (fetchedContent) return { ...article, content: fetchedContent };
+    return article;
+  }, [article, fetchedContent]);
+
+  const { translated, loading, error } = useTranslation(articleWithContent, target);
 
   useSwipe(panelRef, {
     onLeft:  hasNext ? onNext : undefined,
@@ -92,6 +107,20 @@ export default function DetailPanel({
 
   useEffect(() => { setImgFailed(false); }, [article?.article_url]);
 
+  // Lazy-fetch content the first time an article is opened.
+  // Content was excluded from the initial bulk fetch to keep payload small.
+  useEffect(() => {
+    if (!article?.id || article.content) { setFetchedContent(null); return; }
+    if (contentCache.current.has(article.id)) { setFetchedContent(contentCache.current.get(article.id)); return; }
+    let cancelled = false;
+    fetchArticleContent(article.id).then(text => {
+      if (cancelled) return;
+      contentCache.current.set(article.id, text);
+      setFetchedContent(text);
+    });
+    return () => { cancelled = true; };
+  }, [article?.id, article?.content]);
+
   // Cancel speech + timer on unmount
   useEffect(() => () => {
     window.speechSynthesis?.cancel();
@@ -99,11 +128,11 @@ export default function DetailPanel({
   }, []);
 
   // ── Build view ──────────────────────────────────────────────────────────
-  const view = article ? {
-    title:       translated?.title       || article.title       || '',
-    description: stripHtml(translated?.description || article.description || ''),
-    content:     stripHtml(translated?.content     || article.content     || ''),
-    keyPoints:   parseKeyPoints(translated?.key_points || article.key_points),
+  const view = articleWithContent ? {
+    title:       translated?.title       || articleWithContent.title       || '',
+    description: stripHtml(translated?.description || articleWithContent.description || ''),
+    content:     stripHtml(translated?.content     || articleWithContent.content     || ''),
+    keyPoints:   parseKeyPoints(translated?.key_points || articleWithContent.key_points),
   } : { title: '', description: '', content: '', keyPoints: [] };
 
   const contentText = (view.content && view.content !== view.description) ? view.content : '';
