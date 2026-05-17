@@ -5,9 +5,10 @@ import NewsFeed from '../components/NewsFeed.jsx';
 function AllNews({
   articles, visibleCount, onLoadMore, status, error,
   selectedUrl, onSelect, isBookmarked, onToggleBookmark,
-  target, onRefresh, topics, onTopicToggle, onTopicClear,
+  target, onRefresh, topics, onTopicToggle, onTopicClear, readCount,
 }) {
   const allSelected = topics.length === 0;
+  const readActive = topics.includes('Read');
   return (
     <div className="allnews-wrap">
       <div className="allnews-filter">
@@ -22,10 +23,13 @@ function AllNews({
               </button>
             );
           })}
+          <button className={`chip chip--read${readActive ? ' on' : ''}`} aria-pressed={readActive} onClick={() => onTopicToggle('Read')}>
+            Read{readCount > 0 && <span className="chip-badge">{readCount}</span>}
+          </button>
         </div>
       </div>
       <div className="feed-hdr" style={{ marginTop: '1rem' }}>
-        <h2 className="feed-title">{allSelected ? 'All stories' : topics.join(', ')}</h2>
+        <h2 className="feed-title">{allSelected ? 'Unread stories' : readActive ? 'Read articles' : topics.join(', ')}</h2>
         {!allSelected && (
           <button type="button" className="reset-link" onClick={onTopicClear}>Clear</button>
         )}

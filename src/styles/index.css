@@ -352,6 +352,12 @@ button { font-family: inherit; }
 }
 .chip:hover { border-color: var(--accent2); color: var(--accent2); }
 .chip.on   { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip--read { display: inline-flex; align-items: center; gap: 5px; }
+.chip-badge {
+  background: var(--hl); color: #fff; border-radius: 9px;
+  font-size: .62rem; font-weight: 700; padding: 1px 5px; line-height: 1.4;
+}
+.chip.on .chip-badge { background: rgba(255,255,255,.35); }
 .chip-lang { display: inline-flex; align-items: center; gap: 5px; }
 .chip-flag { font-size: .9rem; }
 

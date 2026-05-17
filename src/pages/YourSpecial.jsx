@@ -30,7 +30,7 @@ const FEATURES = [
   { icon: '🔖', title: 'Save stories', desc: 'Bookmark articles and read them later' },
 ];
 
-export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target }) {
+export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
@@ -93,13 +93,18 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     [articles, isBookmarked]
   );
 
+  const readArticles = useMemo(
+    () => (readUrls || []).map(url => articles.find(a => a.article_url === url)).filter(Boolean),
+    [articles, readUrls]
+  );
+
   // Auto-select the first article of the active panel when logged in and nothing selected.
-  // Must be declared AFTER feedArticles and savedArticles (deps array is evaluated synchronously).
+  // Must be declared AFTER feedArticles, savedArticles, and readArticles (deps array is evaluated synchronously).
   useEffect(() => {
     if (!user || !onAutoSelect || selectedUrl) return;
-    const first = panel === 'topics' ? feedArticles[0] : savedArticles[0];
+    const first = panel === 'topics' ? feedArticles[0] : panel === 'saved' ? savedArticles[0] : readArticles[0];
     if (first) onAutoSelect(first.article_url);
-  }, [user, panel, feedArticles, savedArticles, selectedUrl, onAutoSelect]);
+  }, [user, panel, feedArticles, savedArticles, readArticles, selectedUrl, onAutoSelect]);
 
   // Shared props for NewsFeed in both panels
   const feedProps = {
@@ -185,6 +190,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
               <span><strong>{followedSources.length}</strong> sources</span>
               <span aria-hidden>·</span>
               <span><strong>{savedArticles.length}</strong> saved</span>
+              <span aria-hidden>·</span>
+              <span><strong>{readArticles.length}</strong> read</span>
             </div>
           </div>
         </div>
@@ -196,12 +203,16 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
         {[
           ['topics', '🎯', 'My Feed'],
           ['saved',  '🔖', 'Saved Stories'],
+          ['read',   '👁', 'Read'],
         ].map(([id, icon, label]) => (
           <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); setEditing(false); navigate('/special'); }}>
             <span className="sp-tab-icon">{icon}</span>
             <span className="sp-tab-label">{label}</span>
             {id === 'saved' && savedArticles.length > 0 && (
               <span className="sp-tab-badge">{savedArticles.length}</span>
+            )}
+            {id === 'read' && readArticles.length > 0 && (
+              <span className="sp-tab-badge">{readArticles.length}</span>
             )}
           </button>
         ))}
@@ -222,10 +233,9 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
               ) : (
                 <>
                   <span className="sp-feed-hdr-title">Your Feed</span>
-                  {feedArticles.length > 0
-                    ? <span className="sp-feed-hdr-sub">{feedArticles.length} stories from your followed topics & sources</span>
-                    : <span className="sp-feed-hdr-sub">Follow topics or sources to build your personalised feed</span>
-                  }
+                  {feedArticles.length === 0 && (
+                    <span className="sp-feed-hdr-sub">Follow topics or sources to build your personalised feed</span>
+                  )}
                 </>
               )}
             </div>
@@ -338,6 +348,18 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
             articles={savedArticles}
             emptyTitle="No saved stories yet"
             emptySubtitle="Tap the ☆ star on any article to save it here and read later."
+          />
+        </div>
+      )}
+
+      {/* ── Read panel ───────────────────────────────────────────────── */}
+      {panel === 'read' && (
+        <div className="sp-panel">
+          <NewsFeed
+            {...feedProps}
+            articles={readArticles}
+            emptyTitle="No read articles yet"
+            emptySubtitle="Articles you open will appear here so you can find them again easily."
           />
         </div>
       )}

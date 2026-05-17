@@ -5,6 +5,7 @@ import DetailPanel from './components/DetailPanel.jsx';
 import { useNews } from './hooks/useNews.js';
 import { useTheme } from './hooks/useTheme.js';
 import { useBookmarks } from './hooks/useBookmarks.js';
+import { useReadArticles } from './hooks/useReadArticles.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
 import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
@@ -29,6 +30,7 @@ export default function App() {
   const { articles, status, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
+  const { isRead, markRead, readUrls, readCount } = useReadArticles();
 
   // When visiting a /news/slug-id URL directly, routeTab is null (tab is
   // preserved, not forced). Default to 'allnews' so the reader is visible.
@@ -70,8 +72,16 @@ export default function App() {
 
     return base
       .filter((a) => {
-        if (navTab !== 'allnews') return true; // home/special/feedback: no category filter on reader panel
-        return allNewsTopics.length === 0 || allNewsTopics.some(t => matchesTopic(a.category, t));
+        if (navTab !== 'allnews') return true;
+        // 'Read' chip: show only articles the user has already opened
+        if (allNewsTopics.includes('Read')) return isRead(a.article_url);
+        // Keep the currently open article visible even after it is marked read,
+        // so the reader panel doesn't go blank mid-article and auto-select
+        // doesn't immediately jump to the next story.
+        if (a.article_url === selectedUrl) return true;
+        // Default "All" view and topic-filtered views: hide already-read articles
+        const topicOk = allNewsTopics.length === 0 || allNewsTopics.some(t => matchesTopic(a.category, t));
+        return topicOk && !isRead(a.article_url);
       })
       .filter((a) => {
         if (!q) return true;
@@ -92,7 +102,7 @@ export default function App() {
         const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
         return bf - af;
       });
-  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked, allNewsTopics]);
+  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked, allNewsTopics, isRead, selectedUrl]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {
@@ -138,6 +148,7 @@ export default function App() {
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
+    markRead(article.article_url);
     if (navTab === 'home' || navTab === 'feedback') {
       // Home/Feedback don't show a reader — jump to All News
       setNavTabState('allnews');
@@ -147,7 +158,7 @@ export default function App() {
     if (article.id && article.title) {
       navigate(`/news/${slugify(article.title)}-${article.id}`);
     }
-  }, [navTab]);
+  }, [navTab, markRead]);
 
   // Prev/Next navigation across the filtered list — used by the bottom buttons
   // and the mobile swipe gesture. Auto-extends the visible window when the user
@@ -215,6 +226,8 @@ export default function App() {
               onSelect={handleSelect}
               onAutoSelect={setSelectedUrl}
               target={target}
+              isRead={isRead}
+              readUrls={readUrls}
             />
           )}
           {showFeedback && <Feedback />}
@@ -234,6 +247,7 @@ export default function App() {
               topics={allNewsTopics}
               onTopicToggle={(t) => setAllNewsTopics(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
               onTopicClear={() => setAllNewsTopics([])}
+              readCount={readCount}
             />
           )}
         </section>
