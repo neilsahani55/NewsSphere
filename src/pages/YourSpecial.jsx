@@ -17,7 +17,7 @@ const ALL_SOURCES = [
 ];
 
 export default function YourSpecial({ articles, selectedUrl, onSelect, target, onSeeAll }) {
-  const { user, loading, signIn, signOut } = useAuth();
+  const { user, loading, authError, signIn, signOut } = useAuth();
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics'); // 'topics' | 'searches' | 'saved'
   const [savedSearches, setSavedSearches] = useState([]);
@@ -89,6 +89,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, target, o
           </button>
           {/* Fallback target for Google's rendered button if One Tap is suppressed */}
           <div id="g-signin-btn" />
+          {authError && <p className="sp-auth-err">{authError}</p>}
           <p className="sp-gate-note">Your preferences are stored securely in your account.</p>
         </div>
       </div>
