@@ -1717,8 +1717,8 @@ button { font-family: inherit; }
 }
 .hcard-src { font-weight: 500; color: var(--ink3); }
 
-/* Share button in reader */
-.share-btn {
+/* Speak / Share buttons in reader header */
+.speak-btn, .share-btn {
   display: inline-flex;
   align-items: center;
   gap: .3rem;
@@ -1730,9 +1730,20 @@ button { font-family: inherit; }
   border-radius: 20px;
   padding: .3rem .7rem;
   cursor: pointer;
-  transition: color .15s, border-color .15s;
+  transition: color .15s, border-color .15s, background .15s;
 }
-.share-btn:hover { color: var(--accent); border-color: var(--accent2); }
+.speak-btn:hover, .share-btn:hover { color: var(--accent); border-color: var(--accent2); }
+.speak-btn.on {
+  color: var(--hl);
+  border-color: var(--hl);
+  background: color-mix(in srgb, var(--hl) 10%, transparent);
+  animation: speak-pulse 1.4s ease-in-out infinite;
+}
+@keyframes speak-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .65; }
+}
+.share-btn.copied { color: #16a34a; border-color: #16a34a; }
 
 /* Responsive: home page */
 @media (max-width: 720px) {

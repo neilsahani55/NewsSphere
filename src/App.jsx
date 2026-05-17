@@ -236,7 +236,7 @@ export default function App() {
           )}
         </section>
 
-        {!showHomePage && !showFeedback && (
+        {!showHomePage && !showFeedback && (!showSpecial || selected) && (
           <DetailPanel
             article={selected}
             bookmarked={selected ? isBookmarked(selected.article_url) : false}

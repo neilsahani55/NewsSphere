@@ -6,6 +6,47 @@ import { useSwipe } from '../hooks/useSwipe.js';
 import { slugify } from '../utils/slug.js';
 import OsintPanel from './OsintPanel.jsx';
 
+// Maps app language codes → BCP-47 tags used by SpeechSynthesis
+const LANG_TTS = {
+  'en': 'en-IN', 'hi': 'hi-IN', 'ta': 'ta-IN', 'te': 'te-IN',
+  'bn': 'bn-IN', 'mr': 'mr-IN', 'gu': 'gu-IN', 'kn': 'kn-IN',
+  'ml': 'ml-IN', 'pa': 'pa-IN', 'ur': 'ur-PK', 'ar': 'ar-SA',
+  'es': 'es-ES', 'fr': 'fr-FR', 'de': 'de-DE', 'zh-CN': 'zh-CN',
+};
+
+function useTTS(text, lang) {
+  const [speaking, setSpeaking] = useState(false);
+  const uttRef = useRef(null);
+
+  // Stop speech when article or language changes
+  useEffect(() => {
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+  }, [text, lang]);
+
+  // Stop on unmount
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+
+  const toggle = () => {
+    if (!window.speechSynthesis) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = LANG_TTS[lang] || 'en-IN';
+    utt.rate = 0.95;
+    utt.onend = () => setSpeaking(false);
+    utt.onerror = () => setSpeaking(false);
+    uttRef.current = utt;
+    window.speechSynthesis.speak(utt);
+    setSpeaking(true);
+  };
+
+  return { speaking, toggle };
+}
+
 export default function DetailPanel({
   article,
   bookmarked,
@@ -20,11 +61,10 @@ export default function DetailPanel({
   position,
 }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { translated, loading, error } = useTranslation(article, target);
   const panelRef = useRef(null);
 
-  // Touch-swipe: left = next, right = previous. Only fires on touch devices,
-  // so it never interferes with mouse-based text selection.
   useSwipe(panelRef, {
     onLeft:  hasNext ? onNext : undefined,
     onRight: hasPrev ? onPrev : undefined,
@@ -33,6 +73,41 @@ export default function DetailPanel({
   useEffect(() => {
     setImgFailed(false);
   }, [article?.article_url]);
+
+  const topics = article ? topicsOf(article.category) : [];
+  const sentiment = article ? sentimentLabel(article.sentiment) : null;
+
+  const view = article ? {
+    title:       translated?.title       || article.title       || '',
+    description: stripHtml(translated?.description || article.description || ''),
+    content:     stripHtml(translated?.content     || article.content     || ''),
+    keyPoints:   parseKeyPoints(translated?.key_points || article.key_points),
+  } : { title: '', description: '', content: '', keyPoints: [] };
+
+  // Text fed to TTS: title + description + content (truncated to avoid very long reads)
+  const ttsText = [view.title, view.description, view.content]
+    .filter(Boolean).join('. ').slice(0, 4000);
+
+  const { speaking, toggle: toggleSpeak } = useTTS(ttsText, target);
+
+  const shareArticle = async () => {
+    if (!article) return;
+    const slug = slugify(article.title || '');
+    const url = `${window.location.origin}/news/${slug}-${article.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: article.title, url });
+        return;
+      } catch (_) { /* user dismissed — fall through to copy */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (_) {}
+  };
+
+  const showImage = article?.image_url && !imgFailed;
 
   if (!article) {
     return (
@@ -48,19 +123,6 @@ export default function DetailPanel({
     );
   }
 
-  const topics = topicsOf(article.category);
-  const sentiment = sentimentLabel(article.sentiment);
-
-  // Reader prefers translated text but falls through to the original
-  // until the cache fills (so selecting an article shows something instantly).
-  const view = {
-    title:       translated?.title       || article.title       || '',
-    description: stripHtml(translated?.description || article.description || ''),
-    content:     stripHtml(translated?.content     || article.content     || ''),
-    keyPoints:   parseKeyPoints(translated?.key_points || article.key_points),
-  };
-  const showImage = article.image_url && !imgFailed;
-
   return (
     <aside className="dcol" ref={panelRef}>
       <div className="dpanel">
@@ -70,6 +132,31 @@ export default function DetailPanel({
             {loading && <span className="reader-busy">· translating…</span>}
             {error && <span className="reader-err" title={error}>· translation failed</span>}
           </h3>
+
+          {/* Speak */}
+          <button
+            type="button"
+            className={`speak-btn${speaking ? ' on' : ''}`}
+            aria-label={speaking ? 'Stop speaking' : 'Read article aloud'}
+            title={speaking ? 'Stop' : 'Speak'}
+            onClick={toggleSpeak}
+          >
+            {speaking ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                <rect x="14" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            )}
+            {speaking ? 'Stop' : 'Speak'}
+          </button>
+
+          {/* Save */}
           <button
             type="button"
             className={`bm-btn lg ${bookmarked ? 'on' : ''}`}
@@ -78,23 +165,32 @@ export default function DetailPanel({
           >
             {bookmarked ? '★ Saved' : '☆ Save'}
           </button>
+
+          {/* Share */}
           {article.id && (
             <button
               type="button"
-              className="share-btn"
-              title="Copy link"
-              onClick={() => {
-                const slug = slugify(article.title || '');
-                const url = `${window.location.origin}/news/${slug}-${article.id}`;
-                navigator.clipboard.writeText(url).catch(() => {});
-              }}
+              className={`share-btn${copied ? ' copied' : ''}`}
+              title={copied ? 'Copied!' : 'Share article'}
+              onClick={shareArticle}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-              </svg>
-              Share
+              {copied ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                  </svg>
+                  Share
+                </>
+              )}
             </button>
           )}
         </div>
@@ -198,4 +294,3 @@ export default function DetailPanel({
     </aside>
   );
 }
-
