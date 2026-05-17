@@ -79,8 +79,6 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
         <h3 className="chl">{title || 'Untitled'}</h3>
         {preview && <p className="cprev">{preview}</p>}
         <div className="cmeta">
-          <span className="csrc">{article.source_name || 'Unknown'}</span>
-          <span className="dot-sep" aria-hidden>·</span>
           <span>{relativeTime(article.published_at_ist || article.fetched_at_ist)}</span>
           {article.country && (
             <>
