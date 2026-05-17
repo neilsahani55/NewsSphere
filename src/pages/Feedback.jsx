@@ -17,7 +17,7 @@ export default function Feedback() {
       const res = await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ type, name, email, message }),
+        body: JSON.stringify({ type, name, email, message, _cc: 'newssphere55@gmail.com' }),
       });
       setStatus(res.ok ? 'sent' : 'error');
     } catch {
@@ -43,12 +43,14 @@ export default function Feedback() {
       {/* Left — brand panel */}
       <aside className="fb-brand">
         <div className="fb-brand-logo" aria-hidden>
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="10" fill="var(--accent)" />
-            <path d="M8 12h24M8 20h16M8 28h20" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="48" height="48">
+            <circle cx="16" cy="16" r="15" fill="#1a3c6e"/>
+            <ellipse cx="16" cy="16" rx="15" ry="5.5" fill="none" stroke="#5d7ba8" strokeWidth="0.9" opacity="0.9"/>
+            <path d="M10.5 22 V10.5 L21.5 22 V10.5" stroke="#f5f4f0" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <circle cx="25.5" cy="7" r="2.6" fill="#d4a847"/>
           </svg>
         </div>
-        <h1 className="fb-brand-name">NewsSphere</h1>
+        <h1 className="fb-brand-name">NewsSphere<span className="fb-brand-dot" aria-hidden /></h1>
         <p className="fb-brand-tag">News intelligence beyond the headline</p>
         <ul className="fb-brand-list">
           <li>

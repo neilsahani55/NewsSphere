@@ -2196,6 +2196,17 @@ mark.tts-hl {
   letter-spacing: -.4px;
   line-height: 1.1;
 }
+.fb-brand-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--hl);
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+  position: relative;
+  top: -2px;
+}
 .fb-brand-tag {
   font-size: .88rem;
   color: var(--ink3);
