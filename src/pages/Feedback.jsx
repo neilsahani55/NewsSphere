@@ -1,8 +1,28 @@
 import { useState } from 'react';
+import { useUIStrings } from '../hooks/useUIStrings.js';
 
 const FORMSPREE_ID = import.meta.env.VITE_FORMSPREE_ID;
 
-export default function Feedback() {
+const FB_STRINGS = {
+  tagline: 'News intelligence beyond the headline',
+  feat1title: 'Feedback',    feat1desc: 'help us improve the reading experience',
+  feat2title: 'Suggestions', feat2desc: 'request topics, sources, or features',
+  feat3title: 'Complaints',  feat3desc: 'report inaccurate content or broken features',
+  orReach: 'Or reach us directly',
+  formTitle: 'Share your thoughts',
+  formSub: 'Your feedback goes directly to the team. We read every message.',
+  typeFeedback: 'Feedback', typeSuggestion: 'Suggestion', typeComplaint: 'Complaint',
+  nameLabel: 'Your name', nameOpt: '(optional)', namePlaceholder: 'John Doe',
+  emailLabel: 'Email', emailOpt: '(so we can reply)', emailPlaceholder: 'you@example.com',
+  msgLabel: 'Message',
+  thankYou: 'Thank you!',
+  received: 'has been received. We\'ll get back to you if needed.',
+  sendAnother: 'Send another',
+  sending: 'Sending…',
+};
+
+export default function Feedback({ target }) {
+  const t = useUIStrings(FB_STRINGS, target);
   const [type, setType] = useState('Feedback');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -29,10 +49,10 @@ export default function Feedback() {
     return (
       <div className="fb-sent">
         <div className="fb-sent-icon" aria-hidden>✓</div>
-        <h2>Thank you!</h2>
-        <p>Your {type.toLowerCase()} has been received. We'll get back to you if needed.</p>
+        <h2>{t.thankYou}</h2>
+        <p>Your {type.toLowerCase()} {t.received}</p>
         <button className="fb-again" onClick={() => { setStatus('idle'); setMessage(''); setName(''); setEmail(''); }}>
-          Send another
+          {t.sendAnother}
         </button>
       </div>
     );
@@ -51,23 +71,23 @@ export default function Feedback() {
           </svg>
         </div>
         <h1 className="fb-brand-name">NewsSphere<span className="fb-brand-dot" aria-hidden /></h1>
-        <p className="fb-brand-tag">News intelligence beyond the headline</p>
+        <p className="fb-brand-tag">{t.tagline}</p>
         <ul className="fb-brand-list">
           <li>
             <span className="fb-brand-icon">💬</span>
-            <span><strong>Feedback</strong> — help us improve the reading experience</span>
+            <span><strong>{t.typeFeedback}</strong> — {t.feat1desc}</span>
           </li>
           <li>
             <span className="fb-brand-icon">💡</span>
-            <span><strong>Suggestions</strong> — request topics, sources, or features</span>
+            <span><strong>{t.feat2title}</strong> — {t.feat2desc}</span>
           </li>
           <li>
             <span className="fb-brand-icon">⚠️</span>
-            <span><strong>Complaints</strong> — report inaccurate content or broken features</span>
+            <span><strong>{t.feat3title}</strong> — {t.feat3desc}</span>
           </li>
         </ul>
         <div className="fb-brand-contact">
-          <p className="fb-brand-contact-lbl">Or reach us directly</p>
+          <p className="fb-brand-contact-lbl">{t.orReach}</p>
           <a href="mailto:newssphere55@gmail.com" className="fb-brand-email">newssphere55@gmail.com</a>
         </div>
       </aside>
@@ -75,39 +95,40 @@ export default function Feedback() {
       {/* Right — form */}
       <div className="fb-wrap">
         <div className="fb-hdr">
-          <h2 className="fb-title">Share your thoughts</h2>
-          <p className="fb-sub">Your feedback goes directly to the team. We read every message.</p>
+          <h2 className="fb-title">{t.formTitle}</h2>
+          <p className="fb-sub">{t.formSub}</p>
         </div>
 
         <form className="fb-form" onSubmit={handleSubmit}>
           <div className="fb-type-row">
-            {['Feedback', 'Suggestion', 'Complaint'].map(t => (
+            {[
+              { key: 'Feedback',   label: t.typeFeedback,   icon: '💬 ' },
+              { key: 'Suggestion', label: t.typeSuggestion, icon: '💡 ' },
+              { key: 'Complaint',  label: t.typeComplaint,  icon: '⚠️ ' },
+            ].map(({ key, label, icon }) => (
               <button
-                key={t}
+                key={key}
                 type="button"
-                className={`fb-type-btn${type === t ? ' on' : ''}`}
-                onClick={() => setType(t)}
+                className={`fb-type-btn${type === key ? ' on' : ''}`}
+                onClick={() => setType(key)}
               >
-                {t === 'Feedback' && '💬 '}
-                {t === 'Suggestion' && '💡 '}
-                {t === 'Complaint' && '⚠️ '}
-                {t}
+                {icon}{label}
               </button>
             ))}
           </div>
 
           <div className="fb-row">
-            <label className="fb-label" htmlFor="fb-name">Your name <span className="fb-opt">(optional)</span></label>
-            <input id="fb-name" className="fb-input" type="text" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} maxLength={100} />
+            <label className="fb-label" htmlFor="fb-name">{t.nameLabel} <span className="fb-opt">{t.nameOpt}</span></label>
+            <input id="fb-name" className="fb-input" type="text" placeholder={t.namePlaceholder} value={name} onChange={e => setName(e.target.value)} maxLength={100} />
           </div>
 
           <div className="fb-row">
-            <label className="fb-label" htmlFor="fb-email">Email <span className="fb-opt">(so we can reply)</span></label>
-            <input id="fb-email" className="fb-input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} maxLength={200} />
+            <label className="fb-label" htmlFor="fb-email">{t.emailLabel} <span className="fb-opt">{t.emailOpt}</span></label>
+            <input id="fb-email" className="fb-input" type="email" placeholder={t.emailPlaceholder} value={email} onChange={e => setEmail(e.target.value)} maxLength={200} />
           </div>
 
           <div className="fb-row">
-            <label className="fb-label" htmlFor="fb-msg">Message <span className="fb-req">*</span></label>
+            <label className="fb-label" htmlFor="fb-msg">{t.msgLabel} <span className="fb-req">*</span></label>
             <textarea
               id="fb-msg"
               className="fb-textarea"
@@ -136,7 +157,7 @@ export default function Feedback() {
             className="fb-submit"
             disabled={status === 'sending' || !message.trim()}
           >
-            {status === 'sending' ? 'Sending…' : `Send ${type}`}
+            {status === 'sending' ? t.sending : `Send ${type}`}
           </button>
         </form>
       </div>

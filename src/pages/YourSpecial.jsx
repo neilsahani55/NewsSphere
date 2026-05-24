@@ -4,6 +4,33 @@ import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
 import { navigate } from '../hooks/useRoute.js';
 import NewsFeed from '../components/NewsFeed.jsx';
+import { useUIStrings } from '../hooks/useUIStrings.js';
+
+const SP_STRINGS = {
+  loading: 'Loading your profile…',
+  gateTitle: 'Your Special',
+  gateSub: 'Sign in to get a news experience built around what matters to you.',
+  continueGoogle: 'Continue with Google',
+  gateNote: 'Free · No spam · Stored securely in your account',
+  feat1t: 'Follow topics',    feat1d: 'Pin the categories you care about most',
+  feat2t: 'Follow sources',   feat2d: 'Choose which publications you trust',
+  feat3t: 'Save stories',     feat3d: 'Bookmark articles and read them later',
+  tabFeed: 'My Feed', tabSaved: 'Saved Stories', tabRead: 'Read',
+  signOut: 'Sign out',
+  topicsLbl: 'topics', sourcesLbl: 'sources', savedLbl: 'saved', readLbl: 'read',
+  yourFeed: 'Your Feed', editPrefs: 'Edit Preferences', done: 'Done',
+  toggleHint: 'Toggle topics and sources for your feed',
+  followHint: 'Follow topics or sources to build your personalised feed',
+  topicsSec: 'Topics', sourcesSec: 'Sources', followed: 'followed',
+  emptyFeedTitle: 'Your feed is empty',
+  emptyFeedSub: 'Tap Edit Preferences above to follow topics and sources you care about.',
+  noRecentTitle: 'No recent stories',
+  noRecentSub: 'No new articles yet from your followed topics and sources.',
+  noSavedTitle: 'No saved stories yet',
+  noSavedSub: 'Tap the ☆ star on any article to save it here and read later.',
+  noReadTitle: 'No read articles yet',
+  noReadSub: 'Articles you open will appear here so you can find them again easily.',
+};
 
 function istNow() {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -46,6 +73,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
   const prevPanel = useRef(panel);
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
+  const t = useUIStrings(SP_STRINGS, target);
 
   useEffect(() => {
     if (!user) return;
@@ -160,7 +188,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     return (
       <div className="sp-loading-screen">
         <div className="sp-spinner" aria-hidden />
-        <span>Loading your profile…</span>
+        <span>{t.loading}</span>
       </div>
     );
   }
@@ -171,11 +199,15 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
       <div className="sp-gate">
         <div className="sp-gate-hero">
           <div className="sp-gate-badge">✦ Personalised</div>
-          <h1 className="sp-gate-title">Your Special</h1>
-          <p className="sp-gate-sub">Sign in to get a news experience built around what matters to you.</p>
+          <h1 className="sp-gate-title">{t.gateTitle}</h1>
+          <p className="sp-gate-sub">{t.gateSub}</p>
 
           <div className="sp-gate-features">
-            {FEATURES.map(f => (
+            {[
+              { icon: '🎯', title: t.feat1t, desc: t.feat1d },
+              { icon: '📰', title: t.feat2t, desc: t.feat2d },
+              { icon: '🔖', title: t.feat3t, desc: t.feat3d },
+            ].map(f => (
               <div key={f.title} className="sp-gate-feat">
                 <span className="sp-gate-feat-icon">{f.icon}</span>
                 <div>
@@ -193,11 +225,11 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
               <path fill="#FBBC05" d="M10.5 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.7 10.5l7.8-6z"/>
               <path fill="#34A853" d="M24 48c6.1 0 11.2-2 14.9-5.4l-7-5.5c-2 1.3-4.5 2.1-7.9 2.1-6.7 0-12.4-4.5-14.4-10.7l-7.8 6C6.7 42.7 14.7 48 24 48z"/>
             </svg>
-            Continue with Google
+            {t.continueGoogle}
           </button>
           <div id="g-signin-btn" />
           {authError && <p className="sp-auth-err">{authError}</p>}
-          <p className="sp-gate-note">Free · No spam · Stored securely in your account</p>
+          <p className="sp-gate-note">{t.gateNote}</p>
         </div>
       </div>
     );
@@ -221,25 +253,25 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
             <span className="sp-profile-name">{displayName}</span>
             <span className="sp-profile-email">{user.email}</span>
             <div className="sp-profile-stats">
-              <span><strong>{followedTopics.length}</strong> topics</span>
+              <span><strong>{followedTopics.length}</strong> {t.topicsLbl}</span>
               <span aria-hidden>·</span>
-              <span><strong>{followedSources.length}</strong> sources</span>
+              <span><strong>{followedSources.length}</strong> {t.sourcesLbl}</span>
               <span aria-hidden>·</span>
-              <span><strong>{savedArticles.length}</strong> saved</span>
+              <span><strong>{savedArticles.length}</strong> {t.savedLbl}</span>
               <span aria-hidden>·</span>
-              <span><strong>{readArticles.length}</strong> read</span>
+              <span><strong>{readArticles.length}</strong> {t.readLbl}</span>
             </div>
           </div>
         </div>
-        <button className="sp-signout" onClick={signOut}>Sign out</button>
+        <button className="sp-signout" onClick={signOut}>{t.signOut}</button>
       </div>
 
       {/* Sub-panel tabs */}
       <div className="sp-tabs">
         {[
-          ['topics', '🎯', 'My Feed'],
-          ['saved',  '🔖', 'Saved Stories'],
-          ['read',   '👁', 'Read'],
+          ['topics', '🎯', t.tabFeed],
+          ['saved',  '🔖', t.tabSaved],
+          ['read',   '👁', t.tabRead],
         ].map(([id, icon, label]) => (
           <button key={id} className={`sp-tab${panel === id ? ' on' : ''}`} onClick={() => { setPanel(id); setEditing(false); navigate('/special'); }}>
             <span className="sp-tab-icon">{icon}</span>
@@ -263,14 +295,14 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
             <div className="sp-feed-hdr-left">
               {editing ? (
                 <>
-                  <span className="sp-feed-hdr-title">Edit Preferences</span>
-                  <span className="sp-feed-hdr-sub">Toggle topics and sources for your feed</span>
+                  <span className="sp-feed-hdr-title">{t.editPrefs}</span>
+                  <span className="sp-feed-hdr-sub">{t.toggleHint}</span>
                 </>
               ) : (
                 <>
-                  <span className="sp-feed-hdr-title">Your Feed</span>
+                  <span className="sp-feed-hdr-title">{t.yourFeed}</span>
                   {feedArticles.length === 0 && (
-                    <span className="sp-feed-hdr-sub">Follow topics or sources to build your personalised feed</span>
+                    <span className="sp-feed-hdr-sub">{t.followHint}</span>
                   )}
                 </>
               )}
@@ -284,7 +316,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  Done
+                  {t.done}
                 </>
               ) : (
                 <>
@@ -292,7 +324,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
-                  Edit Preferences
+                  {t.editPrefs}
                 </>
               )}
             </button>
@@ -303,8 +335,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
             <>
               <div className="sp-section">
                 <div className="sp-section-hdr">
-                  <h3 className="sp-sec-title">Topics</h3>
-                  <span className="sp-sec-hint">{followedTopics.length} followed</span>
+                  <h3 className="sp-sec-title">{t.topicsSec}</h3>
+                  <span className="sp-sec-hint">{followedTopics.length} {t.followed}</span>
                 </div>
                 <div className="sp-topic-grid">
                   {TOPIC_CATEGORIES.filter(c => c.id !== 'All').map(c => {
@@ -327,8 +359,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
 
               <div className="sp-section">
                 <div className="sp-section-hdr">
-                  <h3 className="sp-sec-title">Sources</h3>
-                  <span className="sp-sec-hint">{followedSources.length} followed</span>
+                  <h3 className="sp-sec-title">{t.sourcesSec}</h3>
+                  <span className="sp-sec-hint">{followedSources.length} {t.followed}</span>
                 </div>
                 <div className="sp-source-groups">
                   {SOURCE_GROUPS.map(group => (
@@ -361,15 +393,15 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
             followedTopics.length === 0 && followedSources.length === 0 ? (
               <div className="sp-empty-state">
                 <div className="sp-empty-icon">🎯</div>
-                <h3>Your feed is empty</h3>
-                <p>Tap <strong>Edit Preferences</strong> above to follow topics and sources you care about.</p>
+                <h3>{t.emptyFeedTitle}</h3>
+                <p>Tap <strong>{t.editPrefs}</strong> above to follow topics and sources you care about.</p>
               </div>
             ) : (
               <NewsFeed
                 {...feedProps}
                 articles={feedArticles}
-                emptyTitle="No recent stories"
-                emptySubtitle="No new articles yet from your followed topics and sources."
+                emptyTitle={t.noRecentTitle}
+                emptySubtitle={t.noRecentSub}
               />
             )
           )}
@@ -382,8 +414,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
           <NewsFeed
             {...feedProps}
             articles={savedArticles}
-            emptyTitle="No saved stories yet"
-            emptySubtitle="Tap the ☆ star on any article to save it here and read later."
+            emptyTitle={t.noSavedTitle}
+            emptySubtitle={t.noSavedSub}
           />
         </div>
       )}
@@ -394,8 +426,8 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
           <NewsFeed
             {...feedProps}
             articles={readArticles}
-            emptyTitle="No read articles yet"
-            emptySubtitle="Articles you open will appear here so you can find them again easily."
+            emptyTitle={t.noReadTitle}
+            emptySubtitle={t.noReadSub}
           />
         </div>
       )}

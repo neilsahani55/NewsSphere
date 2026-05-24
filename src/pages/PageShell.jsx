@@ -13,6 +13,7 @@ export default function PageShell({ title, children }) {
               <circle cx="25.5" cy="7" r="2.6" fill="#d4a847"/>
             </svg>
             <span className="pg-brand-name">NewsSphere</span>
+            <span className="pg-brand-dot" aria-hidden />
           </a>
 
           <a href="/" className="pg-back">

@@ -2,6 +2,13 @@ import { useMemo } from 'react';
 import { matchesTopic } from '../utils/categories.js';
 import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
+import { useUIStrings } from '../hooks/useUIStrings.js';
+
+const HOME_STRINGS = {
+  briefing: 'Your briefing',
+  topStories: 'Top stories',
+  seeAll: 'See all →',
+};
 
 const SECTIONS = ['India','World','Tech','Business','Science','Health','Sports','Entertainment','Crypto','Politics','Environment','Crime'];
 
@@ -37,6 +44,7 @@ function HomeCard({ article, featured, compact, selected, onSelect, target }) {
 }
 
 export default function HomePage({ articles, selectedUrl, onSelect, target, onSeeAll }) {
+  const t = useUIStrings(HOME_STRINGS, target);
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
   const now = Date.now();
 
@@ -61,15 +69,15 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
   return (
     <div className="home-pg">
       <div className="home-briefing">
-        <h2 className="home-briefing-title">Your briefing</h2>
+        <h2 className="home-briefing-title">{t.briefing}</h2>
         <span className="home-briefing-date">{today}</span>
       </div>
 
       {topStories.length > 0 && (
         <section className="home-sec">
           <div className="home-sec-hdr">
-            <h3>Top stories</h3>
-            <button className="home-see-all" onClick={() => onSeeAll(null)}>See all →</button>
+            <h3>{t.topStories}</h3>
+            <button className="home-see-all" onClick={() => onSeeAll(null)}>{t.seeAll}</button>
           </div>
           <div className="home-top-grid">
             {featured && (
@@ -101,7 +109,7 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
         <section key={cat} className="home-sec">
           <div className="home-sec-hdr">
             <h3>{cat}</h3>
-            <button className="home-see-all" onClick={() => onSeeAll(cat)}>See all →</button>
+            <button className="home-see-all" onClick={() => onSeeAll(cat)}>{t.seeAll}</button>
           </div>
           <div className="home-cat-grid">
             {items.map(a => (

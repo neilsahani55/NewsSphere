@@ -228,7 +228,7 @@ export default function App() {
               readUrls={readUrls}
             />
           )}
-          {showFeedback && <Feedback />}
+          {showFeedback && <Feedback target={target} />}
           {!showHomePage && !showSpecial && !showFeedback && (
             <AllNews
               articles={filtered}
