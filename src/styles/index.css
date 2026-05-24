@@ -1342,7 +1342,7 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 .pg-hdr-inner {
-  max-width: 860px;
+  max-width: 1480px;
   margin: 0 auto;
   padding: 0 2rem;
   height: 56px;
@@ -1382,7 +1382,7 @@ button { font-family: inherit; }
 
 /* Main content — centred, readable line length */
 .pg-main { flex: 1; padding: 3rem 2rem 5rem; }
-.pg-content { max-width: 780px; margin: 0 auto; }
+.pg-content { max-width: 960px; margin: 0 auto; }
 .pg-page-title {
   font-family: var(--ffd);
   font-size: 2rem;
@@ -1458,7 +1458,7 @@ button { font-family: inherit; }
   background: var(--paper2);
 }
 .pg-foot-inner {
-  max-width: 860px;
+  max-width: 1480px;
   margin: 0 auto;
   display: flex;
   align-items: center;

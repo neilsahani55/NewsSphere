@@ -290,7 +290,6 @@ export default function App() {
             <span className="foot-col-hd">Company</span>
             <nav className="foot-col-links">
               <a href="/methodology">How it works</a>
-              <a href="/status">Service status</a>
               <a href="/privacy">Privacy policy</a>
               <a href="/terms">Terms of use</a>
               <a href="/grievance">Grievance officer</a>
