@@ -8,6 +8,14 @@ const supabase = createClient(
 
 export { supabase as authSupabase };
 
+function istNow() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(new Date());
+}
+
 async function upsertProfile(u) {
   if (!u) return;
   await supabase.from('profiles').upsert({
@@ -15,7 +23,7 @@ async function upsertProfile(u) {
     email: u.email,
     name: u.user_metadata?.full_name || u.email,
     avatar_url: u.user_metadata?.avatar_url || null,
-    last_seen: new Date().toISOString(),
+    last_seen: istNow(),
   }, { onConflict: 'id' });
 }
 

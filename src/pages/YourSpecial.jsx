@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
 import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
 import { navigate } from '../hooks/useRoute.js';
 import NewsFeed from '../components/NewsFeed.jsx';
+
+function istNow() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(new Date());
+}
 
 const TOPIC_ICONS = {
   India: '🇮🇳', World: '🌍', Tech: '💻', Business: '📈',
@@ -42,11 +50,11 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      authSupabase.from('source_prefs').select('*').eq('user_id', user.id),
-      authSupabase.from('topic_prefs').select('*').eq('user_id', user.id),
+      authSupabase.from('source_prefs').select('followed_sources').eq('user_id', user.id).maybeSingle(),
+      authSupabase.from('topic_prefs').select('followed_topics').eq('user_id', user.id).maybeSingle(),
     ]).then(([sp, tp]) => {
-      setFollowedSources((sp.data || []).filter(r => r.followed).map(r => r.source_name));
-      setFollowedTopics((tp.data || []).filter(r => r.followed).map(r => r.topic));
+      setFollowedSources(sp.data?.followed_sources || []);
+      setFollowedTopics(tp.data?.followed_topics || []);
     });
   }, [user]);
 
@@ -60,22 +68,32 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
 
   const toggleSource = async (src) => {
     if (!user) return;
-    const followed = !followedSources.includes(src);
-    setFollowedSources(prev => followed ? [...prev, src] : prev.filter(s => s !== src));
-    await authSupabase.from('source_prefs').upsert(
-      { user_id: user.id, source_name: src, followed },
-      { onConflict: 'user_id,source_name' }
-    );
+    const newSources = followedSources.includes(src)
+      ? followedSources.filter(s => s !== src)
+      : [...followedSources, src];
+    setFollowedSources(newSources);
+    await authSupabase.from('source_prefs').upsert({
+      user_id: user.id,
+      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      user_email: user.email,
+      followed_sources: newSources,
+      updated_at: istNow(),
+    }, { onConflict: 'user_id' });
   };
 
   const toggleTopic = async (topic) => {
     if (!user) return;
-    const followed = !followedTopics.includes(topic);
-    setFollowedTopics(prev => followed ? [...prev, topic] : prev.filter(t => t !== topic));
-    await authSupabase.from('topic_prefs').upsert(
-      { user_id: user.id, topic, followed },
-      { onConflict: 'user_id,topic' }
-    );
+    const newTopics = followedTopics.includes(topic)
+      ? followedTopics.filter(t => t !== topic)
+      : [...followedTopics, topic];
+    setFollowedTopics(newTopics);
+    await authSupabase.from('topic_prefs').upsert({
+      user_id: user.id,
+      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      user_email: user.email,
+      followed_topics: newTopics,
+      updated_at: istNow(),
+    }, { onConflict: 'user_id' });
   };
 
   // Personalised feed: articles matching any followed topic OR any followed source
@@ -106,6 +124,31 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     if (first) onAutoSelect(first.article_url);
   }, [user, panel, feedArticles, savedArticles, readArticles, selectedUrl, onAutoSelect]);
 
+  // When logged in, also sync bookmark changes to the saved_news Supabase table.
+  const handleToggleSave = useCallback(async (url) => {
+    const wasSaved = isBookmarked(url);
+    toggleBookmark(url); // always update localStorage immediately
+    if (!user) return;
+    const name = user.user_metadata?.full_name || user.email.split('@')[0];
+    if (wasSaved) {
+      await authSupabase.from('saved_news').delete()
+        .eq('user_id', user.id).eq('article_url', url);
+    } else {
+      const article = articles.find(a => a.article_url === url);
+      await authSupabase.from('saved_news').upsert({
+        user_id: user.id,
+        user_name: name,
+        user_email: user.email,
+        article_url: url,
+        title: article?.title ?? null,
+        source_name: article?.source_name ?? null,
+        category: article?.category ?? null,
+        description: article?.description ?? null,
+        saved_at: istNow(),
+      }, { onConflict: 'user_id,article_url' });
+    }
+  }, [isBookmarked, toggleBookmark, user, articles]);
+
   // Shared props for NewsFeed in both panels
   const feedProps = {
     visibleCount: Infinity,
@@ -115,7 +158,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     selectedUrl,
     onSelect,
     isBookmarked,
-    onToggleBookmark: toggleBookmark,
+    onToggleBookmark: handleToggleSave,
     target,
   };
 
