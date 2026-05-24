@@ -5,7 +5,7 @@ import NewsFeed from '../components/NewsFeed.jsx';
 function AllNews({
   articles, visibleCount, onLoadMore, status, error,
   selectedUrl, onSelect, isBookmarked, onToggleBookmark,
-  target, onRefresh, topics, onTopicToggle, onTopicClear, readCount,
+  target, onRefresh, topics, onTopicToggle, onTopicClear, readCount, backgroundLoading,
 }) {
   const allSelected = topics.length === 0;
   const readActive = topics.includes('Read');
@@ -47,6 +47,14 @@ function AllNews({
         target={target}
         onRefresh={onRefresh}
       />
+      {backgroundLoading && (
+        <div className="bg-loading-strip">
+          <span className="bg-loading-dot" />
+          <span className="bg-loading-dot" />
+          <span className="bg-loading-dot" />
+          <span className="bg-loading-text">Fetching more articles…</span>
+        </div>
+      )}
     </div>
   );
 }

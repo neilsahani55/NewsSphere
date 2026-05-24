@@ -25,13 +25,16 @@ const CARD_COLUMNS = [
   'sentiment',
 ].join(', ');
 
-export async function loadNews({ signal } = {}) {
+export const INITIAL_BATCH = 50;   // shown to user immediately
+export const BACKGROUND_BATCH = 200; // each subsequent background page
+
+export async function loadNews({ signal, from = 0, to = INITIAL_BATCH - 1 } = {}) {
   let query = supabase
     .from('news')
     .select(CARD_COLUMNS)
     .eq('enriched', true)
     .order('published_at_ist', { ascending: false })
-    .limit(100);
+    .range(from, to);
 
   if (signal) query = query.abortSignal(signal);
 

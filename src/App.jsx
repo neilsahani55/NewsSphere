@@ -23,11 +23,11 @@ import AllNews from './pages/AllNews.jsx';
 import YourSpecial from './pages/YourSpecial.jsx';
 import Feedback from './pages/Feedback.jsx';
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 50;
 
 export default function App() {
   const { route, tab: routeTab, articleId } = useRoute();
-  const { articles, status, error, refresh } = useNews();
+  const { articles, status, backgroundLoading, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
   const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
   const { isRead, markRead, readUrls, readCount } = useReadArticles();
@@ -248,6 +248,7 @@ export default function App() {
               onTopicToggle={(t) => setAllNewsTopics(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
               onTopicClear={() => setAllNewsTopics([])}
               readCount={readCount}
+              backgroundLoading={backgroundLoading}
             />
           )}
         </section>
