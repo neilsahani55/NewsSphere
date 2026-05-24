@@ -17,7 +17,6 @@ const Privacy     = lazy(() => import('./pages/Privacy.jsx'));
 const Terms       = lazy(() => import('./pages/Terms.jsx'));
 const Grievance   = lazy(() => import('./pages/Grievance.jsx'));
 const Methodology = lazy(() => import('./pages/Methodology.jsx'));
-const Status      = lazy(() => import('./pages/Status.jsx'));
 import HomePage from './pages/HomePage.jsx';
 import AllNews from './pages/AllNews.jsx';
 import YourSpecial from './pages/YourSpecial.jsx';
@@ -181,7 +180,6 @@ export default function App() {
   if (route === '/terms')       return <Suspense fallback={null}><Terms /></Suspense>;
   if (route === '/grievance')   return <Suspense fallback={null}><Grievance /></Suspense>;
   if (route === '/methodology') return <Suspense fallback={null}><Methodology /></Suspense>;
-  if (route === '/status')      return <Suspense fallback={null}><Status /></Suspense>;
   // '#/news' and '#/' both fall through to the main app
 
   const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();
