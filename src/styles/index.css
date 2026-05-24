@@ -1360,14 +1360,14 @@ button { font-family: inherit; }
 }
 .pg-brand-name {
   font-family: var(--ffd);
-  font-size: .97rem;
-  font-weight: 700;
-  letter-spacing: .01em;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
 }
 .pg-brand-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--accent);
+  width: 8px;
+  height: 8px;
+  background: var(--hl);
   border-radius: 50%;
   flex-shrink: 0;
 }
