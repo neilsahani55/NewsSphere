@@ -1,6 +1,6 @@
 -- =============================================================================
 -- NewsSphere · Supabase schema
--- Run in SQL Editor on a fresh database (Dashboard → SQL Editor → Run).
+-- Run in SQL Editor on a FRESH database (Dashboard → SQL Editor → Run).
 -- For an existing database use migrate.sql instead.
 -- =============================================================================
 
@@ -23,48 +23,46 @@ CREATE POLICY "Users insert own profile" ON profiles FOR INSERT WITH CHECK (auth
 CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 
 -- 2. Saved news ───────────────────────────────────────────────────────────────
---    Articles bookmarked by logged-in users (replaces saved_searches).
---    UNIQUE(user_id, article_url) prevents duplicate saves.
+--    One row per user. article_urls is an array of bookmarked article URLs.
+--    The trigger below automatically removes any URL when its news row is deleted
+--    (articles expire after ~30 days).
 CREATE TABLE IF NOT EXISTS saved_news (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  user_name   TEXT,
-  user_email  TEXT,
-  article_url TEXT NOT NULL,
-  title       TEXT,
-  source_name TEXT,
-  category    TEXT,
-  description TEXT,
-  saved_at    TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS'),
-  UNIQUE (user_id, article_url)
+  user_id      UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
+  user_name    TEXT,
+  user_email   TEXT,
+  article_urls TEXT[] DEFAULT '{}',
+  updated_at   TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
 );
 ALTER TABLE saved_news ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own saved news" ON saved_news
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 3. Source preferences ───────────────────────────────────────────────────────
---    One row per user; all followed sources stored as a single array.
---    Toggle a source → update the array, never insert a new row.
-CREATE TABLE IF NOT EXISTS source_prefs (
+-- Trigger: when a news row is deleted, remove its URL from every user's saved list.
+CREATE OR REPLACE FUNCTION fn_cleanup_saved_news()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE saved_news
+  SET article_urls = array_remove(article_urls, OLD.article_url),
+      updated_at   = to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
+  WHERE OLD.article_url = ANY(article_urls);
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER trg_news_delete_cleanup
+AFTER DELETE ON news
+FOR EACH ROW EXECUTE FUNCTION fn_cleanup_saved_news();
+
+-- 3. User preferences ─────────────────────────────────────────────────────────
+--    One row per user. Stores both followed sources and followed topics together.
+CREATE TABLE IF NOT EXISTS user_prefs (
   user_id          UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
   user_name        TEXT,
   user_email       TEXT,
   followed_sources TEXT[] DEFAULT '{}',
+  followed_topics  TEXT[] DEFAULT '{}',
   updated_at       TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
 );
-ALTER TABLE source_prefs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own source prefs" ON source_prefs
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- 4. Topic preferences ────────────────────────────────────────────────────────
---    One row per user; all followed topics stored as a single array.
-CREATE TABLE IF NOT EXISTS topic_prefs (
-  user_id         UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
-  user_name       TEXT,
-  user_email      TEXT,
-  followed_topics TEXT[] DEFAULT '{}',
-  updated_at      TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
-);
-ALTER TABLE topic_prefs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own topic prefs" ON topic_prefs
+ALTER TABLE user_prefs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own prefs" ON user_prefs
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

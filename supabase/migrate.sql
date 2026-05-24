@@ -1,7 +1,7 @@
 -- =============================================================================
 -- NewsSphere · Migration script
--- Run in SQL Editor on an EXISTING database to apply the v2 schema changes.
--- Safe to re-run (uses IF NOT EXISTS / IF EXISTS guards where possible).
+-- Run in SQL Editor on an EXISTING database (select "Run without RLS").
+-- Preserves all existing user data.
 -- =============================================================================
 
 -- 1. Profiles: convert TIMESTAMPTZ columns to IST text ───────────────────────
@@ -17,72 +17,81 @@ ALTER TABLE profiles
   ALTER COLUMN last_seen SET DEFAULT
     to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS');
 
--- 2. Replace saved_searches with saved_news ──────────────────────────────────
-DROP TABLE IF EXISTS saved_searches;
+-- 2. saved_news: collapse to one row per user ────────────────────────────────
+-- Back up existing multi-row data into a single URL array per user.
+CREATE TEMP TABLE _sn_backup AS
+  SELECT user_id, user_name, user_email,
+         array_agg(article_url ORDER BY saved_at) AS article_urls
+  FROM saved_news
+  GROUP BY user_id, user_name, user_email;
 
-CREATE TABLE IF NOT EXISTS saved_news (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  user_name   TEXT,
-  user_email  TEXT,
-  article_url TEXT NOT NULL,
-  title       TEXT,
-  source_name TEXT,
-  category    TEXT,
-  description TEXT,
-  saved_at    TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS'),
-  UNIQUE (user_id, article_url)
+DROP TABLE IF EXISTS saved_news;
+
+CREATE TABLE saved_news (
+  user_id      UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
+  user_name    TEXT,
+  user_email   TEXT,
+  article_urls TEXT[] DEFAULT '{}',
+  updated_at   TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
 );
 ALTER TABLE saved_news ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Users manage own saved news" ON saved_news;
 CREATE POLICY "Users manage own saved news" ON saved_news
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 3. Migrate source_prefs → one row per user ─────────────────────────────────
--- Aggregate existing per-source rows into a single array per user.
+-- Restore existing saves
+INSERT INTO saved_news (user_id, user_name, user_email, article_urls)
+  SELECT user_id, user_name, user_email, COALESCE(article_urls, '{}')
+  FROM _sn_backup;
+
+-- Trigger: auto-remove deleted articles from every user's saved list.
+CREATE OR REPLACE FUNCTION fn_cleanup_saved_news()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE saved_news
+  SET article_urls = array_remove(article_urls, OLD.article_url),
+      updated_at   = to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
+  WHERE OLD.article_url = ANY(article_urls);
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_news_delete_cleanup ON news;
+CREATE TRIGGER trg_news_delete_cleanup
+AFTER DELETE ON news
+FOR EACH ROW EXECUTE FUNCTION fn_cleanup_saved_news();
+
+-- 3. Merge source_prefs + topic_prefs → user_prefs ───────────────────────────
+-- Back up both tables before dropping them.
 CREATE TEMP TABLE _sp_backup AS
-  SELECT user_id,
-         array_agg(source_name ORDER BY source_name) FILTER (WHERE followed) AS followed_sources
-  FROM source_prefs
-  GROUP BY user_id;
+  SELECT user_id, user_name, user_email, followed_sources
+  FROM source_prefs;
+
+CREATE TEMP TABLE _tp_backup AS
+  SELECT user_id, followed_topics
+  FROM topic_prefs;
 
 DROP TABLE IF EXISTS source_prefs;
+DROP TABLE IF EXISTS topic_prefs;
 
-CREATE TABLE source_prefs (
+CREATE TABLE user_prefs (
   user_id          UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
   user_name        TEXT,
   user_email       TEXT,
   followed_sources TEXT[] DEFAULT '{}',
+  followed_topics  TEXT[] DEFAULT '{}',
   updated_at       TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
 );
-ALTER TABLE source_prefs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own source prefs" ON source_prefs
+ALTER TABLE user_prefs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own prefs" ON user_prefs
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Restore existing data
-INSERT INTO source_prefs (user_id, followed_sources)
-  SELECT user_id, COALESCE(followed_sources, '{}') FROM _sp_backup;
-
--- 4. Migrate topic_prefs → one row per user ──────────────────────────────────
-CREATE TEMP TABLE _tp_backup AS
-  SELECT user_id,
-         array_agg(topic ORDER BY topic) FILTER (WHERE followed) AS followed_topics
-  FROM topic_prefs
-  GROUP BY user_id;
-
-DROP TABLE IF EXISTS topic_prefs;
-
-CREATE TABLE topic_prefs (
-  user_id         UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
-  user_name       TEXT,
-  user_email      TEXT,
-  followed_topics TEXT[] DEFAULT '{}',
-  updated_at      TEXT DEFAULT to_char((NOW() AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD HH24:MI:SS')
-);
-ALTER TABLE topic_prefs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users manage own topic prefs" ON topic_prefs
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Restore existing data
-INSERT INTO topic_prefs (user_id, followed_topics)
-  SELECT user_id, COALESCE(followed_topics, '{}') FROM _tp_backup;
+-- Merge: a user may exist in one or both backup tables.
+INSERT INTO user_prefs (user_id, user_name, user_email, followed_sources, followed_topics)
+  SELECT
+    COALESCE(sp.user_id, tp.user_id),
+    sp.user_name,
+    sp.user_email,
+    COALESCE(sp.followed_sources, '{}'),
+    COALESCE(tp.followed_topics, '{}')
+  FROM _sp_backup sp
+  FULL OUTER JOIN _tp_backup tp ON sp.user_id = tp.user_id;

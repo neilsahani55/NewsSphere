@@ -40,7 +40,7 @@ const FEATURES = [
 
 export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
-  const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
   const [editing, setEditing] = useState(false);
   const prevPanel = useRef(panel);
@@ -49,13 +49,14 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      authSupabase.from('source_prefs').select('followed_sources').eq('user_id', user.id).maybeSingle(),
-      authSupabase.from('topic_prefs').select('followed_topics').eq('user_id', user.id).maybeSingle(),
-    ]).then(([sp, tp]) => {
-      setFollowedSources(sp.data?.followed_sources || []);
-      setFollowedTopics(tp.data?.followed_topics || []);
-    });
+    authSupabase.from('user_prefs')
+      .select('followed_sources, followed_topics')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setFollowedSources(data?.followed_sources || []);
+        setFollowedTopics(data?.followed_topics || []);
+      });
   }, [user]);
 
   // When switching between My Feed / Saved Stories sub-tabs, clear the current
@@ -72,7 +73,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
       ? followedSources.filter(s => s !== src)
       : [...followedSources, src];
     setFollowedSources(newSources);
-    await authSupabase.from('source_prefs').upsert({
+    await authSupabase.from('user_prefs').upsert({
       user_id: user.id,
       user_name: user.user_metadata?.full_name || user.email.split('@')[0],
       user_email: user.email,
@@ -87,7 +88,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
       ? followedTopics.filter(t => t !== topic)
       : [...followedTopics, topic];
     setFollowedTopics(newTopics);
-    await authSupabase.from('topic_prefs').upsert({
+    await authSupabase.from('user_prefs').upsert({
       user_id: user.id,
       user_name: user.user_metadata?.full_name || user.email.split('@')[0],
       user_email: user.email,
@@ -124,30 +125,22 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     if (first) onAutoSelect(first.article_url);
   }, [user, panel, feedArticles, savedArticles, readArticles, selectedUrl, onAutoSelect]);
 
-  // When logged in, also sync bookmark changes to the saved_news Supabase table.
+  // When logged in, sync bookmark changes to saved_news (single row, array of URLs).
   const handleToggleSave = useCallback(async (url) => {
     const wasSaved = isBookmarked(url);
-    toggleBookmark(url); // always update localStorage immediately
+    const newUrls = wasSaved
+      ? bookmarks.filter(u => u !== url)
+      : [url, ...bookmarks];
+    toggleBookmark(url); // update localStorage immediately
     if (!user) return;
-    const name = user.user_metadata?.full_name || user.email.split('@')[0];
-    if (wasSaved) {
-      await authSupabase.from('saved_news').delete()
-        .eq('user_id', user.id).eq('article_url', url);
-    } else {
-      const article = articles.find(a => a.article_url === url);
-      await authSupabase.from('saved_news').upsert({
-        user_id: user.id,
-        user_name: name,
-        user_email: user.email,
-        article_url: url,
-        title: article?.title ?? null,
-        source_name: article?.source_name ?? null,
-        category: article?.category ?? null,
-        description: article?.description ?? null,
-        saved_at: istNow(),
-      }, { onConflict: 'user_id,article_url' });
-    }
-  }, [isBookmarked, toggleBookmark, user, articles]);
+    await authSupabase.from('saved_news').upsert({
+      user_id: user.id,
+      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      user_email: user.email,
+      article_urls: newUrls,
+      updated_at: istNow(),
+    }, { onConflict: 'user_id' });
+  }, [isBookmarked, toggleBookmark, bookmarks, user]);
 
   // Shared props for NewsFeed in both panels
   const feedProps = {
