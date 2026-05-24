@@ -34,20 +34,44 @@ export default function PageShell({ title, children }) {
         </div>
       </main>
 
-      {/* ── Footer ───────────────────────────────────────────────────── */}
-      <footer className="pg-foot">
-        <div className="pg-foot-inner">
-          <div className="pg-foot-brand">
-            <span className="pg-foot-name">NewsSphere</span>
-            <span className="pg-foot-copy">© {new Date().getFullYear()} · All rights reserved</span>
+      {/* ── Footer — same structure as main app footer ───────────────── */}
+      <footer className="pg-foot-wrap">
+        <div className="foot">
+          <div className="foot-grid">
+            <div className="foot-col foot-col--brand">
+              <span className="foot-name">NewsSphere</span>
+              <p className="foot-desc">AI-powered news intelligence — aggregated, enriched, and delivered around the clock across 12 categories and 37+ sources.</p>
+              <p className="foot-copy">© {new Date().getFullYear()} NewsSphere. All rights reserved.</p>
+            </div>
+
+            <div className="foot-col">
+              <span className="foot-col-hd">Explore</span>
+              <nav className="foot-col-links">
+                <a href="/">Home</a>
+                <a href="/allnews">All News</a>
+                <a href="/special">Your Special</a>
+                <a href="/feedback">Feedback</a>
+              </nav>
+            </div>
+
+            <div className="foot-col">
+              <span className="foot-col-hd">Company</span>
+              <nav className="foot-col-links">
+                <a href="/methodology">How it works</a>
+                <a href="/privacy">Privacy policy</a>
+                <a href="/terms">Terms of use</a>
+                <a href="/grievance">Grievance officer</a>
+              </nav>
+            </div>
+
+            <div className="foot-col">
+              <span className="foot-col-hd">Contact</span>
+              <div className="foot-col-links">
+                <a href="mailto:newssphere55@gmail.com" className="foot-email">newssphere55@gmail.com</a>
+                <p className="foot-response">We respond within 72 hours</p>
+              </div>
+            </div>
           </div>
-          <nav className="pg-foot-links" aria-label="Footer navigation">
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
-            <a href="/grievance">Grievance</a>
-            <a href="/methodology">How it works</a>
-            <a href="/#feedback">Feedback</a>
-          </nav>
         </div>
       </footer>
 

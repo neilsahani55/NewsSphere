@@ -1451,31 +1451,8 @@ button { font-family: inherit; }
   white-space: nowrap;
 }
 
-/* Footer */
-.pg-foot {
-  border-top: 1px solid var(--border);
-  padding: 1.25rem 2rem;
-  background: var(--paper2);
-}
-.pg-foot-inner {
-  max-width: 1480px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .5rem 2rem;
-}
-.pg-foot-brand { display: flex; align-items: center; gap: .75rem; }
-.pg-foot-name { font-family: var(--ffd); font-size: .85rem; font-weight: 800; color: var(--accent); }
-.pg-foot-copy { font-size: .7rem; color: var(--ink4); }
-.pg-foot-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .25rem 1.1rem;
-  margin-left: auto;
-}
-.pg-foot-links a { font-size: .75rem; color: var(--ink3); text-decoration: none; }
-.pg-foot-links a:hover { color: var(--hl); }
+/* Footer — reuses main .foot / .foot-grid classes; wrapper just adds border */
+.pg-foot-wrap { border-top: 1px solid var(--border); }
 
 /* ─── Responsive ───────────────────────────────────────────────── */
 
@@ -1581,8 +1558,6 @@ button { font-family: inherit; }
   .pg-brand-name { font-size: .88rem; }
   .pg-main { padding: 1.5rem 1rem 3rem; }
   .pg-page-title { font-size: 1.5rem; }
-  .pg-foot { padding: 1rem; }
-  .pg-foot-links { margin-left: 0; }
   /* Feedback mobile */
   .fb-wrap { padding: 1.5rem 0; }
 
