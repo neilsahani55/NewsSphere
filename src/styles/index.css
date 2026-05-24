@@ -1380,9 +1380,9 @@ button { font-family: inherit; }
 }
 .pg-back:hover { color: #fff; border-color: rgba(255,255,255,.45); }
 
-/* Main content — centred, readable line length */
+/* Main content — aligns with header/footer inner width */
 .pg-main { flex: 1; padding: 3rem 2rem 5rem; }
-.pg-content { max-width: 960px; margin: 0 auto; }
+.pg-content { max-width: 1480px; margin: 0 auto; }
 .pg-page-title {
   font-family: var(--ffd);
   font-size: 2rem;

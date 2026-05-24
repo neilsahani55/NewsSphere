@@ -10,7 +10,7 @@ export default function Grievance() {
       <h2>Grievance Officer Details</h2>
       <table className="pg-table">
         <tbody>
-          <tr><td>Name</td><td>Neil Sahani</td></tr>
+          <tr><td>Name</td><td>Neel Sahani</td></tr>
           <tr><td>Designation</td><td>Founder, NewsSphere</td></tr>
           <tr><td>Email</td><td><a href="mailto:newssphere55@gmail.com">newssphere55@gmail.com</a></td></tr>
           <tr><td>Response time</td><td>Within 72 hours of receipt</td></tr>
