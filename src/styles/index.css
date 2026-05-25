@@ -36,6 +36,7 @@
   --bluebg:   #eff6ff;
   --border:   #e2ddd8;
   --border2:  #d1cdc7;
+  --surface2: #f0ede8;
 
   --shadow:   0 1px 3px rgba(15, 23, 42, .06);
   --shadowmd: 0 4px 16px rgba(15, 23, 42, .07);
@@ -63,6 +64,7 @@
   --bluebg:   rgba(59, 130, 246, .15);
   --border:   #2a3552;
   --border2:  #3a466a;
+  --surface2: #1c2540;
 
   --shadow:   0 1px 3px rgba(0, 0, 0, .35);
   --shadowmd: 0 6px 20px rgba(0, 0, 0, .4);
@@ -1562,7 +1564,7 @@ button { font-family: inherit; }
   .foot-col--brand { grid-column: auto; }
   /* PageShell mobile */
   .pg-hdr-inner { padding: 0 1rem; height: 50px; }
-  .pg-brand-name { font-size: .88rem; }
+  .pg-brand-name { font-size: 1.2rem; }
   .pg-main { padding: 1.5rem 1rem 3rem; }
   .pg-page-title { font-size: 1.5rem; }
   /* Feedback mobile */
@@ -2334,3 +2336,78 @@ mark.tts-hl {
   padding: .5rem 1.2rem; cursor: pointer; font-size: .88rem; color: var(--ink2);
 }
 .sp-auth-err { font-size: .82rem; color: var(--red); background: var(--redbg); border: 1px solid var(--red); border-radius: 6px; padding: .5rem .8rem; width: 100%; text-align: center; }
+
+/* ─── Mobile full-screen reader overlay ─── */
+.dp-mobile-back {
+  display: none; /* hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  /* When an article is open, hide the feed and show reader full-screen */
+  main.layout[data-panel-open] > section {
+    display: none;
+  }
+  main.layout[data-panel-open] .dcol {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    overflow-y: auto;
+    background: var(--paper);
+  }
+  main.layout[data-panel-open] .dpanel {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    min-height: 100svh;
+  }
+  .dp-mobile-back {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--ink3);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: .3rem .7rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .dp-mobile-back:hover { color: var(--accent); border-color: var(--accent2); }
+
+  /* DetailPanel header wraps on mobile */
+  .dphdr { flex-wrap: wrap; gap: .5rem; }
+  .dphdr-btns { gap: .3rem; }
+
+  /* Chips scroll horizontally on mobile */
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+
+  /* Feedback: hide brand features list on mobile to keep form visible quickly */
+  .fb-brand-list { display: none; }
+  .fb-brand { padding: 1rem 0; }
+
+  /* YourSpecial: wrap profile stats on mobile */
+  .sp-profile-stats { flex-wrap: wrap; gap: .35rem .75rem; }
+
+  /* Footer on mobile: ensure proper spacing */
+  .foot { padding: 1.5rem 1rem 2rem; }
+  .foot-grid { gap: 1.25rem; }
+}
+
+@media (max-width: 540px) {
+  /* YourSpecial edit header wraps */
+  .sp-feed-hdr { flex-wrap: wrap; gap: .5rem; }
+  .sp-edit-btn { font-size: .8rem; padding: .4rem .75rem; }
+
+  /* AllNews filter row */
+  .allnews-filter { gap: .4rem; }
+}

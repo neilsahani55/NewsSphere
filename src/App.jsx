@@ -116,11 +116,12 @@ export default function App() {
   );
   const { pending: translatePending } = useBatchTranslation(translatableSlice, target);
 
-  // Auto-select first article for All News only.
-  // Other tabs (Special) manage their own selection via onAutoSelect.
+  // Auto-select first article for All News only (desktop only — on mobile the
+  // user taps a card to open the reader so auto-select would hijack the feed view).
   useEffect(() => {
     if (navTab !== 'allnews') return;
     if (articleId) return;
+    if (window.innerWidth <= 768) return;
     if (filtered.length === 0) { setSelectedUrl(null); return; }
     const stillVisible = filtered.some((a) => a.article_url === selectedUrl);
     if (!stillVisible) setSelectedUrl(filtered[0].article_url);
@@ -203,7 +204,7 @@ export default function App() {
 
       <TopNav tab={navTab} onTabChange={setNavTab} />
 
-      <main className="layout">
+      <main className="layout" {...(selected ? { 'data-panel-open': '' } : {})}>
         <section>
           {showHomePage && (
             <HomePage
@@ -264,6 +265,7 @@ export default function App() {
             hasPrev={selectedIndex > 0}
             hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
             position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
+            onClose={() => setSelectedUrl(null)}
           />
         )}
       </main>
