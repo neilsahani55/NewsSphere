@@ -1818,13 +1818,9 @@ mark.tts-hl {
 
 /* Responsive: home page */
 @media (max-width: 720px) {
-  .top-nav { padding: 0 1.25rem; }
   .home-top-grid { grid-template-columns: 1fr; }
   .home-top-side { display: none; }
   .home-cat-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 540px) {
-  .top-nav { padding: 0 1rem; }
 }
 
 /* Tiny phones (e.g. iPhone SE 1st gen) — squeeze everything that's left. */
@@ -2003,6 +1999,7 @@ mark.tts-hl {
   border-radius: var(--rmd); padding: .35rem;
 }
 .sp-tab {
+  position: relative;
   flex: 1; display: flex; align-items: center; justify-content: center;
   gap: .4rem; padding: .6rem .5rem;
   font-size: .82rem; font-weight: 500; color: var(--ink3);
@@ -2337,29 +2334,31 @@ mark.tts-hl {
 }
 .sp-auth-err { font-size: .82rem; color: var(--red); background: var(--redbg); border: 1px solid var(--red); border-radius: 6px; padding: .5rem .8rem; width: 100%; text-align: center; }
 
-/* ─── Mobile full-screen reader overlay ─── */
+/* ─── Mobile back-to-feed button (hidden on desktop) ─── */
 .dp-mobile-back {
-  display: none; /* hidden on desktop */
+  display: none;
 }
 
 @media (max-width: 768px) {
-  /* When an article is open, hide the feed and show reader full-screen */
-  main.layout[data-panel-open] > section {
-    display: none;
+  /* Nav tabs: all 4 fit on screen without horizontal scroll */
+  .top-nav { overflow-x: visible; overflow-y: visible; padding: 0; }
+  .tnav-tab {
+    flex: 1;
+    min-width: 0;
+    padding: .6rem .15rem;
+    font-size: .7rem;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
   }
-  main.layout[data-panel-open] .dcol {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    overflow-y: auto;
-    background: var(--paper);
-  }
-  main.layout[data-panel-open] .dpanel {
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    min-height: 100svh;
-  }
+
+  /* Main layout: tighter on mobile so feed + reader both comfortably visible */
+  .layout { margin-top: .75rem; padding: 0 1rem 2rem; gap: 1rem; }
+
+  /* Reader panel: flush edges on mobile */
+  .dpanel { border-left: none; border-right: none; border-radius: var(--rsm) var(--rsm) var(--rlg) var(--rlg); box-shadow: none; }
+
+  /* Back-to-feed button visible on mobile */
   .dp-mobile-back {
     display: inline-flex;
     align-items: center;
@@ -2391,14 +2390,19 @@ mark.tts-hl {
   }
   .chips::-webkit-scrollbar { display: none; }
 
-  /* Feedback: hide brand features list on mobile to keep form visible quickly */
+  /* Feedback: hide brand features list so form is immediately visible */
   .fb-brand-list { display: none; }
   .fb-brand { padding: 1rem 0; }
 
-  /* YourSpecial: wrap profile stats on mobile */
+  /* YourSpecial profile card stats wrap on mobile */
   .sp-profile-stats { flex-wrap: wrap; gap: .35rem .75rem; }
 
-  /* Footer on mobile: ensure proper spacing */
+  /* YourSpecial login gate: full width on mobile */
+  .sp-gate-hero { padding: 1.5rem 0; }
+  .sp-gate-title { font-size: 1.7rem; }
+  .sp-gate-sub { font-size: .88rem; }
+
+  /* Footer spacing on mobile */
   .foot { padding: 1.5rem 1rem 2rem; }
   .foot-grid { gap: 1.25rem; }
 }
@@ -2407,6 +2411,10 @@ mark.tts-hl {
   /* YourSpecial edit header wraps */
   .sp-feed-hdr { flex-wrap: wrap; gap: .5rem; }
   .sp-edit-btn { font-size: .8rem; padding: .4rem .75rem; }
+  /* YourSpecial sub-tabs tighter on small phones */
+  .sp-tab { padding: .5rem .2rem; gap: .2rem; }
+  .sp-tab-icon { font-size: .9rem; }
+  .sp-tab-label { font-size: .7rem; }
 
   /* AllNews filter row */
   .allnews-filter { gap: .4rem; }

@@ -2,18 +2,35 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadNews, INITIAL_BATCH, BACKGROUND_BATCH } from '../services/supabaseService.js';
 
 const REFRESH_MS = 5 * 60 * 1000; // re-fetch everything every 5 minutes
+const CACHE_KEY = 'ns_articles_v1';
+const CACHE_TTL = 10 * 60 * 1000; // serve cache for up to 10 minutes
+
+function readCache() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL || !Array.isArray(data) || data.length === 0) return null;
+    return data;
+  } catch { return null; }
+}
+
+function writeCache(data) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
 
 export function useNews({ auto = true } = {}) {
-  const [articles, setArticles] = useState([]);
-  const [status, setStatus] = useState('idle');
+  const [articles, setArticles] = useState(() => readCache() || []);
+  const [status, setStatus] = useState(() => (readCache() ? 'success' : 'idle'));
   const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const abortRef = useRef(null);
 
   const fetchAll = useCallback(async (ctrl) => {
-    setStatus('loading');
     setError(null);
+    // Don't show spinner if we already have cached articles visible.
+    setStatus(prev => prev === 'success' ? 'success' : 'loading');
 
     // ── Phase 1: first 50 articles ───────────────────────────────────────────
     // Fetch the initial batch and render immediately so the user sees news fast.
@@ -23,6 +40,7 @@ export function useNews({ auto = true } = {}) {
     setArticles(initial);
     setLastUpdated(new Date());
     setStatus('success');
+    writeCache(initial);
 
     // If the database returned fewer rows than requested, there is nothing more.
     if (initial.length < INITIAL_BATCH) return;

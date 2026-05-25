@@ -116,6 +116,14 @@ export default function App() {
   );
   const { pending: translatePending } = useBatchTranslation(translatableSlice, target);
 
+  // On mobile, scroll to the reader panel when an article is opened.
+  useEffect(() => {
+    if (!selectedUrl || window.innerWidth > 768) return;
+    requestAnimationFrame(() => {
+      document.getElementById('news-reader')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [selectedUrl]);
+
   // Auto-select first article for All News only (desktop only — on mobile the
   // user taps a card to open the reader so auto-select would hijack the feed view).
   useEffect(() => {
@@ -204,8 +212,8 @@ export default function App() {
 
       <TopNav tab={navTab} onTabChange={setNavTab} />
 
-      <main className="layout" {...(selected ? { 'data-panel-open': '' } : {})}>
-        <section>
+      <main className="layout">
+        <section id="news-feed">
           {showHomePage && (
             <HomePage
               articles={completeArticles}
@@ -253,20 +261,25 @@ export default function App() {
         </section>
 
         {!showHomePage && !showFeedback && (!showSpecial || selectedUrl) && (
-          <DetailPanel
-            article={selected}
-            bookmarked={selected ? isBookmarked(selected.article_url) : false}
-            onToggleBookmark={toggleBookmark}
-            target={target}
-            allArticles={completeArticles}
-            onSelectArticle={handleSelect}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            hasPrev={selectedIndex > 0}
-            hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
-            position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
-            onClose={() => setSelectedUrl(null)}
-          />
+          <div id="news-reader">
+            <DetailPanel
+              article={selected}
+              bookmarked={selected ? isBookmarked(selected.article_url) : false}
+              onToggleBookmark={toggleBookmark}
+              target={target}
+              allArticles={completeArticles}
+              onSelectArticle={handleSelect}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              hasPrev={selectedIndex > 0}
+              hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
+              position={selectedIndex >= 0 ? { current: selectedIndex + 1, total: filtered.length } : null}
+              onClose={() => {
+                setSelectedUrl(null);
+                document.getElementById('news-feed')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
+          </div>
         )}
       </main>
 
