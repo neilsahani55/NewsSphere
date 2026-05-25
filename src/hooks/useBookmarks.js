@@ -29,5 +29,9 @@ export function useBookmarks() {
 
   const clearAll = useCallback(() => setUrls([]), []);
 
-  return { bookmarks: urls, isBookmarked, toggle, clearAll, count: urls.length };
+  const setAll = useCallback((newUrls) => {
+    setUrls(Array.isArray(newUrls) ? newUrls : []);
+  }, []);
+
+  return { bookmarks: urls, isBookmarked, toggle, clearAll, setAll, count: urls.length };
 }

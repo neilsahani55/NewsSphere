@@ -65,15 +65,47 @@ const FEATURES = [
   { icon: '🔖', title: 'Save stories', desc: 'Bookmark articles and read them later' },
 ];
 
-export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls }) {
+export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls, onClearBookmarks, onLoadBookmarks, onClearRead }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
   const [editing, setEditing] = useState(false);
   const prevPanel = useRef(panel);
+  const prevUserId = useRef(undefined); // undefined = auth not yet resolved
   const [followedSources, setFollowedSources] = useState([]);
   const [followedTopics, setFollowedTopics] = useState([]);
   const t = useUIStrings(SP_STRINGS, target);
+
+  // When the signed-in account changes, wipe the previous user's localStorage
+  // data and restore the new user's saved articles from Supabase.
+  useEffect(() => {
+    if (loading) return; // wait until Supabase auth resolves
+    const currentId = user?.id ?? null;
+
+    if (prevUserId.current === undefined) {
+      // First resolution after mount — just record; don't wipe anything.
+      prevUserId.current = currentId;
+      return;
+    }
+    if (prevUserId.current === currentId) return; // same account, no action needed
+    prevUserId.current = currentId;
+
+    // Different account (or logout) — clear previous user's local data.
+    onClearBookmarks?.();
+    onClearRead?.();
+
+    if (!currentId) return; // logged out — done
+
+    // Logged in as a new user — restore their saved articles from Supabase.
+    authSupabase
+      .from('saved_news')
+      .select('article_urls')
+      .eq('user_id', currentId)
+      .maybeSingle()
+      .then(({ data }) => {
+        onLoadBookmarks?.(data?.article_urls || []);
+      });
+  }, [user, loading]);
 
   useEffect(() => {
     if (!user) return;

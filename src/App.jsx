@@ -28,8 +28,8 @@ export default function App() {
   const { route, tab: routeTab, articleId } = useRoute();
   const { articles, status, backgroundLoading, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount } = useBookmarks();
-  const { isRead, markRead, readUrls, readCount } = useReadArticles();
+  const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount, clearAll: clearBookmarks, setAll: setBookmarks } = useBookmarks();
+  const { isRead, markRead, readUrls, readCount, clearRead } = useReadArticles();
 
   // When visiting a /news/slug-id URL directly, routeTab is null (tab is
   // preserved, not forced). Default to 'allnews' so the reader is visible.
@@ -235,6 +235,9 @@ export default function App() {
               target={target}
               isRead={isRead}
               readUrls={readUrls}
+              onClearBookmarks={clearBookmarks}
+              onLoadBookmarks={setBookmarks}
+              onClearRead={clearRead}
             />
           )}
           {showFeedback && <Feedback target={target} />}
