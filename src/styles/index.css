@@ -1559,8 +1559,7 @@ button { font-family: inherit; }
   .tr-global { padding: .3rem .55rem .3rem .7rem; }
   .tr-global-select { max-width: none; font-size: .78rem; }
 
-  /* Footer grid collapses to single column on mobile */
-  .foot-grid { grid-template-columns: 1fr; gap: 1.25rem; }
+  /* Footer — 2-column layout handled in the 768px block below */
   .foot-col--brand { grid-column: auto; }
   /* PageShell mobile */
   .pg-hdr-inner { padding: 0 1rem; height: 50px; }
@@ -2402,9 +2401,11 @@ mark.tts-hl {
   .sp-gate-title { font-size: 1.7rem; }
   .sp-gate-sub { font-size: .88rem; }
 
-  /* Footer spacing on mobile */
-  .foot { padding: 1.5rem 1rem 2rem; }
-  .foot-grid { gap: 1.25rem; }
+  /* Footer: brand full-width top, Explore+Company side-by-side, Contact full-width bottom */
+  .foot { padding: 1.5rem 1rem 2.5rem; }
+  .foot-grid { grid-template-columns: 1fr 1fr; gap: 1.5rem 2rem; }
+  .foot-col--brand { grid-column: 1 / -1; border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; }
+  .foot-col:last-child { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 1.25rem; margin-top: .25rem; }
 }
 
 @media (max-width: 540px) {
