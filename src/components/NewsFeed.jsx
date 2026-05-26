@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import NewsCard from './NewsCard.jsx';
 import SkeletonCard from './SkeletonCard.jsx';
 
-export default function NewsFeed({
+function NewsFeed({
   articles,
   visibleCount,
   onLoadMore,
@@ -90,3 +90,5 @@ export default function NewsFeed({
     </>
   );
 }
+
+export default memo(NewsFeed);

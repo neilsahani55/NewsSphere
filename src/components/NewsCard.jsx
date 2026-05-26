@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
 import { isBoilerplate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
-export default function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target }) {
+function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target }) {
   const [imgFailed, setImgFailed] = useState(false);
+  // Images in a horizontal scroller are all at the same vertical position as the
+  // viewport, so loading="lazy" alone doesn't defer them — the browser treats them
+  // all as in-range and downloads everything. We use an IntersectionObserver to
+  // only set src once the card is within 900px of the viewport edge.
+  const [imgReady, setImgReady] = useState(false);
   const cardRef = useRef(null);
   const topics = topicsOf(article.category);
   const sentiment = sentimentLabel(article.sentiment);
@@ -22,6 +27,16 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
       inline: 'center',
     });
   }, [selected]);
+
+  useEffect(() => {
+    if (!article.image_url || imgFailed || !cardRef.current) return;
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setImgReady(true); obs.disconnect(); } },
+      { rootMargin: '0px 900px 0px 900px' }
+    );
+    obs.observe(cardRef.current);
+    return () => obs.disconnect();
+  }, [article.image_url, imgFailed]);
 
   // Translated fields fall through to the originals until the cache is filled.
   const title = getCached(article, 'title', target);
@@ -88,12 +103,12 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
           )}
         </div>
       </div>
-      {showImage ? (
+      {showImage && imgReady ? (
         <img
           className="card-thumb"
           src={article.image_url}
           alt=""
-          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           onError={() => setImgFailed(true)}
         />
@@ -108,3 +123,12 @@ export default function NewsCard({ article, selected, bookmarked, onSelect, onTo
     </article>
   );
 }
+
+export default memo(NewsCard, (prev, next) =>
+  prev.article.article_url === next.article.article_url &&
+  prev.article.title === next.article.title &&
+  prev.article.description === next.article.description &&
+  prev.selected === next.selected &&
+  prev.bookmarked === next.bookmarked &&
+  prev.target === next.target
+);
