@@ -2336,10 +2336,6 @@ mark.tts-hl {
 }
 .sp-auth-err { font-size: .82rem; color: var(--red); background: var(--redbg); border: 1px solid var(--red); border-radius: 6px; padding: .5rem .8rem; width: 100%; text-align: center; }
 
-/* ─── Mobile back-to-feed button (hidden on desktop) ─── */
-.dp-mobile-back {
-  display: none;
-}
 
 @media (max-width: 768px) {
   /* Nav tabs: all 4 fit on screen without horizontal scroll */
@@ -2359,24 +2355,6 @@ mark.tts-hl {
 
   /* Reader panel: flush edges on mobile */
   .dpanel { border-left: none; border-right: none; border-radius: var(--rsm) var(--rsm) var(--rlg) var(--rlg); box-shadow: none; }
-
-  /* Back-to-feed button visible on mobile */
-  .dp-mobile-back {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    font-size: .8rem;
-    font-weight: 600;
-    color: var(--ink3);
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: .3rem .7rem;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .dp-mobile-back:hover { color: var(--accent); border-color: var(--accent2); }
 
   /* DetailPanel header wraps on mobile */
   .dphdr { flex-wrap: wrap; gap: .5rem; }

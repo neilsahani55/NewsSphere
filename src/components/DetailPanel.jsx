@@ -269,7 +269,6 @@ export default function DetailPanel({
       <aside className="dcol" ref={panelRef}>
         <div className="dpanel">
           <div className="dphdr">
-            {onClose && <button type="button" className="dp-mobile-back" onClick={onClose}>← Back</button>}
             <h3>Reader</h3>
           </div>
           <div className="dph">
@@ -287,14 +286,6 @@ export default function DetailPanel({
 
         {/* ── Header ── */}
         <div className="dphdr">
-          {onClose && (
-            <button type="button" className="dp-mobile-back" onClick={onClose} aria-label="Back to feed">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-              Back
-            </button>
-          )}
           <h3>
             Reader
             {loading && <span className="reader-busy">· translating…</span>}

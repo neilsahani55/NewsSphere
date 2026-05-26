@@ -59,14 +59,6 @@ function AllNews({
         target={target}
         onRefresh={onRefresh}
       />
-      {backgroundLoading && (
-        <div className="bg-loading-strip">
-          <span className="bg-loading-dot" />
-          <span className="bg-loading-dot" />
-          <span className="bg-loading-dot" />
-          <span className="bg-loading-text">Fetching more articles…</span>
-        </div>
-      )}
     </div>
   );
 }
