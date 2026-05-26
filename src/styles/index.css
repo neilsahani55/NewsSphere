@@ -2163,6 +2163,9 @@ mark.tts-hl {
   .sp-saved-img { width: 64px; height: 50px; }
 }
 
+/* Mobile compact header inside the feedback form (hidden on desktop) */
+.fb-mobile-hdr { display: none; }
+
 /* ─── Feedback ─────────────────────────────────────────────────── */
 .fb-layout {
   display: grid;
@@ -2389,9 +2392,26 @@ mark.tts-hl {
   }
   .chips::-webkit-scrollbar { display: none; }
 
-  /* Feedback: hide brand features list so form is immediately visible */
-  .fb-brand-list { display: none; }
-  .fb-brand { padding: 1rem 0; }
+  /* Feedback: collapse to single-column, hide desktop brand panel, show mobile header */
+  .fb-layout { display: block; }
+  .fb-brand  { display: none; }
+  .fb-wrap   { padding: 1rem 0 2rem; }
+  .fb-mobile-hdr {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+  }
+  .fb-mobile-brand {
+    font-family: var(--ffd);
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -.3px;
+    line-height: 1;
+  }
 
   /* YourSpecial profile card stats wrap on mobile */
   .sp-profile-stats { flex-wrap: wrap; gap: .35rem .75rem; }

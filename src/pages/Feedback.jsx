@@ -94,6 +94,17 @@ export default function Feedback({ target }) {
 
       {/* Right — form */}
       <div className="fb-wrap">
+        {/* Compact brand header — visible only on mobile (desktop shows the aside panel) */}
+        <div className="fb-mobile-hdr" aria-hidden>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="30" height="30">
+            <circle cx="16" cy="16" r="15" fill="#1a3c6e"/>
+            <ellipse cx="16" cy="16" rx="15" ry="5.5" fill="none" stroke="#5d7ba8" strokeWidth="0.9" opacity="0.9"/>
+            <path d="M10.5 22 V10.5 L21.5 22 V10.5" stroke="#f5f4f0" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <circle cx="25.5" cy="7" r="2.6" fill="#d4a847"/>
+          </svg>
+          <span className="fb-mobile-brand">NewsSphere<span className="fb-brand-dot" aria-hidden /></span>
+        </div>
+
         <div className="fb-hdr">
           <h2 className="fb-title">{t.formTitle}</h2>
           <p className="fb-sub">{t.formSub}</p>
