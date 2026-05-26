@@ -81,8 +81,18 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     const currentId = user?.id ?? null;
 
     if (prevUserId.current === undefined) {
-      // First resolution after mount — just record; don't wipe anything.
+      // First resolution after mount — record and load this user's saved articles.
       prevUserId.current = currentId;
+      if (currentId) {
+        authSupabase
+          .from('saved_news')
+          .select('article_urls')
+          .eq('user_id', currentId)
+          .maybeSingle()
+          .then(({ data }) => {
+            onLoadBookmarks?.(data?.article_urls || []);
+          });
+      }
       return;
     }
     if (prevUserId.current === currentId) return; // same account, no action needed
@@ -106,7 +116,13 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
   }, [user, loading]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Clear preferences immediately on logout so Account B never briefly
+      // sees Account A's topics/sources while the Supabase query is in-flight.
+      setFollowedSources([]);
+      setFollowedTopics([]);
+      return;
+    }
     authSupabase.from('user_prefs')
       .select('followed_sources, followed_topics')
       .eq('user_id', user.id)
