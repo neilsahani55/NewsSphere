@@ -21,6 +21,11 @@ function istNow() {
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   }).format(new Date());
 }
+
+// Persists the last signed-in user ID across page reloads so we can detect
+// account switches vs. the same user logging back in.
+function getLastUid() { try { return localStorage.getItem('ns_last_uid'); } catch { return null; } }
+function setLastUid(id) { try { if (id) localStorage.setItem('ns_last_uid', id); else localStorage.removeItem('ns_last_uid'); } catch {} }
 // Legal pages are rarely visited — load them only when navigated to.
 const Privacy     = lazy(() => import('./pages/Privacy.jsx'));
 const Terms       = lazy(() => import('./pages/Terms.jsx'));
@@ -41,6 +46,38 @@ export default function App() {
   const { isRead, markRead, readUrls, readCount, clearRead } = useReadArticles();
   const { user } = useAuth();
   const [savePrompt, setSavePrompt] = useState(false);
+
+  // Account isolation: runs in App (always mounted) so it fires regardless of
+  // which tab the user is on.
+  //
+  // Strategy: persist the last user ID in localStorage so we can tell whether
+  // the same person is logging back in (→ restore their data) or a different
+  // person is logging in (→ wipe the previous user's local data first).
+  //
+  // We do NOT wipe on logout — only when a *different* user appears. This means
+  // "Account A → logout → re-login as A" preserves reads without needing a
+  // Supabase backup for read history.
+  useEffect(() => {
+    const currentId = user?.id ?? null;
+    if (!currentId) return; // not yet resolved or logged out — no action
+
+    const lastId = getLastUid();
+    setLastUid(currentId);
+
+    if (lastId !== currentId) {
+      // Different account (or first-ever login on this device) — wipe local data
+      clearBookmarks();
+      clearRead();
+    }
+
+    // Always restore this user's saved articles from Supabase on every login
+    authSupabase
+      .from('saved_news')
+      .select('article_urls')
+      .eq('user_id', currentId)
+      .maybeSingle()
+      .then(({ data }) => setBookmarks(data?.article_urls || []));
+  }, [user]);
 
   // When visiting a /news/slug-id URL directly, routeTab is null (tab is
   // preserved, not forced). Default to 'allnews' so the reader is visible.
@@ -267,12 +304,8 @@ export default function App() {
               target={target}
               isRead={isRead}
               readUrls={readUrls}
-              bookmarks={bookmarks}
               isBookmarked={isBookmarked}
               onToggleBookmark={handleBookmarkToggle}
-              onClearBookmarks={clearBookmarks}
-              onLoadBookmarks={setBookmarks}
-              onClearRead={clearRead}
             />
           )}
           {showFeedback && <Feedback target={target} />}
