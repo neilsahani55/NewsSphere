@@ -2336,6 +2336,34 @@ mark.tts-hl {
 }
 .sp-auth-err { font-size: .82rem; color: var(--red); background: var(--redbg); border: 1px solid var(--red); border-radius: 6px; padding: .5rem .8rem; width: 100%; text-align: center; }
 
+/* Login-required toast (shown when unauthenticated user tries to save) */
+.save-prompt {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  padding: .75rem 1.25rem;
+  border-radius: 10px;
+  font-size: .85rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  z-index: 500;
+  box-shadow: var(--shadowlg);
+  white-space: nowrap;
+}
+.save-prompt button {
+  background: var(--hl);
+  color: var(--ink);
+  border: none;
+  border-radius: 6px;
+  padding: .3rem .7rem;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
 
 @media (max-width: 768px) {
   /* Nav tabs: all 4 fit on screen without horizontal scroll */

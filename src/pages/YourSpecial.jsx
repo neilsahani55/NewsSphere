@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { authSupabase, useAuth } from '../hooks/useAuth.js';
-import { useBookmarks } from '../hooks/useBookmarks.js';
 import { TOPIC_CATEGORIES, matchesTopic } from '../utils/categories.js';
 import { navigate } from '../hooks/useRoute.js';
 import NewsFeed from '../components/NewsFeed.jsx';
@@ -65,9 +64,8 @@ const FEATURES = [
   { icon: '🔖', title: 'Save stories', desc: 'Bookmark articles and read them later' },
 ];
 
-export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls, onClearBookmarks, onLoadBookmarks, onClearRead }) {
+export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSelect, target, isRead, readUrls, bookmarks, isBookmarked, onToggleBookmark, onClearBookmarks, onLoadBookmarks, onClearRead }) {
   const { user, loading, authError, signIn, signOut } = useAuth();
-  const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const [panel, setPanel] = useState('topics');
   const [editing, setEditing] = useState(false);
   const prevPanel = useRef(panel);
@@ -185,24 +183,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     if (first) onAutoSelect(first.article_url);
   }, [user, panel, feedArticles, savedArticles, readArticles, selectedUrl, onAutoSelect]);
 
-  // When logged in, sync bookmark changes to saved_news (single row, array of URLs).
-  const handleToggleSave = useCallback(async (url) => {
-    const wasSaved = isBookmarked(url);
-    const newUrls = wasSaved
-      ? bookmarks.filter(u => u !== url)
-      : [url, ...bookmarks];
-    toggleBookmark(url); // update localStorage immediately
-    if (!user) return;
-    await authSupabase.from('saved_news').upsert({
-      user_id: user.id,
-      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
-      user_email: user.email,
-      article_urls: newUrls,
-      updated_at: istNow(),
-    }, { onConflict: 'user_id' });
-  }, [isBookmarked, toggleBookmark, bookmarks, user]);
-
-  // Shared props for NewsFeed in both panels
+  // Shared props for NewsFeed in all panels
   const feedProps = {
     visibleCount: Infinity,
     onLoadMore: () => {},
@@ -211,7 +192,7 @@ export default function YourSpecial({ articles, selectedUrl, onSelect, onAutoSel
     selectedUrl,
     onSelect,
     isBookmarked,
-    onToggleBookmark: handleToggleSave,
+    onToggleBookmark,
     target,
   };
 

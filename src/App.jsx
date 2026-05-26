@@ -9,9 +9,18 @@ import { useReadArticles } from './hooks/useReadArticles.js';
 import { useDebounce } from './hooks/useDebounce.js';
 import { useBatchTranslation } from './hooks/useBatchTranslation.js';
 import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
+import { authSupabase, useAuth } from './hooks/useAuth.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
+
+function istNow() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(new Date());
+}
 // Legal pages are rarely visited — load them only when navigated to.
 const Privacy     = lazy(() => import('./pages/Privacy.jsx'));
 const Terms       = lazy(() => import('./pages/Terms.jsx'));
@@ -28,8 +37,10 @@ export default function App() {
   const { route, tab: routeTab, articleId } = useRoute();
   const { articles, status, backgroundLoading, error, refresh } = useNews();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { isBookmarked, toggle: toggleBookmark, count: bookmarkCount, clearAll: clearBookmarks, setAll: setBookmarks } = useBookmarks();
+  const { bookmarks, isBookmarked, toggle: toggleBookmark, clearAll: clearBookmarks, setAll: setBookmarks } = useBookmarks();
   const { isRead, markRead, readUrls, readCount, clearRead } = useReadArticles();
+  const { user } = useAuth();
+  const [savePrompt, setSavePrompt] = useState(false);
 
   // When visiting a /news/slug-id URL directly, routeTab is null (tab is
   // preserved, not forced). Default to 'allnews' so the reader is visible.
@@ -51,6 +62,27 @@ export default function App() {
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [allNewsTopics, setAllNewsTopics] = useState([]);
+
+  // Unified save toggle: gates on login, syncs to Supabase when logged in.
+  // Used by AllNews cards, the reader panel, and YourSpecial — single source of truth.
+  const handleBookmarkToggle = useCallback(async (url) => {
+    if (!user) {
+      setSavePrompt(true);
+      setTimeout(() => setSavePrompt(false), 3500);
+      return;
+    }
+    const newUrls = isBookmarked(url)
+      ? bookmarks.filter(u => u !== url)
+      : [url, ...bookmarks];
+    toggleBookmark(url);
+    authSupabase.from('saved_news').upsert({
+      user_id: user.id,
+      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
+      user_email: user.email,
+      article_urls: newUrls,
+      updated_at: istNow(),
+    }, { onConflict: 'user_id' });
+  }, [user, isBookmarked, bookmarks, toggleBookmark]);
 
   const debouncedSearch = useDebounce(search, 200);
 
@@ -235,6 +267,9 @@ export default function App() {
               target={target}
               isRead={isRead}
               readUrls={readUrls}
+              bookmarks={bookmarks}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={handleBookmarkToggle}
               onClearBookmarks={clearBookmarks}
               onLoadBookmarks={setBookmarks}
               onClearRead={clearRead}
@@ -251,7 +286,7 @@ export default function App() {
               selectedUrl={selected?.article_url}
               onSelect={handleSelect}
               isBookmarked={isBookmarked}
-              onToggleBookmark={toggleBookmark}
+              onToggleBookmark={handleBookmarkToggle}
               target={target}
               onRefresh={refresh}
               topics={allNewsTopics}
@@ -268,7 +303,7 @@ export default function App() {
             <DetailPanel
               article={selected}
               bookmarked={selected ? isBookmarked(selected.article_url) : false}
-              onToggleBookmark={toggleBookmark}
+              onToggleBookmark={handleBookmarkToggle}
               target={target}
               allArticles={completeArticles}
               onSelectArticle={handleSelect}
@@ -323,6 +358,15 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {savePrompt && (
+        <div className="save-prompt" role="status">
+          Sign in to save articles
+          <button onClick={() => { setSavePrompt(false); setNavTab('special'); }}>
+            Sign in →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
