@@ -29,7 +29,7 @@ function HomeCard({ article, featured, compact, selected, onSelect, target }) {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(article); } }}
     >
       {!compact && article.image_url && (
-        <img className="hcard-img" src={article.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        <img className="hcard-img" src={article.image_url} alt="" loading={featured ? 'eager' : 'lazy'} fetchPriority={featured ? 'high' : 'auto'} referrerPolicy="no-referrer" />
       )}
       <div className="hcard-body">
         <h3 className="hcard-title">{title}</h3>

@@ -1277,7 +1277,7 @@ button { font-family: inherit; }
 .foot-nav-btn:hover { color: var(--hl); }
 .foot-email {
   font-weight: 600;
-  color: var(--hl) !important;
+  color: var(--accent2) !important;
   word-break: break-all;
 }
 .foot-response { font-size: .72rem; color: var(--ink3); margin-top: .1rem; }
