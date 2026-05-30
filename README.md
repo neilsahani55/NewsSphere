@@ -2,143 +2,216 @@
 
 > News intelligence beyond the headline.
 
-A multilingual news dashboard with built-in OSINT enrichment. NewsSphere
-aggregates 4,000+ articles from 50+ sources (5 keyed APIs + dozens of RSS
-feeds) into a single Google Sheet, then surfaces them through a fast React UI
-that lets you read in any of 18 languages, cross-reference stories across
-sources, and dig into context with Wikipedia + reverse-image search +
-social-media discovery — all from CORS-friendly free APIs (no keys needed
-in the browser).
+A multilingual news dashboard with AI enrichment, personalization, and built-in OSINT tools.
+NewsSphere aggregates articles from 50+ RSS feeds and APIs, enriches each one with an NVIDIA
+LLM (summary, key points, sentiment), stores everything in Supabase, and surfaces it through
+a fast React UI that lets you read in 18 languages, bookmark stories, cross-reference sources,
+and dig into context with Wikipedia + web search — all from the browser, no keys required.
 
-## Aggregate · Translate · Investigate
+## Features
 
 ### Aggregate
-- 12 logical topics derived from comma-separated category labels
-  (`India, Politics, Business` correctly surfaces under three filters)
-- Articles gated on enrichment — only fully-populated rows reach the feed,
-  half-finished rows quietly appear once the Apps Script fills them in
-- Newest-first sort, deterministic across browsers
-- Horizontal scrolling cards row + full-width reader pane below
+- 50+ curated sources across 12 topic categories (India, World, Tech, Business, Science,
+  Health, Sports, Entertainment, Crypto, Politics, Environment, Crime)
+- Three GitHub Actions pipeline groups run every 30 minutes, staggered to avoid rate limits
+- Articles gated on full enrichment — half-finished rows are hidden until AI fills them in
+- **Today in History** — a daily Wikipedia-powered "On this day" widget with India-focused
+  events, date navigation (30 days back), and a full-detail modal
 
 ### Translate
-- On-demand translation to **18 languages** via Google Translate's public
-  gtx endpoint — no API key, no quota for normal use
-- Default English; switch globally and *all* visible cards + the open
-  article translate together
-- Background concurrency-limited batch translator for cards
+- On-demand translation to 18 languages via Google Translate's public gtx endpoint
+- No API key required; switch language globally and all visible cards + the open article translate
+- Background concurrency-limited batch translator for cards in view
 - Shared module-scoped cache that auto-invalidates when source text changes
-  (so updated content doesn't get a stale translation)
+
+### Personalize
+- Google Sign-In (popup-based, no redirect) via Supabase Auth
+- Bookmarks synced to Supabase per user — survive logout/login and multiple devices
+- Read-article tracking (local + per-account) with per-account isolation on device
+- "Your Special" tab: articles matched to your reading history
 
 ### Investigate (OSINT)
-- **Entity extraction** — proper nouns + acronyms pulled from each article
-- **Wikipedia enrichment** — one-paragraph summary + thumbnail per entity
-- **Cross-references** — other articles in the feed mentioning the same
-  entities, expandable inline (each row also has a "open in main reader" jump)
-- **External investigations** — direct links to Google News, Bing, X, Reddit,
-  Google Lens, TinEye for verification and discovery
+- Entity extraction — proper nouns and acronyms pulled from each article
+- Wikipedia enrichment — one-paragraph summary + thumbnail per entity
+- Cross-references — other articles in the feed mentioning the same entities
+- External links — Google News, Bing, X, Reddit, Google Lens, TinEye
 
 ### Polish
 - Light + dark theme with system-preference fallback
-- Bookmarks (localStorage), `⌘K` search, infinite scroll
-- 5-tier responsive design (380 / 540 / 720 / 900 / 1080 px breakpoints)
-- Sentiment tagging from the World News API column
+- Bookmarks, `⌘K` search, infinite scroll
+- Text-to-speech with speed controls and sentence highlighting
+- 5-tier responsive layout (mobile → desktop)
+- Sentiment tagging from LLM enrichment
 
 ## Architecture
 
 ```
-┌──────────────────┐    every 30 min    ┌──────────────────┐
-│ 50+ News sources │ ─────────────────▶ │ Google Sheet     │
-│ (5 APIs + RSS)   │   (Apps Script)    │ (13-column data) │
-└──────────────────┘                    └────────┬─────────┘
-                                                 │
-                                  server-side gviz fetch
-                                                 │
-                                       ┌─────────▼──────────┐
-                                       │ /api/news (Vercel) │
-                                       │ Sheet ID hidden    │
-                                       └─────────┬──────────┘
-                                                 │
-                                          JSON over HTTPS
-                                                 │
-                                       ┌─────────▼──────────┐
-                                       │ React UI (browser) │
-                                       │ + Google Translate │
-                                       │ + Wikipedia REST   │
-                                       └────────────────────┘
+┌─────────────────────┐    GitHub Actions (every 30 min)    ┌──────────────────────┐
+│ 50+ RSS / API feeds │ ──────────────────────────────────▶ │ pipeline/ (Node.js)  │
+│                     │                                      │ fetchNews → NVIDIA   │
+└─────────────────────┘                                      │ enrichWithAI → db.js │
+                                                             └──────────┬───────────┘
+                                                                        │ upsert
+                                                             ┌──────────▼───────────┐
+                                                             │ Supabase (Postgres)  │
+                                                             │ news + today_history │
+                                                             │ profiles + saved_news│
+                                                             └──────────┬───────────┘
+                                                                        │ anon key / RLS
+                                                             ┌──────────▼───────────┐
+                                                             │ React UI (browser)   │
+                                                             │ + Google Translate   │
+                                                             │ + Wikipedia REST     │
+                                                             └──────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│ history-pipeline/  (daily, 00:00 IST via GitHub Actions)│
+│ Wikipedia "On This Day" API → Supabase today_history   │
+└────────────────────────────────────────────────────────┘
 ```
 
-The Sheet ID lives only on the server. Browsers see `/api/news?q=...`
-requests — the actual gviz endpoint and the Sheet ID never reach the client
-bundle or DevTools.
+Supabase service-role key is used only inside GitHub Actions (never in the browser).
+Browser reads use the anon key, protected by Supabase Row Level Security policies.
 
 ## Local development
 
-Requires Node 18+ and a Google Sheet populated with the 13-column schema below.
+Requires Node 18+ and a Supabase project with the schema in `supabase/schema.sql`.
 
 ```bash
 npm install
 cp .env.example .env
-# edit .env: set SHEET_ID and SHEET_TAB
+# Fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-Open http://localhost:5173/. The Vite dev server includes a `/api/news`
-middleware that proxies gviz locally, so the dev experience is identical
-to production.
+Open http://localhost:5173/. The app reads directly from Supabase — no local pipeline needed
+to browse articles (the live database already has data from the GitHub Actions runs).
+
+## Run the pipeline locally
+
+```bash
+cd pipeline
+npm install
+cp .env.example .env
+# Fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, and at least NVIDIA_KEY
+PIPELINE_GROUP=1 node index.js
+```
+
+The pipeline fetches Group 1 sources, enriches with NVIDIA (Gemini/OpenAI as fallbacks),
+and upserts to Supabase. Runs Groups 2 and 3 by changing `PIPELINE_GROUP`.
 
 ## Deploy to Vercel
 
 1. Import the repo at https://vercel.com/new
-2. Add two environment variables (server-only — no `VITE_` prefix):
-   - `SHEET_ID` — your Google Sheet ID
-   - `SHEET_TAB` — sheet tab name (default: `News`)
-3. Click **Deploy**
+2. Add environment variables (Vite prefix required for browser access):
+   - `VITE_SUPABASE_URL` — your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` — your Supabase anon (public) key
+3. Click **Deploy** — Vercel detects Vite from `vercel.json`, auto-deploys on every push to `main`
 
-Vercel detects Vite from `vercel.json`, builds the static assets, and turns
-`api/news.js` into a serverless function on the same origin. Auto-deploys on
-every push to `main`.
+## GitHub Actions secrets
+
+The pipeline workflows need these secrets set in **Settings → Secrets → Actions**:
+
+| Secret | Used by |
+|--------|---------|
+| `SUPABASE_URL` | All pipeline workflows |
+| `SUPABASE_SERVICE_KEY` | All pipeline workflows |
+| `NVIDIA_KEY` | News enrichment (primary LLM) |
+| `GEMINI_KEY` | News enrichment (fallback) |
+| `OPENAI_KEY` | News enrichment (fallback) |
+
+The history pipeline (`history.yml`) needs only `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`.
 
 ## Project structure
 
 ```
 .
-├── api/
-│   └── news.js              # Vercel serverless proxy — Sheet ID server-only
+├── .github/workflows/
+│   ├── pipeline.yml         # Group 1 — India/World/Tech/Business (every :00/:30)
+│   ├── pipeline-2.yml       # Group 2 — Science/Health/Sports/… (every :15/:45)
+│   ├── pipeline-3.yml       # Group 3 — India deep coverage (every :10/:40)
+│   └── history.yml          # Today in History — Wikipedia (daily 00:00 IST)
+├── history-pipeline/
+│   ├── index.js             # Wikipedia On-This-Day → Supabase today_history
+│   └── package.json
+├── pipeline/
+│   ├── index.js             # Orchestrator: fetch → enrich → save (per-batch)
+│   ├── fetchNews.js         # RSS + API fetching (parallel, per group)
+│   ├── sources.js           # 50+ source definitions grouped by category
+│   ├── enrichWithAI.js      # NVIDIA LLM enrichment with Gemini/OpenAI fallback
+│   ├── db.js                # Supabase upsert + deduplication
+│   ├── config.js            # Batch sizes, limits, timeouts
+│   └── package.json
+├── supabase/
+│   ├── schema.sql           # Table definitions and RLS policies
+│   └── migrate.sql          # Schema migrations
 ├── public/
-│   └── favicon.svg          # Brand mark — navy sphere + gold dot + serif N
+│   ├── favicon.svg          # Brand mark
+│   └── robots.txt
 ├── src/
-│   ├── App.jsx              # Top-level state + filter pipeline
+│   ├── App.jsx              # Top-level state, routing, filter pipeline
 │   ├── main.jsx             # ReactDOM root
-│   ├── components/          # Header, FilterBar, NewsCard, DetailPanel, OsintPanel, …
-│   ├── hooks/               # useNews, useTranslation, useBatchTranslation, useTheme, …
-│   ├── services/            # sheetService, translateService, osintService
-│   ├── utils/               # format helpers, category bucketing
-│   └── styles/index.css     # Single global stylesheet, light + dark themes
-├── vite.config.js           # Includes dev middleware that mirrors api/news.js
-├── vercel.json              # Vite framework hint
+│   ├── components/
+│   │   ├── Header.jsx       # Navbar: theme, search, language selector, refresh
+│   │   ├── TopNav.jsx       # Tab navigation (Home / All News / Your Special / Feedback)
+│   │   ├── TodayHistory.jsx # "On this day" history widget with date nav + modal
+│   │   ├── DetailPanel.jsx  # Article reader with TTS, OSINT, bookmarks
+│   │   ├── OsintPanel.jsx   # Entity extraction + Wikipedia + external search links
+│   │   ├── NewsFeed.jsx     # Horizontal scrolling card feed with infinite scroll
+│   │   ├── NewsCard.jsx     # Individual article card
+│   │   ├── SkeletonCard.jsx # Loading placeholder
+│   │   ├── SearchBar.jsx    # Search input
+│   │   └── TranslateSelector.jsx  # 18-language dropdown
+│   ├── hooks/
+│   │   ├── useNews.js           # Fetch articles from Supabase (batched, cached)
+│   │   ├── useAuth.js           # Google OAuth + Supabase auth
+│   │   ├── useHistory.js        # Today in History events (per-date session cache)
+│   │   ├── useTranslation.js    # Single-article translation
+│   │   ├── useBatchTranslation.js  # Background translation queue
+│   │   ├── useUIStrings.js      # Static UI string translation
+│   │   ├── useBookmarks.js      # Bookmark state (localStorage + Supabase sync)
+│   │   ├── useReadArticles.js   # Read-article tracking
+│   │   ├── useTheme.js          # Dark/light theme with localStorage persistence
+│   │   ├── useRoute.js          # Hash-based routing
+│   │   ├── useDebounce.js       # Search debounce
+│   │   └── useSwipe.js          # Touch swipe gestures
+│   ├── pages/
+│   │   ├── HomePage.jsx     # Home: Today in History + Top Stories + category sections
+│   │   ├── AllNews.jsx      # Full feed with topic filters
+│   │   ├── YourSpecial.jsx  # Personalized feed for logged-in users
+│   │   ├── Feedback.jsx     # Contact/feedback form
+│   │   ├── Status.jsx       # Live service stats (article counts, sources, categories)
+│   │   ├── Privacy.jsx      # Privacy policy
+│   │   ├── Terms.jsx        # Terms of service
+│   │   ├── Grievance.jsx    # Grievance officer (India IT Rules compliance)
+│   │   ├── Methodology.jsx  # How aggregation and enrichment works
+│   │   └── PageShell.jsx    # Layout wrapper for static pages
+│   ├── services/
+│   │   ├── supabaseService.js   # Supabase article fetch + lazy content loading
+│   │   ├── translateService.js  # Google Translate gtx endpoint + cache
+│   │   └── osintService.js      # Wikipedia entity enrichment + search links
+│   ├── utils/
+│   │   ├── format.js        # Date parsing, HTML stripping, reading time, truncation
+│   │   ├── categories.js    # Category matching, sentiment labels
+│   │   └── slug.js          # URL-safe slugification
+│   └── styles/index.css     # Single global stylesheet, light + dark CSS variables
+├── .env.example             # Browser environment variable template
+├── vite.config.js           # Vite build config with vendor chunk splitting
+├── vercel.json              # Vercel deployment config (SPA rewrite rules)
 └── package.json
 ```
 
-## Sheet schema
+## Supabase schema (key tables)
 
-| Col | Field | Notes |
-|---|---|---|
-| A | `fetched_at_ist` | Apps Script timestamp |
-| B | `category` | Comma-separated topics, e.g. `India, Politics, Business` |
-| C | `article_url` | Primary key for dedupe |
-| D | `title` | |
-| E | `description` | Short summary |
-| F | `content` | Full body — gates feed visibility when blank |
-| G | `key_points` | Bullet summary — also gates feed visibility |
-| H | `image_url` | Hero image |
-| I | `published_at_ist` | Article publish time (sort key) |
-| J | `source_name` | NDTV, BBC, Reuters, … |
-| K | `language` | ISO 639-1 |
-| L | `country` | ISO 3166-1 alpha-2 |
-| M | `sentiment` | -1.0 .. +1.0 from World News API |
+| Table | Purpose |
+|-------|---------|
+| `news` | All enriched articles — title, description, content, key_points, category, sentiment, image_url, source_name, published_at_ist |
+| `today_history` | Wikipedia "On This Day" events — event_year, title, description, category, details, history_date |
+| `profiles` | User display names and preferences |
+| `saved_news` | Per-user bookmark arrays (article_urls[]) |
 
 ## Tech stack
 
-Vite 5 · React 18 · Vercel serverless · Google Translate (gtx) · Wikipedia
-REST · Plain CSS with custom-property theming · Google Sheet as data store
-populated by Apps Script.
+Vite 5 · React 18 · Supabase (Postgres + Auth) · NVIDIA NIM LLM ·
+Google Translate (gtx, no key) · Wikipedia REST API · GitHub Actions ·
+Vercel serverless · Plain CSS with custom-property theming

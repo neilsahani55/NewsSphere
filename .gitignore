@@ -1,6 +1,8 @@
 node_modules
 pipeline/node_modules
 pipeline/.env
+history-pipeline/node_modules
+history-pipeline/.env
 dist
 dist-ssr
 .env
@@ -12,3 +14,4 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+code.gs
