@@ -342,6 +342,7 @@ export default function App() {
           {showHomePage && (
             <HomePage
               articles={completeArticles}
+              articlesStatus={status}
               selectedUrl={selected?.article_url}
               onSelect={handleSelect}
               target={target}

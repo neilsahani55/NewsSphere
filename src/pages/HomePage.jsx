@@ -44,10 +44,55 @@ function HomeCard({ article, featured, compact, selected, onSelect, target }) {
   );
 }
 
-export default function HomePage({ articles, selectedUrl, onSelect, target, onSeeAll }) {
+function HomeSkeleton() {
+  return (
+    <div className="home-skeleton-wrap" aria-hidden>
+      <div className="home-sec">
+        <div className="home-sec-hdr">
+          <div className="hskel-line hskel-line--hd" />
+        </div>
+        <div className="home-top-grid">
+          <div className="hskel-card hskel-card--feat">
+            <div className="hskel-img" />
+            <div className="hskel-body">
+              <div className="hskel-line" />
+              <div className="hskel-line hskel-line--sm" />
+            </div>
+          </div>
+          <div className="home-top-side">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="hskel-card hskel-card--compact">
+                <div className="hskel-line" />
+                <div className="hskel-line hskel-line--sm" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {[0, 1].map(i => (
+        <div key={i} className="home-sec">
+          <div className="home-sec-hdr">
+            <div className="hskel-line hskel-line--hd" />
+          </div>
+          <div className="home-cat-grid">
+            {[0, 1, 2, 3].map(j => (
+              <div key={j} className="hskel-card hskel-card--compact">
+                <div className="hskel-line" />
+                <div className="hskel-line hskel-line--sm" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function HomePage({ articles, articlesStatus, selectedUrl, onSelect, target, onSeeAll }) {
   const t = useUIStrings(HOME_STRINGS, target);
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
   const now = Date.now();
+  const loading = articlesStatus === 'loading' || articlesStatus === 'idle';
 
   const topStories = useMemo(() => {
     const last24h = articles.filter(a => {
@@ -77,6 +122,8 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
       </div>
 
       <TodayHistory target={target} />
+
+      {loading && topStories.length === 0 && <HomeSkeleton />}
 
       {topStories.length > 0 && (
         <section className="home-sec">

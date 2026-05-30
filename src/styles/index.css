@@ -270,7 +270,7 @@ button { font-family: inherit; }
 .kbd {
   font-family: var(--ffb);
   font-size: .65rem;
-  color: var(--ink4);
+  color: var(--ink3);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 1px 6px;
@@ -564,7 +564,7 @@ button { font-family: inherit; }
   padding: 2px 8px;
   border-radius: 6px;
 }
-.dot-sep { color: var(--ink4); }
+.dot-sep { color: var(--ink3); }
 .cc {
   font-weight: 600;
   color: var(--ink3);
@@ -1835,6 +1835,43 @@ mark.tts-hl {
   object-fit: cover;
 }
 
+/* ─── Home skeleton (reserves space while articles load → reduces CLS) ── */
+@keyframes hskel-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+.hskel-card {
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  padding: 1rem 1.25rem;
+  animation: hskel-pulse 1.6s ease-in-out infinite;
+}
+.hskel-card--feat { padding: 0; overflow: hidden; }
+.hskel-card--feat .hskel-body { padding: 1rem 1.25rem; }
+.hskel-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  max-height: 220px;
+  background: var(--paper3);
+}
+.hskel-line {
+  height: 14px;
+  background: var(--paper3);
+  border-radius: 4px;
+  margin-bottom: .5rem;
+  width: 85%;
+}
+.hskel-line--sm { width: 55%; height: 11px; }
+.hskel-line--hd { width: 120px; height: 16px; }
+.hskel-card--compact {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: .75rem 1rem;
+  min-height: 72px;
+}
+
 /* ─── All News ─────────────────────────────────────────────────── */
 .allnews-wrap { display: flex; flex-direction: column; }
 
@@ -2258,8 +2295,8 @@ mark.tts-hl {
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 50%;
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
   font-size: 1.4rem;
   line-height: 1;
   color: rgba(255,255,255,.55);
@@ -2284,19 +2321,21 @@ mark.tts-hl {
   background: rgba(255,255,255,.22);
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 20px 10px;
+  background-clip: content-box;
   transition: background .2s, width .2s, border-radius .2s;
 }
 .th-dot.on {
   width: 18px;
   border-radius: 3px;
   background: var(--hl);
+  background-clip: content-box;
 }
 .th-dot:hover:not(.on) { background: rgba(255,255,255,.45); }
 
 /* ── Skeleton while loading ────────────────────────────────────────────── */
 .th-skeleton {
-  height: 190px;
+  height: 260px;
   background: linear-gradient(135deg, #0b1a30 0%, #152d54 100%);
   border-radius: var(--rmd);
   margin-bottom: 1.75rem;
@@ -2328,7 +2367,11 @@ mark.tts-hl {
   color: rgba(255,255,255,.5);
   font-size: 1.5rem;
   line-height: 1;
-  padding: 0 .1rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: color .15s;
   flex-shrink: 0;
@@ -2709,7 +2752,7 @@ mark.tts-hl {
   .th-year    { font-size: 1.9rem; }
   .th-title   { font-size: 1rem; }
   .th-desc    { font-size: .8rem; }
-  .th-skeleton { height: 170px; margin-bottom: 1.25rem; }
+  .th-skeleton { height: 240px; margin-bottom: 1.25rem; }
   .th-modal        { padding: 1.25rem 1.1rem 1.5rem; max-height: 90vh; }
   .th-modal-title  { font-size: 1.1rem; }
   .th-modal-body p { font-size: .83rem; }
