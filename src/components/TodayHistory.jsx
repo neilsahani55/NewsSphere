@@ -26,14 +26,14 @@ function shiftDate(isoDate, delta) {
   ].join('-');
 }
 
-function formatDisplay(isoDate) {
+function formatDisplay(isoDate, locale) {
   const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+  return new Date(y, m - 1, d).toLocaleDateString(locale || 'en-IN', {
     day: 'numeric', month: 'long',
   });
 }
 
-export default memo(function TodayHistory() {
+export default memo(function TodayHistory({ target }) {
   const todayStr = todayIST();
   const minDate  = shiftDate(todayStr, -MAX_DAYS_BACK);
 
@@ -45,6 +45,7 @@ export default memo(function TodayHistory() {
   const currentDate = selectedDate || todayStr;
   const isToday     = currentDate === todayStr;
   const atLimit     = currentDate <= minDate;
+  const locale      = target && target !== 'en' ? target : 'en-IN';
 
   const { events, status } = useHistory(currentDate);
   const count = events.length;
@@ -121,7 +122,7 @@ export default memo(function TodayHistory() {
                 aria-label="Previous day"
                 title="Previous day"
               >&#8249;</button>
-              <span className="th-today">{formatDisplay(currentDate)}</span>
+              <span className="th-today">{formatDisplay(currentDate, locale)}</span>
               <button
                 className="th-date-arrow"
                 onClick={goNextDay}

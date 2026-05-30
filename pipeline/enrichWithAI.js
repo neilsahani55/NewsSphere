@@ -202,9 +202,10 @@ async function enrichOne(article) {
   return null;
 }
 
-// Process articles in parallel batches of PARALLEL_NVIDIA (default 5).
-// Returns Map<article_url, enrichedData> for articles that succeeded.
-export async function enrichBatch(articles) {
+// Process articles in parallel batches of PARALLEL_NVIDIA.
+// onChunkDone(chunkMap, chunkArticles) is called immediately after each batch
+// so callers can insert to DB right away — protecting data if the job is cancelled.
+export async function enrichBatch(articles, onChunkDone) {
   const results = new Map();
   const chunks = [];
   for (let i = 0; i < articles.length; i += PARALLEL_NVIDIA) {
@@ -216,11 +217,22 @@ export async function enrichBatch(articles) {
     console.log(`  AI batch ${ci + 1}/${chunks.length} (${chunk.length} articles)...`);
 
     const settled = await Promise.allSettled(chunk.map(a => enrichOne(a)));
+    const chunkMap = new Map();
     settled.forEach((r, idx) => {
       if (r.status === 'fulfilled' && r.value) {
         results.set(chunk[idx].article_url, r.value);
+        chunkMap.set(chunk[idx].article_url, r.value);
       }
     });
+
+    // Insert this chunk immediately — data is safe even if the job times out later
+    if (onChunkDone && chunkMap.size > 0) {
+      try {
+        await onChunkDone(chunkMap, chunk);
+      } catch (e) {
+        console.error(`  [DB] Batch insert failed: ${e.message}`);
+      }
+    }
 
     if (ci < chunks.length - 1) {
       console.log(`  Sleeping ${BATCH_SLEEP_MS / 1000}s...`);

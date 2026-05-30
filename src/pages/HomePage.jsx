@@ -74,7 +74,7 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
         <span className="home-briefing-date">{today}</span>
       </div>
 
-      <TodayHistory />
+      <TodayHistory target={target} />
 
       {topStories.length > 0 && (
         <section className="home-sec">
