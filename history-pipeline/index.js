@@ -55,9 +55,7 @@ function assignCategory(text) {
 }
 
 function makeTitle(text, pageTitle) {
-  // Use Wikipedia article title when meaningful (not generic)
   if (pageTitle && pageTitle.length > 3 && pageTitle.length < 80) return pageTitle;
-  // Otherwise take first clause (up to period/comma), max 80 chars
   const clause = text.split(/[.,]/)[0].trim();
   return clause.length <= 80 ? clause : clause.slice(0, 77) + '...';
 }
@@ -70,7 +68,6 @@ async function fetchFromWikipedia(month, day) {
   if (!res.ok) throw new Error(`Wikipedia API HTTP ${res.status}`);
   const data = await res.json();
 
-  // Collect all unique events (selected first — most notable)
   const selected = data.selected || [];
   const events   = data.events   || [];
   const seen = new Set();
@@ -84,23 +81,26 @@ async function fetchFromWikipedia(month, day) {
   return all;
 }
 
-function toRow(ev, date) {
-  const yr    = String(ev.year || '').trim();
-  const text  = String(ev.text || '').trim();
-  const pTitle = ev.pages?.[0]?.title || '';
-  const title = makeTitle(text, pTitle).slice(0, 200);
-  const desc  = text.slice(0, 1500);
-  const cat   = assignCategory(text + ' ' + pTitle);
-  if (!yr || !title || !desc) return null;
-  return { history_date: date, event_year: yr, title, description: desc, category: cat };
+async function fetchWikiExtract(title) {
+  if (!title) return '';
+  try {
+    const encoded = encodeURIComponent(title.replace(/ /g, '_'));
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
+      { headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' } },
+    );
+    if (!res.ok) return '';
+    const data = await res.json();
+    return (data.extract || '').slice(0, 3000);
+  } catch {
+    return '';
+  }
 }
 
 async function insertEvents(raw, date) {
-  // Split into India and non-India pools
   const indiaPool    = raw.filter(ev => isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || '')));
   const nonIndiaPool = raw.filter(ev => !isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || '')));
 
-  // Guarantee at least 2 India events (up to 3), fill the rest from non-India
   const indiaCount = Math.min(indiaPool.length, 3);
   const picked = [
     ...indiaPool.slice(0, indiaCount),
@@ -109,7 +109,20 @@ async function insertEvents(raw, date) {
 
   console.log(`India events available: ${indiaPool.length}, picking: ${indiaCount}`);
 
-  const rows = picked.map(ev => toRow(ev, date)).filter(Boolean);
+  const rows = [];
+  for (const ev of picked) {
+    const yr     = String(ev.year || '').trim();
+    const text   = String(ev.text || '').trim();
+    const pTitle = ev.pages?.[0]?.title || '';
+    const title  = makeTitle(text, pTitle).slice(0, 200);
+    const desc   = text.slice(0, 1500);
+    const cat    = assignCategory(text + ' ' + pTitle);
+    if (!yr || !title || !desc) continue;
+    const details = await fetchWikiExtract(pTitle);
+    console.log(`  [${yr}] ${title} — details: ${details.length} chars`);
+    rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
+  }
+
   if (rows.length === 0) throw new Error('No valid rows after processing');
 
   const { error } = await supabase.from(HISTORY_TABLE).insert(rows);

@@ -41,7 +41,7 @@ export function useHistory() {
 
     supabase
       .from('today_history')
-      .select('id, event_year, title, description, category')
+      .select('id, event_year, title, description, category, details')
       .eq('history_date', todayIST())
       .order('id', { ascending: true })
       .then(({ data, error }) => {
