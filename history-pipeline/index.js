@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const HISTORY_TABLE = 'today_history';
 const KEEP_DAYS     = 30;
-const MAX_EVENTS    = 20; // store up to 20 events per day
+const MAX_EVENTS    = 40; // events stored per day
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false },
@@ -54,7 +54,7 @@ async function shouldSkip(date) {
   return true;
 }
 
-const INDIA_RE = /\b(india|indian|mughal|delhi|mumbai|gandhi|nehru|pakistan|bangladesh|hindi|hindu|sikh|kolkata|calcutta|bombay|madras|chennai|british raj|raj|subcontinent|maharaja|tipu|ashoka|maurya|maratha|gupta|punjab|hyderabad|mysore|nawab|bengal|tamil|kerala|gujarat|rajasthan|bollywood|ipl|bcci)\b/;
+const INDIA_RE = /\b(india|indian|mughal|delhi|mumbai|gandhi|nehru|pakistan|bangladesh|hindi|hindu|sikh|kolkata|calcutta|bombay|madras|chennai|british raj|subcontinent|maharaja|tipu|tipu sultan|ashoka|maurya|maratha|gupta|punjab|hyderabad|mysore|nawab|bengal|tamil|kerala|gujarat|rajasthan|bollywood|ipl|bcci|cricket|hindustan|ambedkar|sardar patel|vallabhbhai|subhas chandra|netaji|bal gangadhar|tilak|gokhale|aurangzeb|akbar|babur|humayun|shah jahan|chandragupta|chola|vijayanagara|peshwa|nizam|deccan|bengaluru|bangalore|pune|patna|bhopal|lucknow|varanasi|agra|jaipur|ahmedabad|surat|guwahati|isro|chandrayaan|mangalyaan|indira|vajpayee|manmohan|narendra modi|kashmir|kargil|partition|andhra|karnataka|odisha|assam|goa|manipur|nagaland|tripura|meghalaya|sikkim|haryana|uttarakhand|jharkhand|chhattisgarh|rupee|reserve bank of india|east india company|indian national congress|indian mutiny|sepoy mutiny|dandi|salt march|quit india|non-cooperation|swadeshi|jallianwala|amritsar massacre|indian ocean|bay of bengal|arabian sea|himalayas|ganges|brahmaputra|indus)\b/;
 
 function isIndia(text) {
   return INDIA_RE.test(text.toLowerCase());
@@ -93,32 +93,50 @@ async function fetchFromWikipedia(month, day) {
   const events   = data.events   || [];
   const births   = data.births   || [];
   const deaths   = data.deaths   || [];
+  const allItems = [...events, ...births, ...deaths];
 
-  // Dedup by year (one event per year); reduce keeps seen updated per-item
-  const seen = new Set();
-  const dedup = (arr, tag) => arr.reduce((acc, ev) => {
+  // seenText prevents the exact same event appearing twice across pools
+  const seenText = new Set();
+
+  // Pool 1: Wikipedia's curated highlights (all of them, usually 5-10)
+  const selPool = selected.filter(ev => ev.text).map(ev => {
+    seenText.add(ev.text);
+    return { ...ev, _tag: 'selected' };
+  });
+
+  // Pool 2: India events with their OWN year-dedup — not blocked by selPool.
+  // A year can appear in both selPool and indiaPool (different events).
+  const indiaSeenYr = new Set();
+  const indiaPool = allItems.reduce((acc, ev) => {
     const yr = String(ev.year);
-    if (!ev.text || seen.has(yr)) return acc;
-    seen.add(yr);
-    acc.push({ ...ev, _tag: tag });
+    if (!ev.text || seenText.has(ev.text) || indiaSeenYr.has(yr)) return acc;
+    if (!isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || ''))) return acc;
+    indiaSeenYr.add(yr);
+    seenText.add(ev.text);
+    acc.push({ ...ev, _tag: 'india' });
     return acc;
   }, []);
 
-  // 1. All "selected" (Wikipedia's own curated picks — most notable)
-  const selPool    = dedup(selected, 'selected');
-  // 2. India-specific from events + births + deaths
-  const indiaEvs   = dedup([...events, ...births, ...deaths].filter(
-    ev => isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || ''))
-  ), 'india');
-  // 3. Remaining events to fill up to MAX_EVENTS
-  const restEvs    = dedup(events, 'event');
+  // Pool 3: General events (events + births + deaths) to fill remaining slots.
+  // Skip years already used in selPool OR indiaPool to avoid repetition.
+  const usedYears = new Set([
+    ...selPool.map(e => String(e.year)),
+    ...indiaPool.map(e => String(e.year)),
+  ]);
+  const restPool = allItems.reduce((acc, ev) => {
+    const yr = String(ev.year);
+    if (!ev.text || seenText.has(ev.text) || usedYears.has(yr)) return acc;
+    usedYears.add(yr);
+    seenText.add(ev.text);
+    acc.push({ ...ev, _tag: 'event' });
+    return acc;
+  }, []);
 
-  // Combine: selected first, then India, then rest — sorted by year ascending
-  const combined = [...selPool, ...indiaEvs, ...restEvs].slice(0, MAX_EVENTS);
+  // Combine: selected → india → rest, cap at MAX_EVENTS, sort by year
+  const combined = [...selPool, ...indiaPool, ...restPool].slice(0, MAX_EVENTS);
   combined.sort((a, b) => Number(a.year) - Number(b.year));
 
-  const indiaCount = combined.filter(e => isIndia(e.text + ' ' + (e.pages?.[0]?.title || ''))).length;
-  console.log(`Events: ${combined.length} total, ${selPool.length} selected, ${indiaCount} India-related`);
+  console.log(`Events: ${combined.length} total | ${selPool.length} selected | ${indiaPool.length} India | ${Math.min(restPool.length, MAX_EVENTS - selPool.length - indiaPool.length)} general`);
   return combined;
 }
 
