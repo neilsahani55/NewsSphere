@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -107,33 +107,41 @@ export default function App() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [allNewsTopics, setAllNewsTopics] = useState([]);
 
+  // Always track the latest bookmarks in a ref so the debounced Supabase
+  // write reads the final state, not a stale closure snapshot.
+  const bookmarksRef = useRef(bookmarks);
+  useEffect(() => { bookmarksRef.current = bookmarks; }, [bookmarks]);
+  const syncTimeoutRef = useRef(null);
+
   // Unified save toggle: gates on login, syncs to Supabase when logged in.
   // Used by AllNews cards, the reader panel, and YourSpecial — single source of truth.
-  const handleBookmarkToggle = useCallback(async (url) => {
+  //
+  // The Supabase write is debounced (800 ms) so that quickly saving several
+  // articles in a row results in ONE upsert with the final list, preventing
+  // the race condition where an earlier upsert finishes last and overwrites
+  // a later one (e.g. save A then B → only A ends up in the DB).
+  const handleBookmarkToggle = useCallback((url) => {
     if (!user) {
       setSavePrompt(true);
       setTimeout(() => setSavePrompt(false), 3500);
       return;
     }
-    const newUrls = isBookmarked(url)
-      ? bookmarks.filter(u => u !== url)
-      : [url, ...bookmarks];
-    toggleBookmark(url); // optimistic local update
-    authSupabase.from('saved_news').upsert({
-      user_id: user.id,
-      user_name: user.user_metadata?.full_name || user.email.split('@')[0],
-      user_email: user.email,
-      article_urls: newUrls,
-      updated_at: istNow(),
-    }, { onConflict: 'user_id' })
-      .then(({ error }) => {
-        if (error) {
-          // Supabase write failed — roll back the optimistic update
-          toggleBookmark(url);
-          console.error('bookmark sync failed:', error.message);
-        }
-      });
-  }, [user, isBookmarked, bookmarks, toggleBookmark]);
+    toggleBookmark(url); // optimistic local update — instant feedback
+
+    clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(() => {
+      authSupabase.from('saved_news').upsert({
+        user_id: user.id,
+        user_name: user.user_metadata?.full_name || user.email.split('@')[0],
+        user_email: user.email,
+        article_urls: bookmarksRef.current,
+        updated_at: istNow(),
+      }, { onConflict: 'user_id' })
+        .then(({ error }) => {
+          if (error) console.error('bookmark sync failed:', error.message);
+        });
+    }, 800);
+  }, [user, toggleBookmark]);
 
   const debouncedSearch = useDebounce(search, 200);
 
