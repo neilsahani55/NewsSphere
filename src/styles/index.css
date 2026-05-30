@@ -18,7 +18,7 @@
   /* Light theme palette (default) */
   --ink:    #0b1120;
   --ink2:   #2d3a52;
-  --ink3:   #64748b;
+  --ink3:   #5a6a80;
   --ink4:   #94a3b8;
   --paper:  #f5f4f0;
   --paper2: #ffffff;
@@ -1265,10 +1265,13 @@ button { font-family: inherit; }
   text-decoration: none;
   background: none;
   border: none;
-  padding: 0;
+  padding: .5rem 0;
   cursor: pointer;
   text-align: left;
   transition: color .15s;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .foot-col-links a:hover,
 .foot-nav-btn:hover { color: var(--hl); }
@@ -1570,6 +1573,7 @@ button { font-family: inherit; }
 .top-nav::-webkit-scrollbar { display: none; }
 .tnav-tab {
   padding: .75rem 1.1rem;
+  min-height: 44px;
   font-size: .84rem;
   font-family: var(--ffb);
   border: none;
@@ -1629,7 +1633,10 @@ button { font-family: inherit; }
   border: none;
   cursor: pointer;
   font-weight: 600;
-  padding: 0;
+  padding: 0 .5rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 .home-see-all:hover { text-decoration: underline; }
 
@@ -2130,8 +2137,10 @@ mark.tts-hl {
 .sp-search-topics { font-size: .76rem; color: var(--ink3); }
 .sp-search-del {
   background: none; border: none; color: var(--ink3);
-  cursor: pointer; padding: .3rem; border-radius: 4px;
-  display: flex; align-items: center; transition: color .15s, background .15s;
+  cursor: pointer; padding: 0; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px;
+  transition: color .15s, background .15s;
 }
 .sp-search-del:hover { color: var(--red); background: var(--redbg); }
 
@@ -2321,7 +2330,7 @@ mark.tts-hl {
   background: rgba(255,255,255,.22);
   border: none;
   cursor: pointer;
-  padding: 20px 10px;
+  padding: 20px;
   background-clip: content-box;
   transition: background .2s, width .2s, border-radius .2s;
 }
@@ -2393,6 +2402,9 @@ mark.tts-hl {
   cursor: pointer;
   transition: background .15s, border-color .15s;
   white-space: nowrap;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 .th-back-today:hover { background: rgba(212,168,71,.22); border-color: var(--hl); }
 
@@ -2425,6 +2437,7 @@ mark.tts-hl {
   border: 1px solid rgba(212,168,71,.4);
   border-radius: 20px;
   padding: .25rem .85rem;
+  min-height: 44px;
   font-size: .75rem;
   font-weight: 700;
   letter-spacing: .04em;
@@ -2474,8 +2487,8 @@ mark.tts-hl {
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.14);
   border-radius: 50%;
-  width: 2rem;
-  height: 2rem;
+  width: 44px;
+  height: 44px;
   font-size: .85rem;
   color: rgba(255,255,255,.6);
   cursor: pointer;
@@ -2720,6 +2733,7 @@ mark.tts-hl {
   .tnav-tab {
     flex: 1;
     min-width: 0;
+    min-height: 44px;
     padding: .6rem .15rem;
     font-size: .7rem;
     white-space: normal;
