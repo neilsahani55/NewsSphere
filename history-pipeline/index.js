@@ -35,9 +35,15 @@ async function alreadyFetched(date) {
   return data.length > 0;
 }
 
+const INDIA_RE = /\b(india|indian|mughal|delhi|mumbai|gandhi|nehru|pakistan|bangladesh|hindi|hindu|sikh|kolkata|calcutta|bombay|madras|chennai|british india|raj|subcontinent|maharaja|tipu|ashoka|maurya|maratha|gupta|punjab|hyderabad|mysore|nawab|bengal|tamil|kerala|gujarat|rajasthan)\b/;
+
+function isIndia(text) {
+  return INDIA_RE.test(text.toLowerCase());
+}
+
 function assignCategory(text) {
   const t = text.toLowerCase();
-  if (/\b(india|indian|mughal|delhi|mumbai|gandhi|nehru|pakistan|bangladesh|hindi|hindu|sikh)\b/.test(t)) return 'India';
+  if (INDIA_RE.test(t)) return 'India';
   if (/\b(discover|invent|scientist|physics|chemistry|astronomy|nasa|rocket|satellite|atom|dna|vaccine|medicine|laboratory)\b/.test(t)) return 'Science';
   if (/\b(computer|internet|telephone|aircraft|automobile|software|technology|digital|electric|telegraph)\b/.test(t)) return 'Technology';
   if (/\b(olympics|world cup|championship|tournament|football|cricket|tennis|basketball|baseball|athlete|stadium)\b/.test(t)) return 'Sports';
@@ -64,10 +70,9 @@ async function fetchFromWikipedia(month, day) {
   if (!res.ok) throw new Error(`Wikipedia API HTTP ${res.status}`);
   const data = await res.json();
 
-  // Prioritise "selected" (most notable), then "events"
+  // Collect all unique events (selected first — most notable)
   const selected = data.selected || [];
   const events   = data.events   || [];
-
   const seen = new Set();
   const all  = [];
   for (const ev of [...selected, ...events]) {
@@ -75,24 +80,36 @@ async function fetchFromWikipedia(month, day) {
     if (seen.has(key) || !ev.text) continue;
     seen.add(key);
     all.push(ev);
-    if (all.length >= 10) break;
   }
   return all;
 }
 
-async function insertEvents(raw, date) {
-  const rows = [];
-  for (const ev of raw) {
-    const yr    = String(ev.year || '').trim();
-    const text  = String(ev.text || '').trim();
-    const pTitle = ev.pages?.[0]?.title || '';
-    const title = makeTitle(text, pTitle).slice(0, 200);
-    const desc  = text.slice(0, 1500);
-    const cat   = assignCategory(text + ' ' + pTitle);
-    if (!yr || !title || !desc) continue;
-    rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat });
-  }
+function toRow(ev, date) {
+  const yr    = String(ev.year || '').trim();
+  const text  = String(ev.text || '').trim();
+  const pTitle = ev.pages?.[0]?.title || '';
+  const title = makeTitle(text, pTitle).slice(0, 200);
+  const desc  = text.slice(0, 1500);
+  const cat   = assignCategory(text + ' ' + pTitle);
+  if (!yr || !title || !desc) return null;
+  return { history_date: date, event_year: yr, title, description: desc, category: cat };
+}
 
+async function insertEvents(raw, date) {
+  // Split into India and non-India pools
+  const indiaPool    = raw.filter(ev => isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || '')));
+  const nonIndiaPool = raw.filter(ev => !isIndia(ev.text + ' ' + (ev.pages?.[0]?.title || '')));
+
+  // Guarantee at least 2 India events (up to 3), fill the rest from non-India
+  const indiaCount = Math.min(indiaPool.length, 3);
+  const picked = [
+    ...indiaPool.slice(0, indiaCount),
+    ...nonIndiaPool.slice(0, 10 - indiaCount),
+  ].sort((a, b) => Number(a.year) - Number(b.year));
+
+  console.log(`India events available: ${indiaPool.length}, picking: ${indiaCount}`);
+
+  const rows = picked.map(ev => toRow(ev, date)).filter(Boolean);
   if (rows.length === 0) throw new Error('No valid rows after processing');
 
   const { error } = await supabase.from(HISTORY_TABLE).insert(rows);
