@@ -6,9 +6,9 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
 
-// Columns fetched on initial load — excludes `content` (the largest field,
-// ~2 KB per article) so the first payload is small and renders fast.
-// Content is fetched lazily the first time the user opens an article.
+// Columns fetched on initial/background loads — excludes `content` (~2 KB/article)
+// and `key_points` (~250 bytes/article) because both are only needed in the reader.
+// They are fetched lazily the first time the user opens an article.
 const CARD_COLUMNS = [
   'id',
   'fetched_at_ist',
@@ -16,7 +16,6 @@ const CARD_COLUMNS = [
   'article_url',
   'title',
   'description',
-  'key_points',
   'image_url',
   'published_at_ist',
   'source_name',
@@ -25,8 +24,9 @@ const CARD_COLUMNS = [
   'sentiment',
 ].join(', ');
 
-export const INITIAL_BATCH = 50;   // shown to user immediately
-export const BACKGROUND_BATCH = 200; // each subsequent background page
+export const INITIAL_BATCH      = 50;  // shown to user immediately
+export const BACKGROUND_BATCH   = 100; // each background page (smaller = snappier UI)
+export const MAX_TOTAL_ARTICLES = 500; // stop after this many — nobody reads 2000+
 
 export async function loadNews({ signal, from = 0, to = INITIAL_BATCH - 1 } = {}) {
   let query = supabase
@@ -48,15 +48,19 @@ export async function loadNews({ signal, from = 0, to = INITIAL_BATCH - 1 } = {}
   return (data || []).filter(a => a.article_url && a.title);
 }
 
-// Per-article content fetch — called by DetailPanel the first time an article
-// is opened. Result is cached in the component so subsequent opens are instant.
+// Per-article content + key_points fetch — called by DetailPanel the first time
+// an article is opened. Both fields are excluded from card fetches to save data.
+// Result is cached in the component so subsequent opens are instant.
 export async function fetchArticleContent(id) {
   const { data, error } = await supabase
     .from('news')
-    .select('id, content')
+    .select('id, content, key_points')
     .eq('id', id)
     .single();
 
-  if (error) return '';
-  return data?.content ?? '';
+  if (error) return { content: '', key_points: '' };
+  return {
+    content:    data?.content    ?? '',
+    key_points: data?.key_points ?? '',
+  };
 }

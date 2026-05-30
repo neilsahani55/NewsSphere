@@ -69,17 +69,18 @@ export default function DetailPanel({
 
   const panelRef     = useRef(null);
   const timerRef     = useRef(null);   // fallback word-advance timer
-  // Cache fetched content so re-opening the same article is instant
-  const contentCache = useRef(new Map()); // id → content string
+  // Cache fetched content so re-opening the same article is instant.
+  // Stores { content, key_points } objects — both fields are lazy-loaded together.
+  const contentCache = useRef(new Map());
   const [fetchedContent, setFetchedContent] = useState(null);
 
-  // Merge lazily-fetched content so useTranslation sees it
+  // Merge lazily-fetched content + key_points so useTranslation sees them
   const articleWithContent = useMemo(() => {
     if (!article) return null;
     if (article.content) return article;
     const cached = contentCache.current.get(article.id);
-    if (cached) return { ...article, content: cached };
-    if (fetchedContent) return { ...article, content: fetchedContent };
+    if (cached) return { ...article, ...cached };
+    if (fetchedContent) return { ...article, ...fetchedContent };
     return article;
   }, [article, fetchedContent]);
 
@@ -108,16 +109,16 @@ export default function DetailPanel({
 
   useEffect(() => { setImgFailed(false); }, [article?.article_url]);
 
-  // Lazy-fetch content the first time an article is opened.
-  // Content was excluded from the initial bulk fetch to keep payload small.
+  // Lazy-fetch content + key_points the first time an article is opened.
+  // Both fields are excluded from bulk fetches to keep list payloads small.
   useEffect(() => {
     if (!article?.id || article.content) { setFetchedContent(null); return; }
     if (contentCache.current.has(article.id)) { setFetchedContent(contentCache.current.get(article.id)); return; }
     let cancelled = false;
-    fetchArticleContent(article.id).then(text => {
+    fetchArticleContent(article.id).then(result => {
       if (cancelled) return;
-      contentCache.current.set(article.id, text);
-      setFetchedContent(text);
+      contentCache.current.set(article.id, result);
+      setFetchedContent(result);
     });
     return () => { cancelled = true; };
   }, [article?.id, article?.content]);

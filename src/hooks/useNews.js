@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadNews, INITIAL_BATCH, BACKGROUND_BATCH } from '../services/supabaseService.js';
+import { loadNews, INITIAL_BATCH, BACKGROUND_BATCH, MAX_TOTAL_ARTICLES } from '../services/supabaseService.js';
 
-const REFRESH_MS = 5 * 60 * 1000; // re-fetch everything every 5 minutes
-const CACHE_KEY = 'ns_articles_v1';
-const CACHE_TTL = 10 * 60 * 1000; // serve cache for up to 10 minutes
+const REFRESH_MS = 5 * 60 * 1000;  // re-fetch everything every 5 minutes
+const CACHE_KEY  = 'ns_articles_v2'; // bumped so stale v1 cache (with key_points) is discarded
+const CACHE_TTL  = 25 * 60 * 1000;  // pipeline runs every 30 min — 25 min cache is safe
 
 function readCache() {
   try {
@@ -46,26 +46,31 @@ export function useNews({ auto = true } = {}) {
     if (initial.length < INITIAL_BATCH) return;
 
     // ── Phase 2: remaining articles in background ────────────────────────────
-    // Keep fetching pages of BACKGROUND_BATCH until the DB returns an empty page.
+    // Fetch pages of BACKGROUND_BATCH, stopping at MAX_TOTAL_ARTICLES so we
+    // never load the whole database. Cache is written after every page so that
+    // a partial load is still usable on the next visit.
     setBackgroundLoading(true);
     const all = [...initial];
     let from = INITIAL_BATCH;
 
     try {
-      while (!ctrl.signal.aborted) {
+      while (!ctrl.signal.aborted && all.length < MAX_TOTAL_ARTICLES) {
+        const remaining = MAX_TOTAL_ARTICLES - all.length;
+        const pageSize  = Math.min(BACKGROUND_BATCH, remaining);
         const batch = await loadNews({
           signal: ctrl.signal,
           from,
-          to: from + BACKGROUND_BATCH - 1,
+          to: from + pageSize - 1,
         });
 
         if (ctrl.signal.aborted || batch.length === 0) break;
 
         all.push(...batch);
-        setArticles([...all]); // each append triggers a re-render with more articles
+        setArticles([...all]);
+        writeCache(all); // persist after every page — don't lose data on early exit
 
-        if (batch.length < BACKGROUND_BATCH) break; // last page
-        from += BACKGROUND_BATCH;
+        if (batch.length < pageSize || all.length >= MAX_TOTAL_ARTICLES) break;
+        from += pageSize;
       }
     } finally {
       if (!ctrl.signal.aborted) setBackgroundLoading(false);
