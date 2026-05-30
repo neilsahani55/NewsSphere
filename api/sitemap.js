@@ -30,16 +30,24 @@ export default async function handler(_req, res) {
     process.env.VITE_SUPABASE_ANON_KEY,
   );
 
-  // Fetch all enriched articles ordered by newest first.
-  // No date filter — include everything the frontend can display.
-  const { data: articles } = await supabase
-    .from('news')
-    .select('id, title, published_at_ist, fetched_at_ist')
-    .eq('enriched', true)
-    .order('published_at_ist', { ascending: false })
-    .limit(2000);
+  // Paginate through all enriched articles so every article URL is in the sitemap.
+  // Supabase limits a single response to 1000 rows; we loop until the last page.
+  const PAGE = 1000;
+  let rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('news')
+      .select('id, title, published_at_ist, fetched_at_ist')
+      .eq('enriched', true)
+      .order('published_at_ist', { ascending: false })
+      .range(from, from + PAGE - 1);
 
-  const rows = (articles || []).filter(a => a.id && a.title);
+    if (error || !data || data.length === 0) break;
+    rows = rows.concat(data.filter(a => a.id && a.title));
+    if (data.length < PAGE) break; // reached the last page
+    from += PAGE;
+  }
   const today = new Date().toISOString().slice(0, 10);
   const now = Date.now();
 

@@ -48,6 +48,19 @@ export async function loadNews({ signal, from = 0, to = INITIAL_BATCH - 1 } = {}
   return (data || []).filter(a => a.article_url && a.title);
 }
 
+// Fetch a single article's card-level fields by ID.
+// Used when visiting /news/:slug directly for an article not in the loaded batch.
+export async function fetchArticleById(id) {
+  const { data, error } = await supabase
+    .from('news')
+    .select(CARD_COLUMNS)
+    .eq('id', id)
+    .single();
+
+  if (error) return null;
+  return data;
+}
+
 // Per-article content + key_points fetch — called by DetailPanel the first time
 // an article is opened. Both fields are excluded from card fetches to save data.
 // Result is cached in the component so subsequent opens are instant.

@@ -11,6 +11,7 @@ import { useBatchTranslation } from './hooks/useBatchTranslation.js';
 import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
 import { authSupabase, useAuth } from './hooks/useAuth.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
+import { fetchArticleById } from './services/supabaseService.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
 
@@ -109,6 +110,8 @@ export default function App() {
     try { localStorage.setItem('ns_lang', target); } catch {}
   }, [target]);
   const [selectedUrl, setSelectedUrl] = useState(null);
+  const [directArticle, setDirectArticle] = useState(null); // article fetched directly for /news/:id URLs
+  const directFetchedRef = useRef(null); // prevents re-fetching the same article ID
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [allNewsTopics, setAllNewsTopics] = useState([]);
 
@@ -233,11 +236,28 @@ export default function App() {
     if (!stillVisible) setSelectedUrl(filtered[0].article_url);
   }, [navTab, filtered, selectedUrl, articleId]);
 
-  // Auto-select article from URL on load
+  // Auto-select article from URL on load.
+  // If the article is in the loaded batch, use it directly.
+  // If not (e.g. shared link for an older article), fetch it from Supabase.
   useEffect(() => {
-    if (!articleId || completeArticles.length === 0) return;
+    if (!articleId) return;
     const found = completeArticles.find(a => a.id === articleId);
-    if (found) setSelectedUrl(found.article_url);
+    if (found) {
+      setSelectedUrl(found.article_url);
+      setDirectArticle(null);
+      return;
+    }
+    // Wait until at least the first batch has loaded before concluding the
+    // article isn't present, then do a targeted single-row fetch.
+    if (completeArticles.length > 0 && directFetchedRef.current !== articleId) {
+      directFetchedRef.current = articleId;
+      fetchArticleById(articleId).then(article => {
+        if (article) {
+          setDirectArticle(article);
+          setSelectedUrl(article.article_url);
+        }
+      });
+    }
   }, [articleId, completeArticles]);
 
   // selectedIndex is -1 when nothing is explicitly selected.
@@ -246,7 +266,12 @@ export default function App() {
     ? filtered.findIndex((a) => a.article_url === selectedUrl)
     : -1;
 
-  const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
+  // Fall back to directArticle (fetched by ID) when the article isn't in the
+  // current filtered list — happens when opening a shared /news/ link for an
+  // older article that isn't in the top-500 loaded batch.
+  const selected = selectedIndex >= 0
+    ? filtered[selectedIndex]
+    : (directArticle?.article_url === selectedUrl ? directArticle : null);
 
   const handleLoadMore = useCallback(() => {
     setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
