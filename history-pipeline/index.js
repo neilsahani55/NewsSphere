@@ -12,6 +12,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
+const pause = ms => new Promise(r => setTimeout(r, ms));
+
 // Add 90 min so that when run at 23:00 IST (17:30 UTC) we resolve to the
 // upcoming day's date, and a backup run at 00:30 IST still resolves correctly.
 function targetDate() {
@@ -35,8 +37,7 @@ function monthDayIST() {
   };
 }
 
-// Returns false if we should fetch (no rows, or rows missing details).
-// Auto-deletes incomplete rows so re-insertion doesn't conflict.
+// Re-fetches if less than 60% of today's events have details — not just "some".
 async function shouldSkip(date) {
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
@@ -45,12 +46,15 @@ async function shouldSkip(date) {
   if (error) throw new Error(`Supabase check failed: ${error.message}`);
   if (data.length === 0) return false;
 
-  const hasDetails = data.some(r => r.details && r.details.length > 50);
-  if (!hasDetails) {
-    console.log(`Found ${data.length} rows with no details — deleting and re-fetching...`);
+  const withDetails = data.filter(r => r.details && r.details.length > 50).length;
+  const ratio = withDetails / data.length;
+
+  if (ratio < 0.6) {
+    console.log(`Found ${data.length} rows but only ${withDetails} have details (${Math.round(ratio * 100)}%) — deleting and re-fetching...`);
     await supabase.from(HISTORY_TABLE).delete().eq('history_date', date);
     return false;
   }
+  console.log(`${withDetails}/${data.length} events have details — skipping`);
   return true;
 }
 
@@ -95,17 +99,13 @@ async function fetchFromWikipedia(month, day) {
   const deaths   = data.deaths   || [];
   const allItems = [...events, ...births, ...deaths];
 
-  // seenText prevents the exact same event appearing twice across pools
   const seenText = new Set();
 
-  // Pool 1: Wikipedia's curated highlights (all of them, usually 5-10)
   const selPool = selected.filter(ev => ev.text).map(ev => {
     seenText.add(ev.text);
     return { ...ev, _tag: 'selected' };
   });
 
-  // Pool 2: India events with their OWN year-dedup — not blocked by selPool.
-  // A year can appear in both selPool and indiaPool (different events).
   const indiaSeenYr = new Set();
   const indiaPool = allItems.reduce((acc, ev) => {
     const yr = String(ev.year);
@@ -117,8 +117,6 @@ async function fetchFromWikipedia(month, day) {
     return acc;
   }, []);
 
-  // Pool 3: General events (events + births + deaths) to fill remaining slots.
-  // Skip years already used in selPool OR indiaPool to avoid repetition.
   const usedYears = new Set([
     ...selPool.map(e => String(e.year)),
     ...indiaPool.map(e => String(e.year)),
@@ -132,7 +130,6 @@ async function fetchFromWikipedia(month, day) {
     return acc;
   }, []);
 
-  // Combine: selected → india → rest, cap at MAX_EVENTS, sort by year
   const combined = [...selPool, ...indiaPool, ...restPool].slice(0, MAX_EVENTS);
   combined.sort((a, b) => Number(a.year) - Number(b.year));
 
@@ -140,35 +137,64 @@ async function fetchFromWikipedia(month, day) {
   return combined;
 }
 
-// Fetch full intro extract from Wikipedia's MediaWiki action API
+// Fetch with automatic retry on 429 (rate limit) — up to 3 attempts.
+async function wikiGet(url) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (res.status === 429) {
+        const wait = 4000 * (attempt + 1);
+        console.warn(`    Wikipedia 429 — backing off ${wait / 1000}s (attempt ${attempt + 1}/3)`);
+        await pause(wait);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt === 2) {
+        console.warn(`    Wikipedia fetch error: ${err.message}`);
+        return null;
+      }
+      await pause(1000 * (attempt + 1));
+    }
+  }
+  return null;
+}
+
+// Two-pass Wikipedia extract: MediaWiki exintro → REST summary.
+// Both passes go through wikiGet so 429s are retried automatically.
 async function extractByTitle(title) {
   if (!title) return '';
+
+  // Pass 1: MediaWiki action API — full intro section (cleanest text)
   try {
     const params = new URLSearchParams({
       action: 'query', prop: 'extracts',
       exintro: '1', explaintext: '1', redirects: '1',
       titles: title, format: 'json',
     });
-    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
-    });
-    if (!res.ok) return '';
-    const json = await res.json();
-    const page = Object.values(json?.query?.pages || {})[0];
-    if (page && !page.missing && page.extract) {
-      const t = page.extract.trim();
-      if (t.length >= 50) return t.slice(0, 5000);
+    const res = await wikiGet(`https://en.wikipedia.org/w/api.php?${params}`);
+    if (res?.ok) {
+      const json = await res.json();
+      const page = Object.values(json?.query?.pages || {})[0];
+      if (page && !page.missing && page.extract) {
+        const t = page.extract.trim();
+        if (t.length >= 50) return t.slice(0, 5000);
+      }
     }
   } catch {}
 
-  // REST summary fallback (shorter but reliable)
+  await pause(400);
+
+  // Pass 2: REST summary API (shorter but rock-solid, different CDN path)
   try {
-    const encoded = encodeURIComponent(title.replace(/ /g, '_'));
-    const res = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
-      { headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' } },
+    const encoded = encodeURIComponent((title).replace(/ /g, '_'));
+    const res = await wikiGet(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`
     );
-    if (res.ok) {
+    if (res?.ok) {
       const json = await res.json();
       const t = (json.extract || '').trim();
       if (t.length >= 50) return t.slice(0, 5000);
@@ -178,72 +204,87 @@ async function extractByTitle(title) {
   return '';
 }
 
-// Search Wikipedia for the most relevant article title given a query string
+// Search Wikipedia for the most relevant article title.
 async function searchWikiTitle(query) {
   try {
     const params = new URLSearchParams({
       action: 'query', list: 'search',
       srsearch: query, srlimit: '1', format: 'json',
     });
-    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
-      headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
-    });
-    if (!res.ok) return '';
+    const res = await wikiGet(`https://en.wikipedia.org/w/api.php?${params}`);
+    if (!res?.ok) return '';
     const json = await res.json();
     return json?.query?.search?.[0]?.title || '';
   } catch { return ''; }
 }
 
+// Generate a factual write-up using Gemini AI when Wikipedia has nothing.
+// Tries gemini-2.0-flash first (faster), falls back to gemini-1.5-flash.
 async function generateWithGemini(title, year, desc) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return '';
+
   const prompt =
     `Write a factual, educational 2-3 paragraph description about this historical event ` +
-    `for a "Today in History" feature:\n\nEvent: ${title} (${year})\nBrief: ${desc}\n\n` +
-    `Be accurate and informative. Plain text only — no markdown, no bullet points.`;
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 600, temperature: 0.3 },
-        }),
-      },
-    );
-    const json = await res.json();
-    const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-    if (text.length >= 100) {
-      console.log(`    ✓ Gemini: ${text.length} chars`);
-      return text.slice(0, 5000);
+    `for a "Today in History" feature:\n\nEvent: ${title} (${year})\nContext: ${desc}\n\n` +
+    `Write in engaging plain prose. No markdown, no bullet points, no headers.`;
+
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 700, temperature: 0.2 },
+          }),
+          signal: AbortSignal.timeout(20000),
+        },
+      );
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`    Gemini ${model} HTTP ${res.status}: ${errBody.slice(0, 120)}`);
+        await pause(500);
+        continue;
+      }
+      const json = await res.json();
+      const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+      if (text.length >= 100) {
+        console.log(`    ✓ Gemini (${model}): ${text.length} chars`);
+        return text.slice(0, 5000);
+      }
+      console.warn(`    Gemini ${model} returned too-short text: "${text.slice(0, 60)}..."`);
+    } catch (err) {
+      console.warn(`    Gemini ${model} error: ${err.message}`);
     }
-  } catch (err) {
-    console.warn(`    ✗ Gemini error: ${err.message}`);
+    await pause(500);
   }
   return '';
 }
 
-// Four-tier extraction:
-//  1. Try every linked Wikipedia page title (not just pages[0])
-//  2. Wikipedia search using the first clause of the event text
-//  3. Second search attempt using a shorter title-only query
-//  4. Gemini AI generation as final fallback
+// Four-tier extraction: linked pages → event search → short search → Gemini AI
 async function fetchWikiExtract(pageTitles, eventText) {
-  // Tier 1: walk all linked pages until one yields a usable extract
-  for (const title of pageTitles) {
+  const tried = new Set();
+
+  // Tier 1: all linked page titles (cap at 3 to limit API calls)
+  for (const title of pageTitles.slice(0, 3)) {
+    tried.add(title);
     const extract = await extractByTitle(title);
     if (extract.length >= 50) {
       console.log(`    ✓ "${title}": ${extract.length} chars`);
       return extract;
     }
+    await pause(400);
   }
 
-  // Tier 2: search with first clause of the event text (cleaner than full text)
+  // Tier 2: Wikipedia search with first clause of the event text
   const clause = eventText.split(/[.,;]/)[0].trim().slice(0, 100);
   const found2 = await searchWikiTitle(clause);
-  if (found2 && !pageTitles.includes(found2)) {
+  if (found2 && !tried.has(found2)) {
+    tried.add(found2);
+    await pause(300);
     const extract = await extractByTitle(found2);
     if (extract.length >= 50) {
       console.log(`    ✓ Search→"${found2}": ${extract.length} chars`);
@@ -251,11 +292,13 @@ async function fetchWikiExtract(pageTitles, eventText) {
     }
   }
 
-  // Tier 3: shorter fallback search using just the first few words
+  // Tier 3: shorter search using just the first six words
   const short = eventText.split(' ').slice(0, 6).join(' ');
   if (short !== clause) {
     const found3 = await searchWikiTitle(short);
-    if (found3 && found3 !== found2 && !pageTitles.includes(found3)) {
+    if (found3 && !tried.has(found3)) {
+      tried.add(found3);
+      await pause(300);
       const extract = await extractByTitle(found3);
       if (extract.length >= 50) {
         console.log(`    ✓ ShortSearch→"${found3}": ${extract.length} chars`);
@@ -264,7 +307,7 @@ async function fetchWikiExtract(pageTitles, eventText) {
     }
   }
 
-  console.warn(`    ✗ No Wikipedia extract (pages: ${pageTitles.slice(0, 2).join(', ') || 'none'}) — trying Gemini`);
+  console.warn(`    ✗ No Wikipedia extract (tried: ${[...tried].slice(0, 2).join(', ') || 'none'})`);
   return '';
 }
 
@@ -283,10 +326,10 @@ async function insertEvents(raw, date) {
     console.log(`  [${yr}] ${title} (${pages.length} pages)`);
     let details = await fetchWikiExtract(pages, text);
     if (details.length < 50) details = await generateWithGemini(title, yr, desc);
+    if (details.length < 50) console.warn(`    ✗ No details obtained for: ${title}`);
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
 
-    // Brief pause between events — keeps Wikipedia API requests polite
-    await new Promise(r => setTimeout(r, 120));
+    await pause(500); // polite gap between events
   }
 
   if (rows.length === 0) throw new Error('No valid rows after processing');
@@ -315,10 +358,11 @@ async function cleanupOld() {
 async function main() {
   const date = todayIST();
   const { month, day } = monthDayIST();
-  console.log(`=== History pipeline: ${date} (${month}/${day}) ===\n`);
+  console.log(`=== History pipeline: ${date} (${month}/${day}) ===`);
+  console.log(`Gemini AI: ${process.env.GEMINI_API_KEY ? 'enabled' : '⚠ GEMINI_API_KEY not set — AI fallback disabled'}\n`);
 
   if (await shouldSkip(date)) {
-    console.log(`History for ${date} already exists with details — skipping fetch`);
+    console.log(`History for ${date} is complete — skipping fetch`);
   } else {
     const raw = await fetchFromWikipedia(month, day);
     await insertEvents(raw, date);
