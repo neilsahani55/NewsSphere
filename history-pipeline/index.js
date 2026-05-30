@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const HISTORY_TABLE = 'today_history';
 const KEEP_DAYS     = 30;
-const MAX_EVENTS    = 40; // events stored per day
+const MAX_EVENTS    = 50; // events stored per day
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false },
@@ -157,7 +157,7 @@ async function extractByTitle(title) {
     const page = Object.values(json?.query?.pages || {})[0];
     if (page && !page.missing && page.extract) {
       const t = page.extract.trim();
-      if (t.length >= 80) return t.slice(0, 5000);
+      if (t.length >= 50) return t.slice(0, 5000);
     }
   } catch {}
 
@@ -195,48 +195,65 @@ async function searchWikiTitle(query) {
 }
 
 // Three-tier extraction:
-//  1. Linked Wikipedia page title (direct)
-//  2. REST summary of same title (shorter)
-//  3. Wikipedia search using the event text → fetch that article
-async function fetchWikiExtract(pageTitle, eventText) {
-  // Tier 1 & 2: direct title lookup
-  if (pageTitle) {
-    const extract = await extractByTitle(pageTitle);
-    if (extract.length >= 80) {
-      console.log(`    ✓ Direct "${pageTitle}": ${extract.length} chars`);
+//  1. Try every linked Wikipedia page title (not just pages[0])
+//  2. Wikipedia search using the first clause of the event text
+//  3. Second search attempt using a shorter title-only query
+async function fetchWikiExtract(pageTitles, eventText) {
+  // Tier 1: walk all linked pages until one yields a usable extract
+  for (const title of pageTitles) {
+    const extract = await extractByTitle(title);
+    if (extract.length >= 50) {
+      console.log(`    ✓ "${title}": ${extract.length} chars`);
       return extract;
     }
   }
 
-  // Tier 3: search Wikipedia with the event description
-  const query = eventText.slice(0, 120);
-  const found = await searchWikiTitle(query);
-  if (found && found !== pageTitle) {
-    const extract = await extractByTitle(found);
-    if (extract.length >= 80) {
-      console.log(`    ✓ Search→"${found}": ${extract.length} chars`);
+  // Tier 2: search with first clause of the event text (cleaner than full text)
+  const clause = eventText.split(/[.,;]/)[0].trim().slice(0, 100);
+  const found2 = await searchWikiTitle(clause);
+  if (found2 && !pageTitles.includes(found2)) {
+    const extract = await extractByTitle(found2);
+    if (extract.length >= 50) {
+      console.log(`    ✓ Search→"${found2}": ${extract.length} chars`);
       return extract;
     }
   }
 
-  console.warn(`    ✗ No extract (title="${pageTitle}")`);
+  // Tier 3: shorter fallback search using just the first few words
+  const short = eventText.split(' ').slice(0, 6).join(' ');
+  if (short !== clause) {
+    const found3 = await searchWikiTitle(short);
+    if (found3 && found3 !== found2 && !pageTitles.includes(found3)) {
+      const extract = await extractByTitle(found3);
+      if (extract.length >= 50) {
+        console.log(`    ✓ ShortSearch→"${found3}": ${extract.length} chars`);
+        return extract;
+      }
+    }
+  }
+
+  console.warn(`    ✗ No extract (pages: ${pageTitles.slice(0, 2).join(', ') || 'none'})`);
   return '';
 }
 
 async function insertEvents(raw, date) {
   const rows = [];
   for (const ev of raw) {
-    const yr     = String(ev.year || '').trim();
-    const text   = String(ev.text || '').trim();
-    const pTitle = ev.pages?.[0]?.title || '';
-    const title  = makeTitle(text, pTitle).slice(0, 200);
-    const desc   = text.slice(0, 1500);
-    const cat    = assignCategory(text + ' ' + pTitle);
+    const yr       = String(ev.year || '').trim();
+    const text     = String(ev.text || '').trim();
+    const pages    = (ev.pages || []).map(p => p.title).filter(Boolean);
+    const pTitle   = pages[0] || '';
+    const title    = makeTitle(text, pTitle).slice(0, 200);
+    const desc     = text.slice(0, 1500);
+    const cat      = assignCategory(text + ' ' + pTitle);
     if (!yr || !title || !desc) continue;
 
-    console.log(`  [${yr}] ${title}`);
-    const details = await fetchWikiExtract(pTitle, text);
+    console.log(`  [${yr}] ${title} (${pages.length} pages)`);
+    const details = await fetchWikiExtract(pages, text);
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
+
+    // Brief pause between events — keeps Wikipedia API requests polite
+    await new Promise(r => setTimeout(r, 120));
   }
 
   if (rows.length === 0) throw new Error('No valid rows after processing');
