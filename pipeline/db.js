@@ -56,12 +56,15 @@ export async function insertEnrichedArticles(articles) {
 
   // ignoreDuplicates: false so that any old blank row gets overwritten with
   // the fully-enriched version if the same URL appears again.
-  const { error } = await supabase
+  // .select() returns the upserted rows including auto-generated IDs so the
+  // caller can build /news/slug-id URLs for IndexNow pinging.
+  const { data: inserted, error } = await supabase
     .from('news')
-    .upsert(rows, { onConflict: 'article_url', ignoreDuplicates: false });
+    .upsert(rows, { onConflict: 'article_url', ignoreDuplicates: false })
+    .select('id, title, article_url');
 
   if (error) throw new Error(`insertEnrichedArticles: ${error.message}`);
-  return rows.length;
+  return inserted || [];
 }
 
 // Delete articles older than RETENTION_DAYS.
