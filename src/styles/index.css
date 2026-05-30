@@ -2321,11 +2321,12 @@ mark.tts-hl {
 .th-dots {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: .3rem;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none; /* Firefox */
-  scroll-behavior: smooth;
 }
 .th-dots::-webkit-scrollbar { display: none; }
 .th-dot {

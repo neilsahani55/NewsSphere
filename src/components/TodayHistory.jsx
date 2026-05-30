@@ -65,10 +65,19 @@ export default memo(function TodayHistory({ target }) {
 
   useEffect(() => { setIndex(0); setExpanded(false); }, [currentDate]);
 
-  // Keep active dot scrolled into view when index changes
+  // Scroll the dots strip to keep the active dot centred — uses scrollTo on
+  // the container directly so the page itself never shifts horizontally.
   useEffect(() => {
-    const dot = dotsRef.current?.children[index];
-    if (dot) dot.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    const container = dotsRef.current;
+    if (!container) return;
+    const dot = container.children[index];
+    if (!dot) return;
+    const cRect = container.getBoundingClientRect();
+    const dRect = dot.getBoundingClientRect();
+    const delta = (dRect.left + dRect.width / 2) - (cRect.left + cRect.width / 2);
+    if (Math.abs(delta) > 1) {
+      container.scrollTo({ left: container.scrollLeft + delta, behavior: 'smooth' });
+    }
   }, [index]);
 
   const ev     = count > 0 ? events[index] : null;
