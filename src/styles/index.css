@@ -2265,6 +2265,8 @@ mark.tts-hl {
   color: #fff;
   line-height: 1.35;
   margin-bottom: .55rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .th-desc {

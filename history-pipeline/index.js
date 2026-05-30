@@ -68,7 +68,9 @@ function assignCategory(text) {
 }
 
 function makeTitle(text, pageTitle) {
-  if (pageTitle && pageTitle.length > 3 && pageTitle.length < 80) return pageTitle;
+  // Wikipedia page titles sometimes come with underscores instead of spaces
+  const clean = (pageTitle || '').replace(/_/g, ' ').trim();
+  if (clean && clean.length > 3 && clean.length < 80) return clean;
   const clause = text.split(/[.,]/)[0].trim();
   return clause.length <= 80 ? clause : clause.slice(0, 77) + '...';
 }

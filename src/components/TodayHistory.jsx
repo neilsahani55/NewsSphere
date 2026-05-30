@@ -1,5 +1,14 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { todayIST, useHistory } from '../hooks/useHistory.js';
+import { getCached, translateField } from '../services/translateService.js';
+import { useUIStrings } from '../hooks/useUIStrings.js';
+
+const TH_STRINGS = {
+  onThisDay:   'On this day',
+  readMore:    'Read more ›',
+  backToToday: 'Back to today',
+  noData:      'No history recorded for this date yet.',
+};
 
 const CAT_ICON = {
   Science:     '🔬',
@@ -40,6 +49,7 @@ export default memo(function TodayHistory({ target }) {
   const [selectedDate, setSelectedDate] = useState(null); // null = today
   const [index, setIndex]       = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [, setTick] = useState(0); // force re-render after async translation arrives
   const touchX = useRef(null);
 
   const currentDate = selectedDate || todayStr;
@@ -47,10 +57,44 @@ export default memo(function TodayHistory({ target }) {
   const atLimit     = currentDate <= minDate;
   const locale      = target && target !== 'en' ? target : 'en-IN';
 
+  const t = useUIStrings(TH_STRINGS, target);
+
   const { events, status } = useHistory(currentDate);
   const count = events.length;
 
   useEffect(() => { setIndex(0); setExpanded(false); }, [currentDate]);
+
+  const ev     = count > 0 ? events[index] : null;
+  const evObj  = ev ? { ...ev, article_url: `history_${ev.id}`, language: 'en' } : null;
+  const needsT = target && target !== 'original' && target !== 'en';
+
+  // Translate title/description/category when the displayed event or language changes
+  useEffect(() => {
+    if (!evObj || !needsT) return;
+    const ctrl = new AbortController();
+    let live = true;
+    Promise.all([
+      translateField(evObj, 'title',       target, ctrl.signal),
+      translateField(evObj, 'description', target, ctrl.signal),
+      translateField(evObj, 'category',    target, ctrl.signal),
+    ]).then(() => { if (live) setTick(n => n + 1); }).catch(() => {});
+    return () => { live = false; ctrl.abort(); };
+  }, [ev?.id, target]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Translate details when modal opens
+  useEffect(() => {
+    if (!expanded || !evObj || !needsT) return;
+    const ctrl = new AbortController();
+    let live = true;
+    translateField(evObj, 'details', target, ctrl.signal)
+      .then(() => { if (live) setTick(n => n + 1); }).catch(() => {});
+    return () => { live = false; ctrl.abort(); };
+  }, [expanded, ev?.id, target]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const evTitle   = evObj ? (getCached(evObj, 'title',       target) || ev.title)       : '';
+  const evDesc    = evObj ? (getCached(evObj, 'description', target) || ev.description) : '';
+  const evCat     = evObj ? (getCached(evObj, 'category',    target) || ev.category)    : '';
+  const evDetails = evObj ? (getCached(evObj, 'details',     target) || ev.details || '') : '';
 
   const goPrevDay = useCallback(() => {
     if (!atLimit) setSelectedDate(shiftDate(currentDate, -1));
@@ -87,9 +131,8 @@ export default memo(function TodayHistory({ target }) {
 
   if (status === 'loading' && !selectedDate) return <div className="th-skeleton" aria-hidden />;
 
-  const ev   = count > 0 ? events[index] : null;
   const icon = ev ? (CAT_ICON[ev.category] || '📅') : '📅';
-  const detailParas = (ev?.details || '').split('\n\n').filter(p => p.trim().length > 0);
+  const detailParas = evDetails.split('\n\n').filter(p => p.trim().length > 0);
 
   return (
     <>
@@ -106,10 +149,10 @@ export default memo(function TodayHistory({ target }) {
         <div className="th-head">
           <div className="th-head-left">
             <div className="th-label-row">
-              <span className="th-label">On this day</span>
+              <span className="th-label">{t.onThisDay}</span>
               {!isToday && (
                 <button className="th-back-today" onClick={goToday} aria-label="Back to today">
-                  Back to today
+                  {t.backToToday}
                 </button>
               )}
             </div>
@@ -145,21 +188,21 @@ export default memo(function TodayHistory({ target }) {
         {status === 'loading' ? (
           <div className="th-day-loading" aria-hidden />
         ) : count === 0 ? (
-          <p className="th-no-data">No history recorded for this date yet.</p>
+          <p className="th-no-data">{t.noData}</p>
         ) : (
           <div className="th-content">
             <div className="th-top-row">
               <span className="th-year">{ev.event_year}</span>
-              <span className="th-cat">{icon} {ev.category}</span>
+              <span className="th-cat">{icon} {evCat}</span>
             </div>
-            <h3 className="th-title">{ev.title}</h3>
-            <p className="th-desc">{ev.description}</p>
+            <h3 className="th-title">{evTitle}</h3>
+            <p className="th-desc">{evDesc}</p>
             <button
               className="th-readmore"
               onClick={() => setExpanded(true)}
               aria-haspopup="dialog"
             >
-              Read more ›
+              {t.readMore}
             </button>
           </div>
         )}
@@ -191,20 +234,20 @@ export default memo(function TodayHistory({ target }) {
           className="th-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label={ev.title}
+          aria-label={evTitle}
           onClick={() => setExpanded(false)}
         >
           <div className="th-modal" onClick={e => e.stopPropagation()}>
             <button className="th-modal-close" onClick={() => setExpanded(false)} aria-label="Close">✕</button>
             <div className="th-modal-top-row">
               <span className="th-year">{ev.event_year}</span>
-              <span className="th-cat">{icon} {ev.category}</span>
+              <span className="th-cat">{icon} {evCat}</span>
             </div>
-            <h2 className="th-modal-title">{ev.title}</h2>
+            <h2 className="th-modal-title">{evTitle}</h2>
             <div className="th-modal-body">
               {detailParas.length > 0
                 ? detailParas.map((para, i) => <p key={i}>{para}</p>)
-                : <p>{ev.description}</p>
+                : <p>{evDesc}</p>
               }
             </div>
           </div>
