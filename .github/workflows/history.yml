@@ -10,7 +10,7 @@ jobs:
   run-history:
     name: Fetch → Store Today in History
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -33,4 +33,3 @@ jobs:
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          GEMINI_KEY:           ${{ secrets.GEMINI_KEY }}
