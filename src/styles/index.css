@@ -2442,6 +2442,7 @@ mark.tts-hl {
   position: relative;
   background: linear-gradient(160deg, #0d1f38 0%, #152d54 60%, #1a3c6e 100%);
   border: 1px solid rgba(255,255,255,.1);
+  overflow-x: hidden;
   border-radius: var(--rmd);
   max-width: 640px;
   width: 100%;
@@ -2485,6 +2486,8 @@ mark.tts-hl {
   font-family: var(--ffd);
   font-size: 1.35rem;
   font-weight: 800;
+  overflow-wrap: break-word;
+  word-break: break-word;
   color: #fff;
   line-height: 1.3;
   margin: 0 0 1.25rem;
