@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { useHistory } from '../hooks/useHistory.js';
+import { todayIST, useHistory } from '../hooks/useHistory.js';
 
 const CAT_ICON = {
   Science:     '🔬',
@@ -14,90 +14,157 @@ const CAT_ICON = {
   History:     '📜',
 };
 
+const MAX_DAYS_BACK = 30;
+
+function shiftDate(isoDate, delta) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  return [
+    dt.getFullYear(),
+    String(dt.getMonth() + 1).padStart(2, '0'),
+    String(dt.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function formatDisplay(isoDate) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'long',
+  });
+}
+
 export default memo(function TodayHistory() {
-  const { events, status } = useHistory();
-  const [index, setIndex] = useState(0);
+  const todayStr = todayIST();
+  const minDate  = shiftDate(todayStr, -MAX_DAYS_BACK);
+
+  const [selectedDate, setSelectedDate] = useState(null); // null = today
+  const [index, setIndex]       = useState(0);
   const [expanded, setExpanded] = useState(false);
   const touchX = useRef(null);
+
+  const currentDate = selectedDate || todayStr;
+  const isToday     = currentDate === todayStr;
+  const atLimit     = currentDate <= minDate;
+
+  const { events, status } = useHistory(currentDate);
   const count = events.length;
+
+  // Reset carousel + modal when date changes
+  useEffect(() => { setIndex(0); setExpanded(false); }, [currentDate]);
+
+  const goPrevDay = useCallback(() => {
+    if (!atLimit) setSelectedDate(prev => shiftDate(prev || todayStr, -1));
+  }, [atLimit, todayStr]);
+
+  const goNextDay = useCallback(() => {
+    if (!isToday) setSelectedDate(prev => shiftDate(prev || todayStr, 1));
+  }, [isToday, todayStr]);
+
+  const goToday = useCallback(() => setSelectedDate(null), []);
 
   const prev = useCallback(() => setIndex(i => (i - 1 + count) % count), [count]);
   const next = useCallback(() => setIndex(i => (i + 1) % count), [count]);
 
-  const onTouchStart = useCallback(e => {
-    touchX.current = e.touches[0].clientX;
-  }, []);
-  const onTouchEnd = useCallback(e => {
+  const onTouchStart = useCallback(e => { touchX.current = e.touches[0].clientX; }, []);
+  const onTouchEnd   = useCallback(e => {
     if (touchX.current === null) return;
     const dx = touchX.current - e.changedTouches[0].clientX;
     if (Math.abs(dx) > 50) dx > 0 ? next() : prev();
     touchX.current = null;
   }, [next, prev]);
 
-  // Close modal on Escape
+  // Escape closes modal
   useEffect(() => {
     if (!expanded) return;
-    const handler = e => { if (e.key === 'Escape') setExpanded(false); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    const h = e => { if (e.key === 'Escape') setExpanded(false); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
   }, [expanded]);
 
-  // Lock body scroll when modal is open
+  // Lock body scroll when modal open
   useEffect(() => {
     document.body.style.overflow = expanded ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [expanded]);
 
-  if (status === 'loading') return <div className="th-skeleton" aria-hidden />;
-  if (count === 0) return null;
+  // Show skeleton only during the very first load of today's data
+  if (status === 'loading' && !selectedDate) return <div className="th-skeleton" aria-hidden />;
 
-  const ev = events[index];
-  const icon = CAT_ICON[ev.category] || '📅';
-  const today = new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long',
-  }).format(new Date());
-
-  const detailParas = (ev.details || '').split('\n\n').filter(Boolean);
+  const ev   = count > 0 ? events[index] : null;
+  const icon = ev ? (CAT_ICON[ev.category] || '📅') : '📅';
+  const detailParas = (ev?.details || '').split('\n\n').filter(p => p.trim().length > 0);
 
   return (
     <>
       <section
         className="th-wrap"
         aria-label="Today in History"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={count > 0 ? onTouchStart : undefined}
+        onTouchEnd={count > 0 ? onTouchEnd : undefined}
       >
         <span className="th-ring th-ring-1" aria-hidden />
         <span className="th-ring th-ring-2" aria-hidden />
 
+        {/* ── Header ── */}
         <div className="th-head">
           <div className="th-head-left">
             <span className="th-label">On this day</span>
-            <span className="th-today">{today}</span>
+            <span className="th-today">{formatDisplay(currentDate)}</span>
           </div>
-          {count > 1 && (
-            <span className="th-count" aria-live="polite">
-              {index + 1} <span aria-hidden>/</span> {count}
-            </span>
-          )}
+          <div className="th-head-right">
+            {count > 1 && status === 'success' && (
+              <span className="th-count" aria-live="polite">
+                {index + 1} <span aria-hidden>/</span> {count}
+              </span>
+            )}
+            <div className="th-day-nav">
+              <button
+                className="th-day-btn"
+                onClick={goPrevDay}
+                disabled={atLimit}
+                aria-label="Previous day"
+              >&#8249;</button>
+              {!isToday && (
+                <button
+                  className="th-day-btn th-day-today"
+                  onClick={goToday}
+                  aria-label="Back to today"
+                >Today</button>
+              )}
+              <button
+                className="th-day-btn"
+                onClick={goNextDay}
+                disabled={isToday}
+                aria-label="Next day"
+              >&#8250;</button>
+            </div>
+          </div>
         </div>
 
-        <div className="th-content">
-          <div className="th-top-row">
-            <span className="th-year">{ev.event_year}</span>
-            <span className="th-cat">{icon} {ev.category}</span>
+        {/* ── Content ── */}
+        {status === 'loading' ? (
+          <div className="th-day-loading" aria-hidden />
+        ) : count === 0 ? (
+          <p className="th-no-data">No history recorded for this date yet.</p>
+        ) : (
+          <div className="th-content">
+            <div className="th-top-row">
+              <span className="th-year">{ev.event_year}</span>
+              <span className="th-cat">{icon} {ev.category}</span>
+            </div>
+            <h3 className="th-title">{ev.title}</h3>
+            <p className="th-desc">{ev.description}</p>
+            <button
+              className="th-readmore"
+              onClick={() => setExpanded(true)}
+              aria-haspopup="dialog"
+            >
+              Read more ›
+            </button>
           </div>
-          <h3 className="th-title">{ev.title}</h3>
-          <p className="th-desc">{ev.description}</p>
-          <button
-            className="th-readmore"
-            onClick={() => setExpanded(true)}
-            aria-haspopup="dialog"
-          >
-            Read more ›
-          </button>
-        </div>
+        )}
 
+        {/* ── Carousel nav ── */}
         {count > 1 && (
           <div className="th-nav">
             <button className="th-arrow" onClick={prev} aria-label="Previous event">&#8249;</button>
@@ -118,7 +185,8 @@ export default memo(function TodayHistory() {
         )}
       </section>
 
-      {expanded && (
+      {/* ── Detail modal ── */}
+      {expanded && ev && (
         <div
           className="th-overlay"
           role="dialog"
@@ -127,13 +195,7 @@ export default memo(function TodayHistory() {
           onClick={() => setExpanded(false)}
         >
           <div className="th-modal" onClick={e => e.stopPropagation()}>
-            <button
-              className="th-modal-close"
-              onClick={() => setExpanded(false)}
-              aria-label="Close"
-            >
-              ✕
-            </button>
+            <button className="th-modal-close" onClick={() => setExpanded(false)} aria-label="Close">✕</button>
 
             <div className="th-modal-top-row">
               <span className="th-year">{ev.event_year}</span>

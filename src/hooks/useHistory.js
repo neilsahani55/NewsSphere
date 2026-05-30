@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -6,52 +6,61 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
 
-const CACHE_KEY = 'ns_history_v1';
-
-function todayIST() {
+export function todayIST() {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date()); // "YYYY-MM-DD"
+  }).format(new Date());
 }
 
-function readCache() {
+function readCache(date) {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
+    const raw = sessionStorage.getItem(`ns_history_v2_${date}`);
     if (!raw) return null;
-    const { date, data } = JSON.parse(raw);
-    if (date !== todayIST() || !Array.isArray(data) || data.length === 0) return null;
-    return data;
+    const { data } = JSON.parse(raw);
+    return Array.isArray(data) ? data : null;
   } catch { return null; }
 }
 
-function writeCache(data) {
+function writeCache(date, data) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayIST(), data }));
+    sessionStorage.setItem(`ns_history_v2_${date}`, JSON.stringify({ data }));
   } catch {}
 }
 
-export function useHistory() {
-  const [events, setEvents] = useState(() => readCache() || []);
-  const [status, setStatus] = useState(() => (readCache() ? 'success' : 'loading'));
+export function useHistory(date) {
+  const targetDate = date || todayIST();
+  const [events, setEvents] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const activeDate = useRef(null);
 
   useEffect(() => {
-    const cached = readCache();
-    if (cached) { setEvents(cached); setStatus('success'); return; }
+    activeDate.current = targetDate;
+
+    const cached = readCache(targetDate);
+    if (cached !== null) {
+      setEvents(cached);
+      setStatus(cached.length > 0 ? 'success' : 'empty');
+      return;
+    }
+
+    setEvents([]);
+    setStatus('loading');
 
     supabase
       .from('today_history')
       .select('id, event_year, title, description, category, details')
-      .eq('history_date', todayIST())
+      .eq('history_date', targetDate)
       .order('id', { ascending: true })
       .then(({ data, error }) => {
+        if (activeDate.current !== targetDate) return; // stale response
         if (error) { setStatus('error'); return; }
         const rows = data || [];
+        writeCache(targetDate, rows);
         setEvents(rows);
-        if (rows.length > 0) writeCache(rows);
         setStatus(rows.length > 0 ? 'success' : 'empty');
       });
-  }, []);
+  }, [targetDate]);
 
   return { events, status };
 }

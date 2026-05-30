@@ -2334,6 +2334,69 @@ mark.tts-hl {
   50%       { opacity: .5; }
 }
 
+/* ── Day navigation (prev / today / next) ─────────────────────────────── */
+.th-head-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .35rem;
+}
+
+.th-day-nav {
+  display: flex;
+  align-items: center;
+  gap: .2rem;
+}
+
+.th-day-btn {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 20px;
+  padding: .18rem .52rem;
+  font-size: .9rem;
+  line-height: 1;
+  color: rgba(255,255,255,.65);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  min-width: 1.6rem;
+  text-align: center;
+}
+.th-day-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,.16);
+  color: #fff;
+}
+.th-day-btn:disabled { opacity: .28; cursor: default; }
+
+.th-day-today {
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--hl);
+  border-color: rgba(212,168,71,.45);
+  padding: .2rem .6rem;
+}
+.th-day-today:hover { background: rgba(212,168,71,.12); border-color: var(--hl); }
+
+/* Inline loading pulse for day switches */
+.th-day-loading {
+  height: 88px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.04);
+  margin-bottom: 1rem;
+  animation: th-pulse 1.2s ease-in-out infinite;
+}
+
+/* No data state */
+.th-no-data {
+  font-size: .85rem;
+  color: rgba(255,255,255,.38);
+  text-align: center;
+  padding: 1.4rem 0 1rem;
+  margin: 0;
+  font-style: italic;
+}
+
 /* ── Read more button ──────────────────────────────────────────────────── */
 .th-readmore {
   display: inline-flex;
@@ -2669,9 +2732,11 @@ mark.tts-hl {
   .th-title   { font-size: 1rem; }
   .th-desc    { font-size: .8rem; }
   .th-skeleton { height: 170px; margin-bottom: 1.25rem; }
-  .th-modal   { padding: 1.25rem 1.1rem 1.5rem; max-height: 90vh; }
-  .th-modal-title { font-size: 1.1rem; }
+  .th-modal        { padding: 1.25rem 1.1rem 1.5rem; max-height: 90vh; }
+  .th-modal-title  { font-size: 1.1rem; }
   .th-modal-body p { font-size: .83rem; }
+  .th-day-btn      { font-size: .8rem; padding: .15rem .45rem; }
+  .th-day-today    { font-size: .58rem; }
 
   /* Feedback: collapse to single-column, hide desktop brand panel, show mobile header */
   .fb-layout { display: block; }

@@ -65,7 +65,7 @@ async function fetchFromWikipedia(month, day) {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
   });
-  if (!res.ok) throw new Error(`Wikipedia API HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Wikipedia feed API HTTP ${res.status}`);
   const data = await res.json();
 
   const selected = data.selected || [];
@@ -81,20 +81,63 @@ async function fetchFromWikipedia(month, day) {
   return all;
 }
 
+// Uses the MediaWiki action API — returns full intro section (2–5 paragraphs)
+// Falls back to REST summary if the action API fails
 async function fetchWikiExtract(title) {
   if (!title) return '';
+
+  // Primary: MediaWiki action API with full intro section
+  try {
+    const params = new URLSearchParams({
+      action:      'query',
+      prop:        'extracts',
+      exintro:     '1',
+      explaintext: '1',
+      redirects:   '1',
+      titles:      title,
+      format:      'json',
+      origin:      '*',
+    });
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const pages = json?.query?.pages || {};
+      const page  = Object.values(pages)[0];
+      if (page && !page.missing && page.extract) {
+        const text = page.extract.trim();
+        if (text.length > 100) {
+          console.log(`    MediaWiki extract: ${text.length} chars`);
+          return text.slice(0, 4000);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`    MediaWiki API error for "${title}": ${e.message}`);
+  }
+
+  // Fallback: REST summary endpoint
   try {
     const encoded = encodeURIComponent(title.replace(/ /g, '_'));
     const res = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
       { headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' } },
     );
-    if (!res.ok) return '';
-    const data = await res.json();
-    return (data.extract || '').slice(0, 3000);
-  } catch {
-    return '';
+    if (res.ok) {
+      const json = await res.json();
+      const text = (json.extract || '').trim();
+      if (text) {
+        console.log(`    REST summary fallback: ${text.length} chars`);
+        return text.slice(0, 4000);
+      }
+    }
+  } catch (e) {
+    console.warn(`    REST summary error for "${title}": ${e.message}`);
   }
+
+  console.warn(`    No extract found for "${title}"`);
+  return '';
 }
 
 async function insertEvents(raw, date) {
@@ -118,8 +161,10 @@ async function insertEvents(raw, date) {
     const desc   = text.slice(0, 1500);
     const cat    = assignCategory(text + ' ' + pTitle);
     if (!yr || !title || !desc) continue;
+
+    console.log(`  Fetching details for [${yr}] ${title}`);
     const details = await fetchWikiExtract(pTitle);
-    console.log(`  [${yr}] ${title} — details: ${details.length} chars`);
+
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
   }
 
@@ -127,7 +172,9 @@ async function insertEvents(raw, date) {
 
   const { error } = await supabase.from(HISTORY_TABLE).insert(rows);
   if (error) throw new Error(`Insert failed: ${error.message}`);
-  console.log(`Inserted ${rows.length} history events for ${date}`);
+
+  const withDetails = rows.filter(r => r.details.length > 0).length;
+  console.log(`Inserted ${rows.length} events (${withDetails} with details) for ${date}`);
 }
 
 async function cleanupOld() {
@@ -137,10 +184,13 @@ async function cleanupOld() {
     year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(cutoff);
 
+  console.log(`Deleting history older than ${cutoffStr} (keeping last ${KEEP_DAYS} days)...`);
   const { error } = await supabase
-    .from(HISTORY_TABLE).delete().lt('history_date', cutoffStr);
+    .from(HISTORY_TABLE)
+    .delete()
+    .lt('history_date', cutoffStr);
   if (error) console.error(`Cleanup failed: ${error.message}`);
-  else console.log(`Cleaned history older than ${cutoffStr}`);
+  else console.log(`Cleanup done — records before ${cutoffStr} removed`);
 }
 
 async function main() {
@@ -149,7 +199,7 @@ async function main() {
   console.log(`Running history pipeline for ${date} (${month}/${day})`);
 
   if (await alreadyFetched(date)) {
-    console.log(`History for ${date} already exists — skipping`);
+    console.log(`History for ${date} already exists — skipping fetch`);
   } else {
     const raw = await fetchFromWikipedia(month, day);
     await insertEvents(raw, date);
