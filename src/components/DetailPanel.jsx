@@ -418,7 +418,8 @@ export default function DetailPanel({
               className="dimg"
               src={article.image_url}
               alt=""
-              loading="lazy"
+              fetchpriority="high"
+              decoding="async"
               referrerPolicy="no-referrer"
               onError={() => setImgFailed(true)}
             />

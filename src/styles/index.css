@@ -169,8 +169,8 @@ button { font-family: inherit; }
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--border);
   background: var(--paper2);
   border-radius: 50%;
@@ -549,8 +549,11 @@ button { font-family: inherit; }
   border: 0;
   font-size: 1.05rem;
   cursor: pointer;
-  color: var(--ink4);
-  padding: 2px 5px;
+  color: var(--ink3);
+  /* 44×44 px minimum touch target (WCAG 2.5.5) */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 10px;
   border-radius: 6px;
   transition: color .15s, background .15s, transform .15s;
 }
@@ -582,8 +585,8 @@ button { font-family: inherit; }
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
-  font-size: .56rem;
-  color: var(--ink4);
+  font-size: .62rem;
+  color: var(--ink3);
   margin-top: .55rem;
 }
 .csrc {
@@ -1830,7 +1833,7 @@ mark.tts-hl {
   .brand-name { font-size: 1.25rem; }
   .ctrls { gap: .45rem; }
   .seg-btn { padding: .3rem .65rem; font-size: .72rem; }
-  .icon-btn { width: 34px; height: 34px; font-size: .9rem; }
+  .icon-btn { width: 40px; height: 40px; font-size: .9rem; }
   .btn-p { padding: .45rem .7rem; }
   .tr-global { padding: .25rem .5rem .25rem .6rem; gap: 6px; }
   .tr-global-select { font-size: .74rem; }
