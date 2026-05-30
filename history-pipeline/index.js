@@ -194,10 +194,42 @@ async function searchWikiTitle(query) {
   } catch { return ''; }
 }
 
-// Three-tier extraction:
+async function generateWithGemini(title, year, desc) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return '';
+  const prompt =
+    `Write a factual, educational 2-3 paragraph description about this historical event ` +
+    `for a "Today in History" feature:\n\nEvent: ${title} (${year})\nBrief: ${desc}\n\n` +
+    `Be accurate and informative. Plain text only — no markdown, no bullet points.`;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 600, temperature: 0.3 },
+        }),
+      },
+    );
+    const json = await res.json();
+    const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+    if (text.length >= 100) {
+      console.log(`    ✓ Gemini: ${text.length} chars`);
+      return text.slice(0, 5000);
+    }
+  } catch (err) {
+    console.warn(`    ✗ Gemini error: ${err.message}`);
+  }
+  return '';
+}
+
+// Four-tier extraction:
 //  1. Try every linked Wikipedia page title (not just pages[0])
 //  2. Wikipedia search using the first clause of the event text
 //  3. Second search attempt using a shorter title-only query
+//  4. Gemini AI generation as final fallback
 async function fetchWikiExtract(pageTitles, eventText) {
   // Tier 1: walk all linked pages until one yields a usable extract
   for (const title of pageTitles) {
@@ -232,7 +264,7 @@ async function fetchWikiExtract(pageTitles, eventText) {
     }
   }
 
-  console.warn(`    ✗ No extract (pages: ${pageTitles.slice(0, 2).join(', ') || 'none'})`);
+  console.warn(`    ✗ No Wikipedia extract (pages: ${pageTitles.slice(0, 2).join(', ') || 'none'}) — trying Gemini`);
   return '';
 }
 
@@ -249,7 +281,8 @@ async function insertEvents(raw, date) {
     if (!yr || !title || !desc) continue;
 
     console.log(`  [${yr}] ${title} (${pages.length} pages)`);
-    const details = await fetchWikiExtract(pages, text);
+    let details = await fetchWikiExtract(pages, text);
+    if (details.length < 50) details = await generateWithGemini(title, yr, desc);
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
 
     // Brief pause between events — keeps Wikipedia API requests polite
