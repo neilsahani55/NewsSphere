@@ -1,0 +1,36 @@
+name: NewsSphere — Today in History
+
+on:
+  schedule:
+    # 00:00 IST = 18:30 UTC previous day
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-history:
+    name: Fetch → Store Today in History
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: history-pipeline/package.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: history-pipeline
+
+      - name: Run history pipeline
+        run: node index.js
+        working-directory: history-pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_KEY:           ${{ secrets.GEMINI_KEY }}

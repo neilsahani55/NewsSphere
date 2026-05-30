@@ -1,0 +1,14 @@
+{
+  "name": "newssphere-history-pipeline",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "NewsSphere Today in History pipeline — fetch via Gemini, store in Supabase",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --env-file=.env index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5"
+  }
+}
