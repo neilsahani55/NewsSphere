@@ -110,42 +110,28 @@ async function fetchFromWikipedia(month, day) {
   return combined;
 }
 
-// MediaWiki action API — returns full intro section (typically 3–6 paragraphs)
-// Falls back to REST summary if the action API returns too little text.
-async function fetchWikiExtract(title) {
+// Fetch full intro extract from Wikipedia's MediaWiki action API
+async function extractByTitle(title) {
   if (!title) return '';
-
-  // Primary: MediaWiki action API with full intro
   try {
     const params = new URLSearchParams({
-      action:      'query',
-      prop:        'extracts',
-      exintro:     '1',
-      explaintext: '1',
-      redirects:   '1',
-      titles:      title,
-      format:      'json',
+      action: 'query', prop: 'extracts',
+      exintro: '1', explaintext: '1', redirects: '1',
+      titles: title, format: 'json',
     });
     const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
       headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
     });
-    if (res.ok) {
-      const json = await res.json();
-      const pages = json?.query?.pages || {};
-      const page  = Object.values(pages)[0];
-      if (page && !page.missing && page.extract) {
-        const text = page.extract.trim();
-        if (text.length >= 100) {
-          console.log(`    ✓ MediaWiki extract: ${text.length} chars`);
-          return text.slice(0, 5000);
-        }
-      }
+    if (!res.ok) return '';
+    const json = await res.json();
+    const page = Object.values(json?.query?.pages || {})[0];
+    if (page && !page.missing && page.extract) {
+      const t = page.extract.trim();
+      if (t.length >= 80) return t.slice(0, 5000);
     }
-  } catch (e) {
-    console.warn(`    MediaWiki error for "${title}": ${e.message}`);
-  }
+  } catch {}
 
-  // Fallback: REST summary
+  // REST summary fallback (shorter but reliable)
   try {
     const encoded = encodeURIComponent(title.replace(/ /g, '_'));
     const res = await fetch(
@@ -154,17 +140,56 @@ async function fetchWikiExtract(title) {
     );
     if (res.ok) {
       const json = await res.json();
-      const text = (json.extract || '').trim();
-      if (text.length >= 50) {
-        console.log(`    ✓ REST summary fallback: ${text.length} chars`);
-        return text.slice(0, 5000);
-      }
+      const t = (json.extract || '').trim();
+      if (t.length >= 50) return t.slice(0, 5000);
     }
-  } catch (e) {
-    console.warn(`    REST summary error for "${title}": ${e.message}`);
+  } catch {}
+
+  return '';
+}
+
+// Search Wikipedia for the most relevant article title given a query string
+async function searchWikiTitle(query) {
+  try {
+    const params = new URLSearchParams({
+      action: 'query', list: 'search',
+      srsearch: query, srlimit: '1', format: 'json',
+    });
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      headers: { 'User-Agent': 'NewsSphere/1.0 (history-pipeline)' },
+    });
+    if (!res.ok) return '';
+    const json = await res.json();
+    return json?.query?.search?.[0]?.title || '';
+  } catch { return ''; }
+}
+
+// Three-tier extraction:
+//  1. Linked Wikipedia page title (direct)
+//  2. REST summary of same title (shorter)
+//  3. Wikipedia search using the event text → fetch that article
+async function fetchWikiExtract(pageTitle, eventText) {
+  // Tier 1 & 2: direct title lookup
+  if (pageTitle) {
+    const extract = await extractByTitle(pageTitle);
+    if (extract.length >= 80) {
+      console.log(`    ✓ Direct "${pageTitle}": ${extract.length} chars`);
+      return extract;
+    }
   }
 
-  console.warn(`    ✗ No extract found for "${title}"`);
+  // Tier 3: search Wikipedia with the event description
+  const query = eventText.slice(0, 120);
+  const found = await searchWikiTitle(query);
+  if (found && found !== pageTitle) {
+    const extract = await extractByTitle(found);
+    if (extract.length >= 80) {
+      console.log(`    ✓ Search→"${found}": ${extract.length} chars`);
+      return extract;
+    }
+  }
+
+  console.warn(`    ✗ No extract (title="${pageTitle}")`);
   return '';
 }
 
@@ -180,7 +205,7 @@ async function insertEvents(raw, date) {
     if (!yr || !title || !desc) continue;
 
     console.log(`  [${yr}] ${title}`);
-    const details = await fetchWikiExtract(pTitle);
+    const details = await fetchWikiExtract(pTitle, text);
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
   }
 

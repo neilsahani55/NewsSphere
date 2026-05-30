@@ -29,7 +29,7 @@ function shiftDate(isoDate, delta) {
 function formatDisplay(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
-    weekday: 'short', day: 'numeric', month: 'long',
+    day: 'numeric', month: 'long',
   });
 }
 
