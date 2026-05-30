@@ -29,7 +29,7 @@ function shiftDate(isoDate, delta) {
 function formatDisplay(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
-    day: 'numeric', month: 'long',
+    weekday: 'short', day: 'numeric', month: 'long',
   });
 }
 
@@ -49,16 +49,15 @@ export default memo(function TodayHistory() {
   const { events, status } = useHistory(currentDate);
   const count = events.length;
 
-  // Reset carousel + modal when date changes
   useEffect(() => { setIndex(0); setExpanded(false); }, [currentDate]);
 
   const goPrevDay = useCallback(() => {
-    if (!atLimit) setSelectedDate(prev => shiftDate(prev || todayStr, -1));
-  }, [atLimit, todayStr]);
+    if (!atLimit) setSelectedDate(shiftDate(currentDate, -1));
+  }, [currentDate, atLimit]);
 
   const goNextDay = useCallback(() => {
-    if (!isToday) setSelectedDate(prev => shiftDate(prev || todayStr, 1));
-  }, [isToday, todayStr]);
+    if (!isToday) setSelectedDate(shiftDate(currentDate, 1));
+  }, [currentDate, isToday]);
 
   const goToday = useCallback(() => setSelectedDate(null), []);
 
@@ -73,7 +72,6 @@ export default memo(function TodayHistory() {
     touchX.current = null;
   }, [next, prev]);
 
-  // Escape closes modal
   useEffect(() => {
     if (!expanded) return;
     const h = e => { if (e.key === 'Escape') setExpanded(false); };
@@ -81,13 +79,11 @@ export default memo(function TodayHistory() {
     return () => document.removeEventListener('keydown', h);
   }, [expanded]);
 
-  // Lock body scroll when modal open
   useEffect(() => {
     document.body.style.overflow = expanded ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [expanded]);
 
-  // Show skeleton only during the very first load of today's data
   if (status === 'loading' && !selectedDate) return <div className="th-skeleton" aria-hidden />;
 
   const ev   = count > 0 ? events[index] : null;
@@ -105,40 +101,43 @@ export default memo(function TodayHistory() {
         <span className="th-ring th-ring-1" aria-hidden />
         <span className="th-ring th-ring-2" aria-hidden />
 
-        {/* ── Header ── */}
+        {/* ── Header: label + date-with-arrows | count ── */}
         <div className="th-head">
           <div className="th-head-left">
-            <span className="th-label">On this day</span>
-            <span className="th-today">{formatDisplay(currentDate)}</span>
-          </div>
-          <div className="th-head-right">
-            {count > 1 && status === 'success' && (
-              <span className="th-count" aria-live="polite">
-                {index + 1} <span aria-hidden>/</span> {count}
-              </span>
-            )}
-            <div className="th-day-nav">
+            <div className="th-label-row">
+              <span className="th-label">On this day</span>
+              {!isToday && (
+                <button className="th-back-today" onClick={goToday} aria-label="Back to today">
+                  Back to today
+                </button>
+              )}
+            </div>
+            {/* Date navigator — arrows hug the date text, clearly for date changes */}
+            <div className="th-date-row">
               <button
-                className="th-day-btn"
+                className="th-date-arrow"
                 onClick={goPrevDay}
                 disabled={atLimit}
                 aria-label="Previous day"
+                title="Previous day"
               >&#8249;</button>
-              {!isToday && (
-                <button
-                  className="th-day-btn th-day-today"
-                  onClick={goToday}
-                  aria-label="Back to today"
-                >Today</button>
-              )}
+              <span className="th-today">{formatDisplay(currentDate)}</span>
               <button
-                className="th-day-btn"
+                className="th-date-arrow"
                 onClick={goNextDay}
                 disabled={isToday}
                 aria-label="Next day"
+                title="Next day"
               >&#8250;</button>
             </div>
           </div>
+
+          {/* Event counter — top-right, no arrows near it */}
+          {count > 1 && status === 'success' && (
+            <span className="th-count" aria-live="polite">
+              {index + 1} <span aria-hidden>/</span> {count}
+            </span>
+          )}
         </div>
 
         {/* ── Content ── */}
@@ -164,7 +163,7 @@ export default memo(function TodayHistory() {
           </div>
         )}
 
-        {/* ── Carousel nav ── */}
+        {/* ── Carousel nav (event switching, bottom) ── */}
         {count > 1 && (
           <div className="th-nav">
             <button className="th-arrow" onClick={prev} aria-label="Previous event">&#8249;</button>
@@ -196,14 +195,11 @@ export default memo(function TodayHistory() {
         >
           <div className="th-modal" onClick={e => e.stopPropagation()}>
             <button className="th-modal-close" onClick={() => setExpanded(false)} aria-label="Close">✕</button>
-
             <div className="th-modal-top-row">
               <span className="th-year">{ev.event_year}</span>
               <span className="th-cat">{icon} {ev.category}</span>
             </div>
-
             <h2 className="th-modal-title">{ev.title}</h2>
-
             <div className="th-modal-body">
               {detailParas.length > 0
                 ? detailParas.map((para, i) => <p key={i}>{para}</p>)
