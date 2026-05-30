@@ -45,22 +45,25 @@ export default function App() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { bookmarks, isBookmarked, toggle: toggleBookmark, clearAll: clearBookmarks, setAll: setBookmarks } = useBookmarks();
   const { isRead, markRead, readUrls, readCount, clearRead } = useReadArticles();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [savePrompt, setSavePrompt] = useState(false);
 
-  // Account isolation: runs in App (always mounted) so it fires regardless of
-  // which tab the user is on.
-  //
-  // Strategy: persist the last user ID in localStorage so we can tell whether
-  // the same person is logging back in (→ restore their data) or a different
-  // person is logging in (→ wipe the previous user's local data first).
-  //
-  // We do NOT wipe on logout — only when a *different* user appears. This means
-  // "Account A → logout → re-login as A" preserves reads without needing a
-  // Supabase backup for read history.
+  // Account isolation + cross-device bookmark sync.
+  // Guards on authLoading so we never act on a transient null user during the
+  // initial session check — only after Supabase has confirmed the auth state.
   useEffect(() => {
+    if (authLoading) return; // session not yet resolved — don't act yet
+
     const currentId = user?.id ?? null;
-    if (!currentId) return; // not yet resolved or logged out — no action
+
+    if (!currentId) {
+      // Confirmed logged-out — wipe local user data so the next person
+      // who opens this device cannot see the previous user's saves/reads.
+      clearBookmarks();
+      clearRead();
+      setLastUid(null);
+      return;
+    }
 
     const lastId = getLastUid();
     setLastUid(currentId);
@@ -72,13 +75,16 @@ export default function App() {
     }
 
     // Always restore this user's saved articles from Supabase on every login
+    // so bookmarks appear on any device they sign into.
     authSupabase
       .from('saved_news')
       .select('article_urls')
       .eq('user_id', currentId)
       .maybeSingle()
-      .then(({ data }) => setBookmarks(data?.article_urls || []));
-  }, [user]);
+      .then(({ data, error }) => {
+        if (!error) setBookmarks(data?.article_urls || []);
+      });
+  }, [user, authLoading]);
 
   // When visiting a /news/slug-id URL directly, routeTab is null (tab is
   // preserved, not forced). Default to 'allnews' so the reader is visible.
@@ -112,14 +118,21 @@ export default function App() {
     const newUrls = isBookmarked(url)
       ? bookmarks.filter(u => u !== url)
       : [url, ...bookmarks];
-    toggleBookmark(url);
+    toggleBookmark(url); // optimistic local update
     authSupabase.from('saved_news').upsert({
       user_id: user.id,
       user_name: user.user_metadata?.full_name || user.email.split('@')[0],
       user_email: user.email,
       article_urls: newUrls,
       updated_at: istNow(),
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id' })
+      .then(({ error }) => {
+        if (error) {
+          // Supabase write failed — roll back the optimistic update
+          toggleBookmark(url);
+          console.error('bookmark sync failed:', error.message);
+        }
+      });
   }, [user, isBookmarked, bookmarks, toggleBookmark]);
 
   const debouncedSearch = useDebounce(search, 200);
