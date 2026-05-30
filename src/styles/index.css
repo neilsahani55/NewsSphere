@@ -2166,6 +2166,174 @@ mark.tts-hl {
 /* Mobile compact header inside the feedback form (hidden on desktop) */
 .fb-mobile-hdr { display: none; }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   TODAY IN HISTORY
+   Dark navy card with gold year, category badge, and dot navigation.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.th-wrap {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0b1a30 0%, #152d54 55%, #1a3c6e 100%);
+  border-radius: var(--rmd);
+  padding: 1.5rem 1.5rem 1.25rem;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 8px 32px rgba(11, 26, 48, .35);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Decorative concentric rings — purely visual */
+.th-ring {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 168, 71, .12);
+}
+.th-ring-1 { width: 220px; height: 220px; right: -70px; top: -70px; }
+.th-ring-2 { width: 340px; height: 340px; right: -130px; top: -130px; border-color: rgba(212, 168, 71, .06); }
+
+/* ── Header row ────────────────────────────────────────────────────────── */
+.th-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 1.1rem;
+}
+.th-head-left { display: flex; flex-direction: column; gap: .15rem; }
+
+.th-label {
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--hl);
+}
+.th-today {
+  font-family: var(--ffd);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+.th-count {
+  font-size: .72rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.35);
+}
+
+/* ── Event content ─────────────────────────────────────────────────────── */
+.th-content { margin-bottom: 1.1rem; }
+
+.th-top-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .65rem;
+  margin-bottom: .55rem;
+}
+
+.th-year {
+  font-family: var(--ffd);
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: var(--hl);
+  line-height: 1;
+  letter-spacing: -.03em;
+}
+
+.th-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.8);
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 20px;
+  padding: .22rem .7rem;
+}
+
+.th-title {
+  font-family: var(--ffd);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.35;
+  margin-bottom: .55rem;
+}
+
+.th-desc {
+  font-size: .83rem;
+  line-height: 1.65;
+  color: rgba(255,255,255,.6);
+}
+
+/* ── Navigation ────────────────────────────────────────────────────────── */
+.th-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+}
+
+.th-arrow {
+  flex-shrink: 0;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: rgba(255,255,255,.55);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.th-arrow:hover { background: rgba(255,255,255,.16); color: #fff; }
+
+.th-dots {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.th-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.22);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background .2s, width .2s, border-radius .2s;
+}
+.th-dot.on {
+  width: 18px;
+  border-radius: 3px;
+  background: var(--hl);
+}
+.th-dot:hover:not(.on) { background: rgba(255,255,255,.45); }
+
+/* ── Skeleton while loading ────────────────────────────────────────────── */
+.th-skeleton {
+  height: 190px;
+  background: linear-gradient(135deg, #0b1a30 0%, #152d54 100%);
+  border-radius: var(--rmd);
+  margin-bottom: 1.75rem;
+  animation: th-pulse 1.6s ease-in-out infinite;
+}
+@keyframes th-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+
 /* ─── Feedback ─────────────────────────────────────────────────── */
 .fb-layout {
   display: grid;
@@ -2397,6 +2565,13 @@ mark.tts-hl {
     padding-bottom: 2px;
   }
   .chips::-webkit-scrollbar { display: none; }
+
+  /* Today in History: tighter on mobile */
+  .th-wrap    { padding: 1.1rem 1.1rem 1rem; margin-bottom: 1.25rem; }
+  .th-year    { font-size: 1.9rem; }
+  .th-title   { font-size: 1rem; }
+  .th-desc    { font-size: .8rem; }
+  .th-skeleton { height: 170px; margin-bottom: 1.25rem; }
 
   /* Feedback: collapse to single-column, hide desktop brand panel, show mobile header */
   .fb-layout { display: block; }

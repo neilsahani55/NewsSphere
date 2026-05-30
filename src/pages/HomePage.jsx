@@ -3,6 +3,7 @@ import { matchesTopic } from '../utils/categories.js';
 import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 import { useUIStrings } from '../hooks/useUIStrings.js';
+import TodayHistory from '../components/TodayHistory.jsx';
 
 const HOME_STRINGS = {
   briefing: 'Your briefing',
@@ -72,6 +73,8 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
         <h2 className="home-briefing-title">{t.briefing}</h2>
         <span className="home-briefing-date">{today}</span>
       </div>
+
+      <TodayHistory />
 
       {topStories.length > 0 && (
         <section className="home-sec">
