@@ -2321,14 +2321,23 @@ mark.tts-hl {
 .th-dots {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: .3rem;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
 }
 .th-dots::-webkit-scrollbar { display: none; }
+
+/* Inner track: margin-inline:auto centers it when content fits;
+   when it overflows it starts from the left edge (no left-clip bug). */
+.th-dots-track {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  margin-inline: auto;
+  flex-shrink: 0;
+}
+
 .th-dot {
   box-sizing: content-box; /* override global border-box so width/height = visible dot only */
   width: 5px;
@@ -2349,6 +2358,12 @@ mark.tts-hl {
   background-clip: content-box;
 }
 .th-dot:hover:not(.on) { background: rgba(255,255,255,.45); }
+
+/* Desktop: mouse is precise — shrink hit-area padding so 50 dots fit neatly */
+@media (min-width: 721px) {
+  .th-dot    { padding: 8px 5px; }
+  .th-dot.on { width: 18px; }
+}
 
 /* ── Skeleton while loading ────────────────────────────────────────────── */
 .th-skeleton {

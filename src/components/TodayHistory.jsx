@@ -70,7 +70,7 @@ export default memo(function TodayHistory({ target }) {
   useEffect(() => {
     const container = dotsRef.current;
     if (!container) return;
-    const dot = container.children[index];
+    const dot = container.querySelectorAll('[role=tab]')[index];
     if (!dot) return;
     const cRect = container.getBoundingClientRect();
     const dRect = dot.getBoundingClientRect();
@@ -227,17 +227,19 @@ export default memo(function TodayHistory({ target }) {
         {count > 1 && (
           <div className="th-nav">
             <button className="th-arrow" onClick={prev} aria-label="Previous event">&#8249;</button>
-            <div className="th-dots" role="tablist" aria-label="Events" ref={dotsRef}>
-              {events.map((_, i) => (
-                <button
-                  key={i}
-                  role="tab"
-                  aria-selected={i === index}
-                  aria-label={`Event ${i + 1}`}
-                  className={`th-dot${i === index ? ' on' : ''}`}
-                  onClick={() => setIndex(i)}
-                />
-              ))}
+            <div className="th-dots" ref={dotsRef}>
+              <span className="th-dots-track" role="tablist" aria-label="Events">
+                {events.map((_, i) => (
+                  <button
+                    key={i}
+                    role="tab"
+                    aria-selected={i === index}
+                    aria-label={`Event ${i + 1}`}
+                    className={`th-dot${i === index ? ' on' : ''}`}
+                    onClick={() => setIndex(i)}
+                  />
+                ))}
+              </span>
             </div>
             <button className="th-arrow" onClick={next} aria-label="Next event">&#8250;</button>
           </div>
