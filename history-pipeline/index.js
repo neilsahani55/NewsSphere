@@ -12,17 +12,23 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false },
 });
 
+// Add 90 min so that when run at 23:00 IST (17:30 UTC) we resolve to the
+// upcoming day's date, and a backup run at 00:30 IST still resolves correctly.
+function targetDate() {
+  return new Date(Date.now() + 90 * 60 * 1000);
+}
+
 function todayIST() {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date());
+  }).format(targetDate());
 }
 
 function monthDayIST() {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date());
+  }).formatToParts(targetDate());
   return {
     month: parts.find(p => p.type === 'month').value,
     day:   parts.find(p => p.type === 'day').value,
@@ -88,11 +94,15 @@ async function fetchFromWikipedia(month, day) {
   const births   = data.births   || [];
   const deaths   = data.deaths   || [];
 
-  // Dedup by year (one event per year)
+  // Dedup by year (one event per year); reduce keeps seen updated per-item
   const seen = new Set();
-  const dedup = (arr, tag) => arr
-    .filter(ev => ev.text && !seen.has(String(ev.year)))
-    .map(ev => { seen.add(String(ev.year)); return { ...ev, _tag: tag }; });
+  const dedup = (arr, tag) => arr.reduce((acc, ev) => {
+    const yr = String(ev.year);
+    if (!ev.text || seen.has(yr)) return acc;
+    seen.add(yr);
+    acc.push({ ...ev, _tag: tag });
+    return acc;
+  }, []);
 
   // 1. All "selected" (Wikipedia's own curated picks — most notable)
   const selPool    = dedup(selected, 'selected');
