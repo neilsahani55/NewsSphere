@@ -2322,7 +2322,12 @@ mark.tts-hl {
   display: flex;
   align-items: center;
   gap: .3rem;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  scroll-behavior: smooth;
 }
+.th-dots::-webkit-scrollbar { display: none; }
 .th-dot {
   width: 5px;
   height: 5px;
@@ -2330,7 +2335,8 @@ mark.tts-hl {
   background: rgba(255,255,255,.22);
   border: none;
   cursor: pointer;
-  padding: 20px;
+  padding: 20px 10px;
+  flex-shrink: 0;
   background-clip: content-box;
   transition: background .2s, width .2s, border-radius .2s;
 }

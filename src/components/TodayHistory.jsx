@@ -50,7 +50,8 @@ export default memo(function TodayHistory({ target }) {
   const [index, setIndex]       = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [, setTick] = useState(0); // force re-render after async translation arrives
-  const touchX = useRef(null);
+  const touchX  = useRef(null);
+  const dotsRef = useRef(null);
 
   const currentDate = selectedDate || todayStr;
   const isToday     = currentDate === todayStr;
@@ -63,6 +64,12 @@ export default memo(function TodayHistory({ target }) {
   const count = events.length;
 
   useEffect(() => { setIndex(0); setExpanded(false); }, [currentDate]);
+
+  // Keep active dot scrolled into view when index changes
+  useEffect(() => {
+    const dot = dotsRef.current?.children[index];
+    if (dot) dot.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [index]);
 
   const ev     = count > 0 ? events[index] : null;
   const evObj  = ev ? { ...ev, article_url: `history_${ev.id}`, language: 'en' } : null;
@@ -211,7 +218,7 @@ export default memo(function TodayHistory({ target }) {
         {count > 1 && (
           <div className="th-nav">
             <button className="th-arrow" onClick={prev} aria-label="Previous event">&#8249;</button>
-            <div className="th-dots" role="tablist" aria-label="Events">
+            <div className="th-dots" role="tablist" aria-label="Events" ref={dotsRef}>
               {events.map((_, i) => (
                 <button
                   key={i}
