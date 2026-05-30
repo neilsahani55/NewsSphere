@@ -181,42 +181,6 @@ button { font-family: inherit; }
 }
 .icon-btn:hover { background: var(--paper3); border-color: var(--border2); transform: scale(1.05); }
 
-/* Segmented control (All / Saved) */
-.seg {
-  display: inline-flex;
-  background: var(--paper3);
-  padding: 3px;
-  border-radius: 30px;
-  border: 1px solid var(--border);
-}
-.seg-btn {
-  border: none;
-  background: transparent;
-  color: var(--ink3);
-  padding: .35rem .85rem;
-  font-size: .78rem;
-  font-weight: 600;
-  border-radius: 24px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  gap: 5px;
-  transition: background .15s, color .15s;
-}
-.seg-btn.on {
-  background: var(--paper2);
-  color: var(--accent);
-  box-shadow: var(--shadow);
-}
-.seg-count {
-  font-size: .65rem;
-  background: var(--accent);
-  color: #fff;
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-weight: 700;
-}
 
 /* ─── Global translate selector (in header) ───────────────────── */
 .tr-global {
@@ -1547,7 +1511,7 @@ button { font-family: inherit; }
     gap: .5rem;
     justify-content: space-between;
   }
-  .seg, .tr-global, .btn-p { flex: 0 1 auto; }
+  .tr-global, .btn-p { flex: 0 1 auto; }
   .brand-name { font-size: 1.42rem; }
   .feed-title { font-size: 1rem; }
   .dpbody { padding: 1rem; }
@@ -1836,7 +1800,6 @@ mark.tts-hl {
   .brand { padding-right: 3rem; }
   .brand-name { font-size: 1.25rem; }
   .ctrls { gap: .45rem; }
-  .seg-btn { padding: .3rem .65rem; font-size: .72rem; }
   .icon-btn { width: 40px; height: 40px; font-size: .9rem; }
   .btn-p { padding: .45rem .7rem; }
   .tr-global { padding: .25rem .5rem .25rem .6rem; gap: 6px; }

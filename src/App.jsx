@@ -102,7 +102,6 @@ export default function App() {
     navigate(TAB_HASHES[tab] || '/');
   }, []);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('all'); // 'all' | 'bookmarks'
   const [target, setTarget] = useState(() => {
     try { return localStorage.getItem('ns_lang') || 'en'; } catch { return 'en'; }
   });
@@ -162,13 +161,9 @@ export default function App() {
   );
 
   const filtered = useMemo(() => {
-    const base = view === 'bookmarks'
-      ? completeArticles.filter((a) => isBookmarked(a.article_url))
-      : completeArticles;
-
     const q = debouncedSearch.trim().toLowerCase();
 
-    return base
+    return completeArticles
       .filter((a) => {
         if (navTab !== 'allnews') return true;
         // 'Read' chip: show only articles the user has already opened
@@ -200,12 +195,12 @@ export default function App() {
         const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
         return bf - af;
       });
-  }, [completeArticles, navTab, debouncedSearch, view, isBookmarked, allNewsTopics, isRead, selectedUrl]);
+  }, [completeArticles, navTab, debouncedSearch, allNewsTopics, isRead, selectedUrl]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [navTab, debouncedSearch, view, allNewsTopics]);
+  }, [navTab, debouncedSearch, allNewsTopics]);
 
   // Translate the slice that's actually rendered. As the user scrolls and
   // visibleCount grows, more articles are queued for background translation.
@@ -321,9 +316,9 @@ export default function App() {
   if (route === '/status')      return <Suspense fallback={null}><Status /></Suspense>;
   // '#/news' and '#/' both fall through to the main app
 
-  const showHomePage = navTab === 'home' && view !== 'bookmarks' && !debouncedSearch.trim();
+  const showHomePage = navTab === 'home' && !debouncedSearch.trim();
   const showSpecial  = navTab === 'special';
-  const showAllNews  = navTab === 'allnews' && view !== 'bookmarks';
+  const showAllNews  = navTab === 'allnews';
   const showFeedback = navTab === 'feedback';
 
   return (
