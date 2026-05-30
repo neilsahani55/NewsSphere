@@ -4,7 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/((?!assets|favicon|robots|sitemap|og-).*)", "destination": "/index.html" }
+    { "source": "/sitemap.xml",    "destination": "/api/sitemap" },
+    { "source": "/news/:slug",     "destination": "/api/og?slug=:slug" },
+    { "source": "/((?!api|assets|favicon|robots|sitemap|og-).*)", "destination": "/index.html" }
   ]
 }

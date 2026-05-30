@@ -24,28 +24,27 @@ const STATIC_PAGES = [
   { path: '/grievance',   changefreq: 'yearly',  priority: '0.2' },
 ];
 
-export default async function handler(req, res) {
+export default async function handler(_req, res) {
   const supabase = createClient(
     process.env.VITE_SUPABASE_URL,
     process.env.VITE_SUPABASE_ANON_KEY,
   );
 
-  // Fetch enriched articles from the last 30 days (max 1000).
-  // We only need id, title, and published_at_ist to build the URL + lastmod.
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Fetch all enriched articles ordered by newest first.
+  // No date filter — include everything the frontend can display.
   const { data: articles } = await supabase
     .from('news')
     .select('id, title, published_at_ist, fetched_at_ist')
     .eq('enriched', true)
-    .gte('published_at_ist', since)
     .order('published_at_ist', { ascending: false })
-    .limit(1000);
+    .limit(2000);
 
   const rows = (articles || []).filter(a => a.id && a.title);
   const today = new Date().toISOString().slice(0, 10);
   const now = Date.now();
 
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<?xml-stylesheet type="text/xsl" href="/sitemap.xsl"?>\n';
   xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
   // Static pages
@@ -58,7 +57,7 @@ export default async function handler(req, res) {
     xml += '  </url>\n';
   }
 
-  // Article pages — priority 0.8 for articles published in the last 7 days, 0.6 for older
+  // Article pages
   for (const article of rows) {
     const slug = slugify(article.title);
     const pubDate = article.published_at_ist || article.fetched_at_ist;
@@ -77,7 +76,6 @@ export default async function handler(req, res) {
   xml += '</urlset>';
 
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  // Cache on CDN for 1 hour, allow serving stale while revalidating for 10 min.
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=600');
   res.status(200).send(xml);
 }
