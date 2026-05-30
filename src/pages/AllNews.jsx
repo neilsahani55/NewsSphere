@@ -15,7 +15,7 @@ const STRINGS = {
 function AllNews({
   articles, visibleCount, onLoadMore, status, error,
   selectedUrl, onSelect, isBookmarked, onToggleBookmark,
-  target, onRefresh, topics, onTopicToggle, onTopicClear, readCount, backgroundLoading,
+  target, translateVersion, onRefresh, topics, onTopicToggle, onTopicClear, readCount, backgroundLoading,
 }) {
   const t = useUIStrings(STRINGS, target);
   const allSelected = topics.length === 0;
@@ -57,6 +57,7 @@ function AllNews({
         isBookmarked={isBookmarked}
         onToggleBookmark={onToggleBookmark}
         target={target}
+        translateVersion={translateVersion}
         onRefresh={onRefresh}
       />
     </div>

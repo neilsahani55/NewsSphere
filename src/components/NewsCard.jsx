@@ -3,7 +3,7 @@ import { sentimentLabel, toneFor, topicsOf } from '../utils/categories.js';
 import { isBoilerplate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 
-function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target }) {
+function NewsCard({ article, selected, bookmarked, onSelect, onToggleBookmark, target, translateVersion }) {
   const [imgFailed, setImgFailed] = useState(false);
   // Images in a horizontal scroller are all at the same vertical position as the
   // viewport, so loading="lazy" alone doesn't defer them — the browser treats them
@@ -130,5 +130,6 @@ export default memo(NewsCard, (prev, next) =>
   prev.article.description === next.article.description &&
   prev.selected === next.selected &&
   prev.bookmarked === next.bookmarked &&
-  prev.target === next.target
+  prev.target === next.target &&
+  prev.translateVersion === next.translateVersion
 );

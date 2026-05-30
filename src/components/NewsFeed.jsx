@@ -13,6 +13,7 @@ function NewsFeed({
   isBookmarked,
   onToggleBookmark,
   target,
+  translateVersion,
   emptyTitle,
   emptySubtitle,
   onRefresh,
@@ -77,6 +78,7 @@ function NewsFeed({
             onSelect={onSelect}
             onToggleBookmark={onToggleBookmark}
             target={target}
+            translateVersion={translateVersion}
           />
         ))}
         {hasMore && (

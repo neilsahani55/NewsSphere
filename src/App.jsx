@@ -102,7 +102,12 @@ export default function App() {
   }, []);
   const [search, setSearch] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'bookmarks'
-  const [target, setTarget] = useState('en'); // global preferred language
+  const [target, setTarget] = useState(() => {
+    try { return localStorage.getItem('ns_lang') || 'en'; } catch { return 'en'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('ns_lang', target); } catch {}
+  }, [target]);
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [allNewsTopics, setAllNewsTopics] = useState([]);
@@ -205,7 +210,9 @@ export default function App() {
     () => filtered.slice(0, visibleCount),
     [filtered, visibleCount]
   );
-  const { pending: translatePending } = useBatchTranslation(translatableSlice, target);
+  // version bumps each time a translation batch completes — passed to NewsCard
+  // so it re-renders and picks up the newly cached translated text.
+  const { version: translateVersion, pending: translatePending } = useBatchTranslation(translatableSlice, target);
 
   // On mobile, scroll to the reader panel when an article is opened.
   useEffect(() => {
@@ -244,6 +251,12 @@ export default function App() {
   const handleLoadMore = useCallback(() => {
     setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length));
   }, [filtered.length]);
+
+  const handleTopicToggle = useCallback(
+    (t) => setAllNewsTopics(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]),
+    []
+  );
+  const handleTopicClear = useCallback(() => setAllNewsTopics([]), []);
 
   const handleSelect = useCallback((article) => {
     setSelectedUrl(article.article_url);
@@ -344,10 +357,11 @@ export default function App() {
               isBookmarked={isBookmarked}
               onToggleBookmark={handleBookmarkToggle}
               target={target}
+              translateVersion={translateVersion}
               onRefresh={refresh}
               topics={allNewsTopics}
-              onTopicToggle={(t) => setAllNewsTopics(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])}
-              onTopicClear={() => setAllNewsTopics([])}
+              onTopicToggle={handleTopicToggle}
+              onTopicClear={handleTopicClear}
               readCount={readCount}
               backgroundLoading={backgroundLoading}
             />
