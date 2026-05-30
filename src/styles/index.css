@@ -2329,6 +2329,7 @@ mark.tts-hl {
 }
 .th-dots::-webkit-scrollbar { display: none; }
 .th-dot {
+  box-sizing: content-box; /* override global border-box so width/height = visible dot only */
   width: 5px;
   height: 5px;
   border-radius: 50%;
