@@ -5,9 +5,11 @@ const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const GEMINI_KEY           = process.env.GEMINI_KEY;
 
-const GEMINI_URL   = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_URL    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const HISTORY_TABLE = 'today_history';
 const KEEP_DAYS     = 30;
+const MAX_RETRIES   = 5;
+const RETRY_DELAY   = 60000; // 60 seconds between retries on quota errors
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false },
@@ -57,42 +59,57 @@ async function fetchFromGemini(displayDate) {
     `Example element:\n` +
     `{"event_year":"1969","title":"Apollo 11 Launched Toward the Moon","description":"NASA launched the Apollo 11 mission from Kennedy Space Center on July 16, 1969, carrying astronauts Neil Armstrong, Buzz Aldrin, and Michael Collins. Four days later, Armstrong and Aldrin became the first humans to walk on the lunar surface, fulfilling President Kennedy's 1961 goal.","category":"Science"}`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4000,
-        responseMimeType: 'application/json',
-      },
-    }),
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4000,
+      responseMimeType: 'application/json',
+    },
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 300)}`);
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+
+    if (res.status === 429) {
+      const wait = RETRY_DELAY * attempt;
+      console.log(`Gemini quota hit (429) — attempt ${attempt}/${MAX_RETRIES}, retrying in ${wait / 1000}s...`);
+      await new Promise(r => setTimeout(r, wait));
+      lastError = new Error(`Gemini quota exceeded after ${MAX_RETRIES} retries`);
+      continue;
+    }
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Gemini HTTP ${res.status}: ${txt.slice(0, 300)}`);
+    }
+
+    const json = await res.json();
+    let rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    rawText = rawText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    let events;
+    try {
+      events = JSON.parse(rawText);
+    } catch {
+      const m = rawText.match(/\[[\s\S]*\]/);
+      if (m) events = JSON.parse(m[0]);
+      else throw new Error(`No JSON array found in Gemini output: ${rawText.slice(0, 400)}`);
+    }
+
+    if (!Array.isArray(events) || events.length === 0) {
+      throw new Error('Empty events array from Gemini');
+    }
+
+    return events;
   }
 
-  const json = await res.json();
-  let rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  rawText = rawText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-
-  let events;
-  try {
-    events = JSON.parse(rawText);
-  } catch {
-    const m = rawText.match(/\[[\s\S]*\]/);
-    if (m) events = JSON.parse(m[0]);
-    else throw new Error(`No JSON array found in Gemini output: ${rawText.slice(0, 400)}`);
-  }
-
-  if (!Array.isArray(events) || events.length === 0) {
-    throw new Error('Empty events array from Gemini');
-  }
-
-  return events;
+  throw lastError;
 }
 
 async function insertEvents(events, date) {
