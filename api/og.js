@@ -129,6 +129,45 @@ export default async function handler(req, res) {
             imgBlock + '<meta property="og:url"',
           );
         }
+
+        // Inject NewsArticle JSON-LD so Google treats this page as a news
+        // article and considers it for News tab and Discover results.
+        const jsonLd = {
+          '@context': 'https://schema.org',
+          '@type': 'NewsArticle',
+          mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalUrl },
+          headline: article.title.slice(0, 110),
+          description: stripHtml(article.description).slice(0, 200) || 'Read this story on NewsSphere.',
+          url: canonicalUrl,
+          datePublished: article.published_at_ist || new Date().toISOString(),
+          dateModified:  article.published_at_ist || new Date().toISOString(),
+          author: {
+            '@type': 'Organization',
+            name: article.source_name || 'NewsSphere',
+          },
+          publisher: {
+            '@type': 'Organization',
+            name: 'NewsSphere',
+            url: 'https://newssphere.tech',
+            logo: {
+              '@type': 'ImageObject',
+              url: 'https://newssphere.tech/favicon.svg',
+              width: 512,
+              height: 512,
+            },
+          },
+          ...(article.image_url && {
+            image: {
+              '@type': 'ImageObject',
+              url: article.image_url,
+              width: 1200,
+              height: 630,
+            },
+          }),
+        };
+
+        const ldScript = `  <script type="application/ld+json">\n  ${JSON.stringify(jsonLd, null, 2).replace(/\n/g, '\n  ')}\n  </script>`;
+        html = html.replace('</head>', `${ldScript}\n  </head>`);
       }
     } catch (err) {
       // If Supabase lookup fails, serve the unmodified base HTML — the SPA
