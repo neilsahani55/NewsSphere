@@ -54,7 +54,9 @@ export default function HomePage({ articles, selectedUrl, onSelect, target, onSe
       const d = parseDate(a.published_at_ist || a.fetched_at_ist);
       return d && (now - d.getTime()) < 86400000;
     });
-    return last24h.length >= 4 ? last24h.slice(0, 4) : articles.slice(0, 4);
+    const pool = last24h.length >= 4 ? last24h : articles;
+    // Featured slot needs an image — sort articles with images first
+    return [...pool].sort((a, b) => (b.image_url ? 1 : 0) - (a.image_url ? 1 : 0)).slice(0, 4);
   }, [articles]);
 
   const sections = useMemo(() =>
