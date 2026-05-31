@@ -11,7 +11,7 @@ import { useBatchTranslation } from './hooks/useBatchTranslation.js';
 import { useRoute, TAB_HASHES, navigate } from './hooks/useRoute.js';
 import { authSupabase, useAuth } from './hooks/useAuth.js';
 import { hasFullArticle, parseDate } from './utils/format.js';
-import { fetchArticleById } from './services/supabaseService.js';
+import { fetchArticleById, searchNews } from './services/supabaseService.js';
 import { matchesTopic } from './utils/categories.js';
 import { slugify } from './utils/slug.js';
 
@@ -150,7 +150,7 @@ export default function App() {
     }, 800);
   }, [user, toggleBookmark]);
 
-  const debouncedSearch = useDebounce(search, 200);
+  const debouncedSearch = useDebounce(search, 350);
 
   // Articles with both `content` and `key_points` populated. Half-finished
   // rows are hidden from the feed and only become visible once the Apps Script
@@ -160,44 +160,57 @@ export default function App() {
     [articles]
   );
 
+  // Server-side search: fires a Supabase query over ALL articles (not just the
+  // 500 loaded client-side) whenever the user types a query. This lets search
+  // surface articles older than the in-memory window.
+  const [serverSearchResults, setServerSearchResults] = useState(null);
+  useEffect(() => {
+    const q = debouncedSearch.trim();
+    if (!q) { setServerSearchResults(null); return; }
+    const ctrl = new AbortController();
+    searchNews(q, ctrl.signal)
+      .then(results => setServerSearchResults(results))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [debouncedSearch]);
+
+  const sortByDate = (a, b) => {
+    const ap = parseDate(a.published_at_ist)?.getTime() ?? 0;
+    const bp = parseDate(b.published_at_ist)?.getTime() ?? 0;
+    if (bp !== ap) return bp - ap;
+    const af = parseDate(a.fetched_at_ist)?.getTime() ?? 0;
+    const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
+    return bf - af;
+  };
+
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
 
+    // Active search: use server results (all-DB) if ready, else fall back to
+    // client-side filtering of loaded articles while the query is in-flight.
+    if (q) {
+      const source = serverSearchResults
+        ?? completeArticles.filter(a =>
+            a.title?.toLowerCase().includes(q) ||
+            a.description?.toLowerCase().includes(q) ||
+            a.source_name?.toLowerCase().includes(q));
+      return [...source].sort(sortByDate);
+    }
+
+    // Normal feed — apply read-filter and topic chips.
     return completeArticles
       .filter((a) => {
         if (navTab !== 'allnews') return true;
-        // Active search: show all matching articles regardless of read status
-        if (q) return true;
-        // 'Read' chip: show only articles the user has already opened
         if (allNewsTopics.includes('Read')) return isRead(a.article_url);
         // Keep the currently open article visible even after it is marked read,
         // so the reader panel doesn't go blank mid-article and auto-select
         // doesn't immediately jump to the next story.
         if (a.article_url === selectedUrl) return true;
-        // Default "All" view and topic-filtered views: hide already-read articles
         const topicOk = allNewsTopics.length === 0 || allNewsTopics.some(t => matchesTopic(a.category, t));
         return topicOk && !isRead(a.article_url);
       })
-      .filter((a) => {
-        if (!q) return true;
-        return (
-          a.title?.toLowerCase().includes(q) ||
-          a.description?.toLowerCase().includes(q) ||
-          a.source_name?.toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => {
-        // Primary: newest publish time first.
-        const ap = parseDate(a.published_at_ist)?.getTime() ?? 0;
-        const bp = parseDate(b.published_at_ist)?.getTime() ?? 0;
-        if (bp !== ap) return bp - ap;
-        // Tie-break: newest fetched time. Keeps order deterministic when two
-        // sources publish at the same minute (e.g. wire republishes).
-        const af = parseDate(a.fetched_at_ist)?.getTime() ?? 0;
-        const bf = parseDate(b.fetched_at_ist)?.getTime() ?? 0;
-        return bf - af;
-      });
-  }, [completeArticles, navTab, debouncedSearch, allNewsTopics, isRead, selectedUrl]);
+      .sort(sortByDate);
+  }, [completeArticles, serverSearchResults, navTab, debouncedSearch, allNewsTopics, isRead, selectedUrl]);
 
   // Reset pagination whenever the filtered set changes shape.
   useEffect(() => {

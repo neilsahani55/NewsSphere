@@ -48,6 +48,27 @@ export async function loadNews({ signal, from = 0, to = INITIAL_BATCH - 1 } = {}
   return (data || []).filter(a => a.article_url && a.title);
 }
 
+// Full-database keyword search — bypasses the client-side 500-article limit.
+// Searches title, description, and source_name with a case-insensitive LIKE.
+export async function searchNews(q, signal) {
+  const safe = q.trim();
+  if (!safe) return [];
+  let query = supabase
+    .from('news')
+    .select(CARD_COLUMNS)
+    .eq('enriched', true)
+    .or(`title.ilike.%${safe}%,description.ilike.%${safe}%,source_name.ilike.%${safe}%`)
+    .order('published_at_ist', { ascending: false })
+    .limit(300);
+  if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query;
+  if (error) {
+    if (error.message?.includes('abort')) throw new DOMException('Aborted', 'AbortError');
+    throw new Error(error.message);
+  }
+  return (data || []).filter(a => a.article_url && a.title);
+}
+
 // Fetch a single article's card-level fields by ID.
 // Used when visiting /news/:slug directly for an article not in the loaded batch.
 export async function fetchArticleById(id) {
