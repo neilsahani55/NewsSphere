@@ -166,6 +166,8 @@ export default function App() {
     return completeArticles
       .filter((a) => {
         if (navTab !== 'allnews') return true;
+        // Active search: show all matching articles regardless of read status
+        if (q) return true;
         // 'Read' chip: show only articles the user has already opened
         if (allNewsTopics.includes('Read')) return isRead(a.article_url);
         // Keep the currently open article visible even after it is marked read,
