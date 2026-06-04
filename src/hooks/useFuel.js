@@ -1,70 +1,129 @@
 /**
- * Live Indian fuel prices — calls our own Vercel serverless function (/api/fuel).
- * The function runs server-side with NO CORS restrictions, fetching directly
- * from HPCL and IOC (official Indian oil companies).
+ * Live Indian fuel prices — reads from Supabase market_data table.
+ * The fuel pipeline (fuel.js / GitHub Actions) fetches from HPCL + IOC
+ * server-side every 6 hours and upserts state-wise prices into Supabase.
+ * This hook reads the matching state's prices using the user's IP location.
  *
- * Flow:
- *  1. Show reference prices immediately (no blank state).
- *  2. Call /api/fuel?city=...&state=... (same-origin, always works).
- *  3. If server got live data → upgrade to 🟢 Live.
- *  4. If server fell back to reference → keep Reference badge.
+ * Key format in Supabase:  petrol_{state_key}  /  diesel_{state_key}
+ * e.g.  petrol_maharashtra = 103.44, diesel_maharashtra = 89.97
+ *
+ * Fallback chain:
+ *   1. Supabase (pipeline-populated, updated every 6 hours) — primary
+ *   2. /api/fuel (Vercel serverless, real-time HPCL/IOC fetch) — secondary
+ *   3. Built-in reference prices (state-matched) — always available
  */
 
 import { useEffect, useState } from 'react';
 import { useLocation } from './useLocation.js';
+import { supabase } from '../lib/supabase.js';
 
-// Fallback reference prices for when the API itself is unreachable
-// (e.g. during local development without a running Vercel dev server).
-const STATE_REF = {
-  'Delhi':             { city: 'Delhi',          p: 94.72,  d: 87.62 },
-  'NCT of Delhi':      { city: 'Delhi',          p: 94.72,  d: 87.62 },
-  'Haryana':           { city: 'Gurugram',       p: 95.03,  d: 87.86 },
-  'Uttar Pradesh':     { city: 'Lucknow',        p: 96.57,  d: 89.76 },
-  'Uttarakhand':       { city: 'Dehradun',       p: 95.42,  d: 88.11 },
-  'Himachal Pradesh':  { city: 'Shimla',         p: 97.50,  d: 85.60 },
-  'Punjab':            { city: 'Amritsar',       p: 96.94,  d: 83.67 },
-  'Chandigarh':        { city: 'Chandigarh',     p: 94.24,  d: 82.40 },
-  'Rajasthan':         { city: 'Jaipur',         p: 104.88, d: 90.36 },
-  'Jammu and Kashmir': { city: 'Srinagar',       p: 97.77,  d: 88.70 },
-  'Jammu & Kashmir':   { city: 'Srinagar',       p: 97.77,  d: 88.70 },
-  'Ladakh':            { city: 'Leh',            p: 100.30, d: 88.70 },
-  'Maharashtra':       { city: 'Mumbai',         p: 103.44, d: 89.97 },
-  'Gujarat':           { city: 'Ahmedabad',      p: 96.63,  d: 92.38 },
-  'Goa':               { city: 'Panaji',         p: 96.81,  d: 90.08 },
-  'Madhya Pradesh':    { city: 'Bhopal',         p: 108.65, d: 93.77 },
-  'Chhattisgarh':      { city: 'Raipur',         p: 102.70, d: 94.76 },
-  'Karnataka':         { city: 'Bengaluru',      p: 102.86, d: 88.94 },
-  'Tamil Nadu':        { city: 'Chennai',        p: 100.75, d: 92.34 },
-  'Telangana':         { city: 'Hyderabad',      p: 107.41, d: 95.65 },
-  'Andhra Pradesh':    { city: 'Visakhapatnam',  p: 109.41, d: 97.21 },
-  'Kerala':            { city: 'Kochi',          p: 102.05, d: 90.55 },
-  'Puducherry':        { city: 'Puducherry',     p: 98.30,  d: 90.50 },
-  'West Bengal':       { city: 'Kolkata',        p: 103.94, d: 90.56 },
-  'Bihar':             { city: 'Patna',          p: 107.24, d: 94.04 },
-  'Jharkhand':         { city: 'Ranchi',         p: 99.09,  d: 96.77 },
-  'Odisha':            { city: 'Bhubaneswar',    p: 103.19, d: 94.76 },
-  'Orissa':            { city: 'Bhubaneswar',    p: 103.19, d: 94.76 },
-  'Assam':             { city: 'Guwahati',       p: 96.01,  d: 83.94 },
-  'Meghalaya':         { city: 'Shillong',       p: 97.53,  d: 88.14 },
-  'Mizoram':           { city: 'Aizawl',         p: 101.18, d: 91.47 },
-  'Tripura':           { city: 'Agartala',       p: 97.13,  d: 88.07 },
-  'Manipur':           { city: 'Imphal',         p: 99.49,  d: 90.71 },
-  'Nagaland':          { city: 'Kohima',         p: 99.00,  d: 88.60 },
-  'Arunachal Pradesh': { city: 'Itanagar',       p: 97.43,  d: 84.12 },
-  'Sikkim':            { city: 'Gangtok',        p: 102.50, d: 89.60 },
+// Map ipapi.co region strings to Supabase state keys
+const REGION_TO_KEY = {
+  'Andhra Pradesh':             'andhra_pradesh',
+  'Arunachal Pradesh':          'arunachal_pradesh',
+  'Assam':                      'assam',
+  'Bihar':                      'bihar',
+  'Chhattisgarh':               'chhattisgarh',
+  'Goa':                        'goa',
+  'Gujarat':                    'gujarat',
+  'Haryana':                    'haryana',
+  'Himachal Pradesh':           'himachal_pradesh',
+  'Jharkhand':                  'jharkhand',
+  'Karnataka':                  'karnataka',
+  'Kerala':                     'kerala',
+  'Madhya Pradesh':             'madhya_pradesh',
+  'Maharashtra':                'maharashtra',
+  'Manipur':                    'manipur',
+  'Meghalaya':                  'meghalaya',
+  'Mizoram':                    'mizoram',
+  'Nagaland':                   'nagaland',
+  'Odisha':                     'odisha',
+  'Orissa':                     'odisha',
+  'Punjab':                     'punjab',
+  'Rajasthan':                  'rajasthan',
+  'Sikkim':                     'sikkim',
+  'Tamil Nadu':                 'tamil_nadu',
+  'Telangana':                  'telangana',
+  'Tripura':                    'tripura',
+  'Uttar Pradesh':              'uttar_pradesh',
+  'Uttarakhand':                'uttarakhand',
+  'Uttaranchal':                'uttarakhand',
+  'West Bengal':                'west_bengal',
+  // Union Territories
+  'Delhi':                      'delhi',
+  'NCT of Delhi':               'delhi',
+  'National Capital Territory': 'delhi',
+  'Chandigarh':                 'chandigarh',
+  'Puducherry':                 'puducherry',
+  'Pondicherry':                'puducherry',
+  'Jammu and Kashmir':          'jammu_and_kashmir',
+  'Jammu & Kashmir':            'jammu_and_kashmir',
+  'Ladakh':                     'ladakh',
+  'Andaman and Nicobar Islands':'andaman_and_nicobar_islands',
+  'Andaman and Nicobar':        'andaman_and_nicobar_islands',
+  'Lakshadweep':                'lakshadweep',
+  'Dadra and Nagar Haveli and Daman and Diu': 'dadra_and_nagar_haveli_and_daman_and_diu',
 };
 
-const INDIA_DEFAULT = { city: 'Delhi', p: 94.72, d: 87.62 };
+// Inline reference prices as final safety net
+const REF = {
+  delhi: { p: 94.72, d: 87.62 }, maharashtra: { p: 103.44, d: 89.97 },
+  karnataka: { p: 102.86, d: 88.94 }, tamil_nadu: { p: 100.75, d: 92.34 },
+  telangana: { p: 107.41, d: 95.65 }, andhra_pradesh: { p: 109.41, d: 97.21 },
+  kerala: { p: 102.05, d: 90.55 }, gujarat: { p: 96.63, d: 92.38 },
+  rajasthan: { p: 104.88, d: 90.36 }, madhya_pradesh: { p: 108.65, d: 93.77 },
+  uttar_pradesh: { p: 96.57, d: 89.76 }, bihar: { p: 107.24, d: 94.04 },
+  west_bengal: { p: 103.94, d: 90.56 }, punjab: { p: 96.94, d: 83.67 },
+  haryana: { p: 95.03, d: 87.86 }, odisha: { p: 103.19, d: 94.76 },
+  assam: { p: 96.01, d: 83.94 }, jharkhand: { p: 99.09, d: 96.77 },
+  chandigarh: { p: 94.24, d: 82.40 }, goa: { p: 96.81, d: 90.08 },
+  chhattisgarh: { p: 102.70, d: 94.76 }, uttarakhand: { p: 95.42, d: 88.11 },
+  himachal_pradesh: { p: 97.50, d: 85.60 }, jammu_and_kashmir: { p: 97.77, d: 88.70 },
+  puducherry: { p: 98.30, d: 90.50 }, manipur: { p: 99.49, d: 90.71 },
+  meghalaya: { p: 97.53, d: 88.14 }, tripura: { p: 97.13, d: 88.07 },
+  mizoram: { p: 101.18, d: 91.47 }, nagaland: { p: 99.00, d: 88.60 },
+  arunachal_pradesh: { p: 97.43, d: 84.12 }, sikkim: { p: 102.50, d: 89.60 },
+  ladakh: { p: 100.30, d: 88.70 },
+};
 
-function stateLookup(region = '') {
-  if (!region) return INDIA_DEFAULT;
-  if (STATE_REF[region]) return STATE_REF[region];
-  const key = Object.keys(STATE_REF).find(k =>
-    k.toLowerCase() === region.toLowerCase() ||
-    region.toLowerCase().includes(k.toLowerCase()) ||
-    k.toLowerCase().includes(region.toLowerCase())
+function regionToKey(region = '') {
+  if (REGION_TO_KEY[region]) return REGION_TO_KEY[region];
+  // Fuzzy fallback
+  const lower = region.toLowerCase();
+  const match = Object.entries(REGION_TO_KEY).find(([k]) =>
+    k.toLowerCase() === lower ||
+    lower.includes(k.toLowerCase()) ||
+    k.toLowerCase().includes(lower)
   );
-  return key ? STATE_REF[key] : INDIA_DEFAULT;
+  return match ? match[1] : 'delhi';
+}
+
+async function fromSupabase(stateKey) {
+  try {
+    const { data, error } = await supabase
+      .from('market_data')
+      .select('key, price, updated_at')
+      .in('key', [`petrol_${stateKey}`, `diesel_${stateKey}`]);
+
+    if (error || !data?.length) return null;
+
+    const p = data.find(r => r.key === `petrol_${stateKey}`);
+    const d = data.find(r => r.key === `diesel_${stateKey}`);
+    if (!p?.price) return null;
+
+    return { petrol: p.price, diesel: d?.price ?? null, updatedAt: p.updated_at, source: 'live' };
+  } catch { return null; }
+}
+
+async function fromAPIFunction(city, region) {
+  try {
+    const url = `/api/fuel?city=${encodeURIComponent(city)}&state=${encodeURIComponent(region)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j?.petrol > 50) return { petrol: j.petrol, diesel: j.diesel, source: j.source || 'live' };
+  } catch {}
+  return null;
 }
 
 export function useFuel() {
@@ -77,31 +136,28 @@ export function useFuel() {
     let mounted = true;
 
     async function load() {
-      // Step 1: Show state-matched reference prices immediately
-      const ref = stateLookup(region);
+      const stateKey = regionToKey(region);
+      const ref = REF[stateKey] ?? REF.delhi;
+
+      // Step 1: Show reference prices immediately (no blank state)
       if (mounted) {
-        setData({ petrol: ref.p, diesel: ref.d, city: city || ref.city, source: 'reference' });
+        setData({ petrol: ref.p, diesel: ref.d, city: city || stateKey.replace(/_/g, ' '), source: 'reference' });
         setLoading(false);
       }
 
-      // Step 2: Call our own Vercel API function (server-side, no CORS at all)
-      try {
-        const url = `/api/fuel?city=${encodeURIComponent(city || ref.city)}&state=${encodeURIComponent(region || '')}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        if (res.ok) {
-          const json = await res.json();
-          if (json?.petrol > 50 && mounted) {
-            setData({
-              petrol: json.petrol,
-              diesel: json.diesel,
-              city:   json.city || city || ref.city,
-              source: json.source || 'reference',
-            });
-          }
-        }
-      } catch {
-        // API not reachable (e.g. local dev) — reference prices already shown
+      // Step 2: Try Supabase (pipeline keeps this updated every 6 hours)
+      const dbResult = await fromSupabase(stateKey);
+      if (dbResult && mounted) {
+        setData({ ...dbResult, city: city || stateKey.replace(/_/g, ' ') });
+        return;
       }
+
+      // Step 3: Try Vercel API function (real-time HPCL/IOC fetch)
+      const apiResult = await fromAPIFunction(city || '', region || '');
+      if (apiResult && mounted) {
+        setData({ ...apiResult, city: city || stateKey.replace(/_/g, ' ') });
+      }
+      // If both fail, reference prices from step 1 remain shown
     }
 
     load();

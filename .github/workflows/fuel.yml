@@ -1,0 +1,36 @@
+name: NewsSphere — Fuel Prices
+
+on:
+  schedule:
+    # Every 6 hours — fuel prices update at 6 AM IST (00:30 UTC) daily
+    # Running 4× per day ensures we always reflect the latest revision
+    - cron: '30 0,6,12,18 * * *'
+  workflow_dispatch:   # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  fetch-fuel:
+    name: Fetch → Store Fuel Prices (All States)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: history-pipeline/package.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: history-pipeline
+
+      - name: Fetch and store fuel prices
+        run: node fuel.js
+        working-directory: history-pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
