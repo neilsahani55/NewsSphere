@@ -1,55 +1,49 @@
 import { useEffect, useState } from 'react';
 
-const WMO = {
-  0:  { emoji: '☀️',  label: 'Clear'         },
-  1:  { emoji: '🌤️', label: 'Mostly clear'  },
-  2:  { emoji: '⛅',  label: 'Partly cloudy' },
-  3:  { emoji: '☁️',  label: 'Overcast'      },
-  45: { emoji: '🌫️', label: 'Foggy'         },
-  48: { emoji: '🌫️', label: 'Foggy'         },
-  51: { emoji: '🌦️', label: 'Drizzle'       },
-  53: { emoji: '🌦️', label: 'Drizzle'       },
-  55: { emoji: '🌧️', label: 'Heavy drizzle' },
-  61: { emoji: '🌧️', label: 'Light rain'    },
-  63: { emoji: '🌧️', label: 'Rainy'         },
-  65: { emoji: '🌧️', label: 'Heavy rain'    },
-  71: { emoji: '❄️',  label: 'Light snow'    },
-  73: { emoji: '❄️',  label: 'Snowy'         },
-  75: { emoji: '❄️',  label: 'Heavy snow'    },
-  77: { emoji: '🌨️', label: 'Snow grains'   },
-  80: { emoji: '🌦️', label: 'Showers'       },
-  81: { emoji: '🌦️', label: 'Showers'       },
-  82: { emoji: '⛈️',  label: 'Heavy showers' },
-  95: { emoji: '⛈️',  label: 'Thunderstorm'  },
-  96: { emoji: '⛈️',  label: 'Thunderstorm'  },
-  99: { emoji: '⛈️',  label: 'Thunderstorm'  },
-};
-
-// Default: New Delhi, India — shown instantly while geolocation loads
-const INDIA = { lat: 28.6139, lon: 77.209, city: 'India' };
-
-async function fetchWeatherAt(lat, lon, city) {
-  const res = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=celsius`,
-    { signal: AbortSignal.timeout(6000) }
-  );
-  if (!res.ok) throw new Error('weather fetch failed');
-  const json = await res.json();
-  const cw = json.current_weather;
-  const wmo = WMO[cw?.weathercode] ?? { emoji: '🌡️', label: 'Unknown' };
-  return { city, temp: Math.round(cw?.temperature ?? 0), emoji: wmo.emoji, label: wmo.label };
+// wttr.in weather codes → emoji + short label
+function wttrLabel(code) {
+  const c = parseInt(code, 10);
+  if (c === 113)                    return { emoji: '☀️',  label: 'Clear'         };
+  if (c === 116)                    return { emoji: '⛅',  label: 'Partly cloudy' };
+  if (c === 119 || c === 122)       return { emoji: '☁️',  label: 'Overcast'      };
+  if (c === 143 || c === 248 || c === 260) return { emoji: '🌫️', label: 'Foggy'  };
+  if ([176,263,266,281,353].includes(c))  return { emoji: '🌦️', label: 'Drizzle'  };
+  if ([284,293,296,299,302,305,308,356,359].includes(c)) return { emoji: '🌧️', label: 'Rainy' };
+  if ([179,182,185,311,314,317,320,362,365].includes(c)) return { emoji: '🌨️', label: 'Sleet' };
+  if ([227,230,323,326,329,332,335,338,368,371,392,395].includes(c)) return { emoji: '❄️', label: 'Snowy' };
+  if ([200,386,389].includes(c))    return { emoji: '⛈️',  label: 'Thunderstorm'  };
+  return { emoji: '🌡️', label: 'Unknown' };
 }
 
-async function reverseGeocode(lat, lon) {
+// Step 1: IP-based location (ipapi.co) — no permission prompt, instant
+async function ipLocation() {
   try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-      { signal: AbortSignal.timeout(4000), headers: { 'Accept-Language': 'en' } }
-    );
-    if (!res.ok) return INDIA.city;
+    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) throw new Error();
     const j = await res.json();
-    return j?.address?.city || j?.address?.town || j?.address?.county || j?.address?.state || INDIA.city;
-  } catch { return INDIA.city; }
+    if (j.error) throw new Error();
+    return {
+      lat:  j.latitude  ?? 28.6139,
+      lon:  j.longitude ?? 77.209,
+      city: j.city || j.region || 'India',
+    };
+  } catch {
+    return { lat: 28.6139, lon: 77.209, city: 'India' };
+  }
+}
+
+// Step 2: wttr.in weather — highly reliable CORS, works from any origin
+async function wttrWeather(lat, lon, city) {
+  const res = await fetch(
+    `https://wttr.in/${lat.toFixed(4)},${lon.toFixed(4)}?format=j1`,
+    { signal: AbortSignal.timeout(6000) }
+  );
+  if (!res.ok) throw new Error('wttr failed');
+  const json = await res.json();
+  const curr = json.current_condition?.[0];
+  if (!curr) throw new Error('no data');
+  const { emoji, label } = wttrLabel(curr.weatherCode);
+  return { city, temp: parseInt(curr.temp_C, 10), emoji, label };
 }
 
 export function useWeather() {
@@ -57,34 +51,12 @@ export function useWeather() {
 
   useEffect(() => {
     let live = true;
-    let geoResolved = false;
-
-    // Step 1: Show India weather IMMEDIATELY — no waiting for geolocation.
-    fetchWeatherAt(INDIA.lat, INDIA.lon, INDIA.city)
-      .then(w => { if (live && !geoResolved) setWeather(w); })
-      .catch(() => {});
-
-    // Step 2: Silently try geolocation; if it arrives, upgrade to local weather.
-    if (!('geolocation' in navigator)) return;
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (!live) return;
-        const { latitude: lat, longitude: lon } = pos.coords;
-        const city = await reverseGeocode(lat, lon);
-        const local = await fetchWeatherAt(lat, lon, city).catch(() => null);
-        if (live && local) {
-          geoResolved = true;
-          setWeather(local);
-        }
-      },
-      () => { /* permission denied — India weather already showing */ },
-      { timeout: 5000, maximumAge: 600000 }
-    );
-
+    ipLocation()
+      .then(({ lat, lon, city }) => wttrWeather(lat, lon, city))
+      .then(w => { if (live) setWeather(w); })
+      .catch(() => { if (live) setWeather(null); });
     return () => { live = false; };
   }, []);
 
-  // loading only while the India default hasn't returned yet (<2s normally)
   return { weather, loading: weather === null };
 }
