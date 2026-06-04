@@ -78,13 +78,13 @@ function assignCategory(text) {
 }
 
 function makeTitle(text, pageTitle) {
-  const clause = text.split(/[.,]/)[0].trim();
-  const clean  = (pageTitle || '').replace(/_/g, ' ').trim();
-  // Prefer the event-text clause — it's always specific to what happened.
-  // Fall back to the page title only when the clause is too short to be useful.
-  if (clause.length >= 20) return clause.length <= 90 ? clause : clause.slice(0, 87) + '...';
+  // Wikipedia page titles are concise and clean (e.g. "1935 Quetta earthquake",
+  // "Battle of Stalingrad", "KK (singer)") — always prefer them as the title.
+  const clean = (pageTitle || '').replace(/_/g, ' ').trim();
   if (clean && clean.length > 3 && clean.length < 80) return clean;
-  return clause || clean;
+  // Fallback: first clause of the event text when no page title is available.
+  const clause = text.split(/[.,]/)[0].trim();
+  return clause.length <= 80 ? clause : clause.slice(0, 77) + '...';
 }
 
 async function fetchFromWikipedia(month, day) {
@@ -238,18 +238,19 @@ async function generateWithGemini(title, year, eventText, wikiContext) {
   if (!apiKey) return '';
 
   const bg = wikiContext?.length > 50
-    ? `\n\nBackground (for factual accuracy only):\n${wikiContext.slice(0, 1500)}`
+    ? `\n\nBackground (use only for factual accuracy):\n${wikiContext.slice(0, 1200)}`
     : '';
 
   const prompt =
-    `You are writing content for a "Today in History" feature. ` +
-    `Write 2-3 paragraphs specifically about the following event that occurred on this date in ${year}:\n\n` +
-    `"${eventText}"${bg}\n\n` +
-    `IMPORTANT:\n` +
-    `- Write ONLY about what happened on this specific date in ${year}\n` +
-    `- Explain what the event was, why it happened, and its immediate significance or impact\n` +
-    `- Do NOT write a general overview of the broader topic or person\n` +
-    `- Plain prose only — no markdown, no bullet points, no headers`;
+    `Write a "Today in History" entry (150-200 words) about this specific event from ${year}:\n\n` +
+    `EVENT: ${eventText}${bg}\n\n` +
+    `Structure your response in 3 short paragraphs:\n` +
+    `1. What exactly happened — key facts, people involved, location, numbers\n` +
+    `2. Why it happened or what led to it — brief background or cause\n` +
+    `3. Its significance or lasting impact\n\n` +
+    `Rules: Write ONLY about this specific event in ${year}. ` +
+    `Do not write a general article about the broader topic. ` +
+    `Be specific and factual. Plain prose — no markdown, no bullet points, no headers.`;
 
   for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
     try {
@@ -260,7 +261,7 @@ async function generateWithGemini(title, year, eventText, wikiContext) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 700, temperature: 0.2 },
+            generationConfig: { maxOutputTokens: 350, temperature: 0.2 },
           }),
           signal: AbortSignal.timeout(20000),
         },
