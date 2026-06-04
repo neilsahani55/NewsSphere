@@ -1863,6 +1863,13 @@ button { font-family: inherit; }
   background: var(--paper3); border: 1px solid var(--border);
   border-radius: 10px; padding: .1rem .45rem;
 }
+.fuel-source {
+  margin-left: auto;
+  font-size: .63rem; font-weight: 600; border-radius: 10px; padding: .1rem .45rem;
+  background: var(--border2); color: var(--ink3);
+}
+.fuel-src-live { background: #dcfce7; color: #16a34a; }
+.fuel-src-ref  { background: var(--border2); color: var(--ink3); }
 .fuel-note {
   font-size: .63rem; color: var(--ink3); margin-left: auto;
 }
