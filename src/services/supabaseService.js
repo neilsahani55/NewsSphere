@@ -1,10 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Anon key is safe to expose in the frontend — Supabase RLS controls access.
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-);
+import { supabase } from '../lib/supabase.js';
 
 // Columns fetched on initial/background loads — excludes `content` (~2 KB/article)
 // and `key_points` (~250 bytes/article) because both are only needed in the reader.

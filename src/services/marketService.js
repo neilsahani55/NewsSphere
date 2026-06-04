@@ -1,13 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 
 // All market data read from Supabase (populated every 15 min by the pipeline).
 // CoinGecko used as fallback only when the DB table is still empty (first run).
 // Client cache: 5 min sessionStorage so page refreshes don't re-fetch instantly.
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-);
 
 const CACHE_KEY = 'ns_markets_v9';
 const CACHE_TTL = 5 * 60 * 1000;
