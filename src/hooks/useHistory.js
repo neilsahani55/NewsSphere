@@ -51,7 +51,7 @@ export function useHistory(date) {
       .from('today_history')
       .select('id, event_year, title, description, category, details')
       .eq('history_date', targetDate)
-      .order('id', { ascending: true })
+      .order('event_year', { ascending: false })
       .then(({ data, error }) => {
         if (activeDate.current !== targetDate) return; // stale response
         if (error) { setStatus('error'); return; }
