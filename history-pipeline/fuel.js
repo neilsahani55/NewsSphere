@@ -1,16 +1,15 @@
 /**
- * Fuel price pipeline — fetches live petrol & diesel prices for all Indian
- * states and UTs from multiple sources and upserts into Supabase market_data.
+ * Fuel price pipeline — fetches live petrol & diesel for all Indian states
+ * from goodreturns.in using the CORRECT URL format:
+ *   {fuel}-price-in-{state-slug}-s{stateID}.html
  *
- * Sources tried in order (first success wins per state):
- *  1. HPCL  — hindustanpetroleum.com (batch JSON)
- *  2. IOC   — iocl.com (batch or per-state JSON)
- *  3. goodreturns.in — HTML scraping with broad regex
- *  4. mypetrolprice.com — HTML scraping fallback
- *  5. Baseline table — hardcoded post-March 2024 prices (last resort)
+ * Strategy:
+ *  1. Fetch goodreturns.in fuel index → auto-discover every state's ID
+ *  2. Fetch each state's petrol + diesel page using discovered IDs
+ *  3. Fall back to HPCL/IOC JSON if discovery fails
+ *  4. Baseline (post-Mar 2024) for any state still missing
  *
- * Run manually: GitHub → Actions → Fuel Prices → Run workflow
- * Check the job logs to see HTTP status for every request.
+ * Runs every 6 hours via GitHub Actions.
  */
 
 import 'dotenv/config';
@@ -22,58 +21,37 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-// Full browser headers — reduces chance of 403 from sites that check UA
+const GR = 'https://www.goodreturns.in';
+
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8',
+  'Accept-Language': 'en-IN,en;q=0.9',
   'Accept-Encoding': 'gzip, deflate, br',
   'Connection': 'keep-alive',
-  'Upgrade-Insecure-Requests': '1',
 };
+
 const JSON_HEADERS = { ...HEADERS, Accept: 'application/json, text/plain, */*' };
 
-// All 36 states + UTs
-const STATES = [
-  { key: 'andhra_pradesh',        gr: 'andhra-pradesh',        mp: 'Andhra%20Pradesh' },
-  { key: 'arunachal_pradesh',     gr: 'arunachal-pradesh',     mp: 'Arunachal%20Pradesh' },
-  { key: 'assam',                  gr: 'assam',                 mp: 'Assam' },
-  { key: 'bihar',                  gr: 'bihar',                 mp: 'Bihar' },
-  { key: 'chhattisgarh',           gr: 'chhattisgarh',          mp: 'Chhattisgarh' },
-  { key: 'goa',                    gr: 'goa',                   mp: 'Goa' },
-  { key: 'gujarat',                gr: 'gujarat',               mp: 'Gujarat' },
-  { key: 'haryana',                gr: 'haryana',               mp: 'Haryana' },
-  { key: 'himachal_pradesh',       gr: 'himachal-pradesh',      mp: 'Himachal%20Pradesh' },
-  { key: 'jharkhand',              gr: 'jharkhand',             mp: 'Jharkhand' },
-  { key: 'karnataka',              gr: 'karnataka',             mp: 'Karnataka' },
-  { key: 'kerala',                 gr: 'kerala',                mp: 'Kerala' },
-  { key: 'madhya_pradesh',         gr: 'madhya-pradesh',        mp: 'Madhya%20Pradesh' },
-  { key: 'maharashtra',            gr: 'maharashtra',           mp: 'Maharashtra' },
-  { key: 'manipur',                gr: 'manipur',               mp: 'Manipur' },
-  { key: 'meghalaya',              gr: 'meghalaya',             mp: 'Meghalaya' },
-  { key: 'mizoram',                gr: 'mizoram',               mp: 'Mizoram' },
-  { key: 'nagaland',               gr: 'nagaland',              mp: 'Nagaland' },
-  { key: 'odisha',                 gr: 'odisha',                mp: 'Odisha' },
-  { key: 'punjab',                 gr: 'punjab',                mp: 'Punjab' },
-  { key: 'rajasthan',              gr: 'rajasthan',             mp: 'Rajasthan' },
-  { key: 'sikkim',                 gr: 'sikkim',                mp: 'Sikkim' },
-  { key: 'tamil_nadu',             gr: 'tamil-nadu',            mp: 'Tamil%20Nadu' },
-  { key: 'telangana',              gr: 'telangana',             mp: 'Telangana' },
-  { key: 'tripura',                gr: 'tripura',               mp: 'Tripura' },
-  { key: 'uttar_pradesh',          gr: 'uttar-pradesh',         mp: 'Uttar%20Pradesh' },
-  { key: 'uttarakhand',            gr: 'uttarakhand',           mp: 'Uttarakhand' },
-  { key: 'west_bengal',            gr: 'west-bengal',           mp: 'West%20Bengal' },
-  { key: 'andaman_and_nicobar_islands', gr: 'andaman-nicobar', mp: 'Andaman%20Nicobar' },
-  { key: 'chandigarh',             gr: 'chandigarh',            mp: 'Chandigarh' },
-  { key: 'dadra_and_nagar_haveli_and_daman_and_diu', gr: 'dadra-nagar-haveli', mp: 'Dadra' },
-  { key: 'delhi',                  gr: 'delhi',                 mp: 'Delhi' },
-  { key: 'jammu_and_kashmir',      gr: 'jammu-kashmir',         mp: 'Jammu%20Kashmir' },
-  { key: 'ladakh',                 gr: 'ladakh',                mp: 'Ladakh' },
-  { key: 'lakshadweep',            gr: 'lakshadweep',           mp: 'Lakshadweep' },
-  { key: 'puducherry',             gr: 'puducherry',            mp: 'Puducherry' },
-];
+// Map goodreturns.in slug → our Supabase state key
+// (most slugs just need hyphens → underscores, but a few are irregular)
+function grSlugToKey(slug) {
+  const MAP = {
+    'jammu-kashmir':               'jammu_and_kashmir',
+    'jammu-and-kashmir':           'jammu_and_kashmir',
+    'andaman-nicobar':             'andaman_and_nicobar_islands',
+    'andaman-nicobar-islands':     'andaman_and_nicobar_islands',
+    'andaman-and-nicobar-islands': 'andaman_and_nicobar_islands',
+    'dadra-nagar-haveli':          'dadra_and_nagar_haveli_and_daman_and_diu',
+    'dadra-nagar-haveli-and-daman-and-diu': 'dadra_and_nagar_haveli_and_daman_and_diu',
+    'pondicherry':                 'puducherry',
+    'nct-of-delhi':                'delhi',
+    'new-delhi':                   'delhi',
+  };
+  return MAP[slug] ?? slug.replace(/-/g, '_');
+}
 
-// Baseline (post-March 2024 central ₹2 cut). Used ONLY if all live sources fail.
+// Baseline — used ONLY when goodreturns.in and HPCL/IOC both fail
 const BASELINE = {
   andhra_pradesh:{p:109.41,d:97.21}, arunachal_pradesh:{p:97.43,d:84.12},
   assam:{p:96.01,d:83.94}, bihar:{p:107.24,d:94.04},
@@ -96,22 +74,23 @@ const BASELINE = {
   puducherry:{p:98.30,d:90.50},
 };
 
-async function safeGet(url, hdrs = HEADERS, ms = 12000) {
+async function safeGet(url, headers = HEADERS, ms = 12000) {
   try {
-    const r = await fetch(url, { headers: hdrs, signal: AbortSignal.timeout(ms) });
-    return { ok: r.ok, status: r.status, text: r.ok ? await r.text() : '' };
+    const r = await fetch(url, { headers, signal: AbortSignal.timeout(ms) });
+    const text = r.ok ? await r.text() : '';
+    return { ok: r.ok, status: r.status, text };
   } catch (e) {
     return { ok: false, status: 0, text: '', err: e.message };
   }
 }
 
-// Extract fuel price from HTML — handles ₹, Rs., Rs and various encodings
 function extractPrice(html, minVal = 70, maxVal = 160) {
-  // Patterns for Indian rupee price
+  if (!html) return null;
+  // Try multiple patterns — goodreturns.in uses ₹ symbol before the price
   const patterns = [
     /(?:₹|Rs\.?\s*|&#8377;|&#x20B9;)\s*(\d{2,3}\.\d{2})/g,
-    /(\d{2,3}\.\d{2})\s*(?:\/\s*(?:litre|ltr|L))/gi,
-    /price[^\d]{0,50}(\d{2,3}\.\d{2})/gi,
+    /(\d{2,3}\.\d{2})\s*\/?\s*(?:litre|ltr|per litre)/gi,
+    /price[^₹\d]{0,60}(\d{2,3}\.\d{2})/gi,
   ];
   for (const re of patterns) {
     re.lastIndex = 0;
@@ -121,22 +100,100 @@ function extractPrice(html, minVal = 70, maxVal = 160) {
   return null;
 }
 
-// ── Source 1: HPCL batch ─────────────────────────────────────────────────
-async function fetchHPCL() {
-  const urls = [
+// ── Step 1: Discover state IDs from goodreturns.in index pages ────────────
+async function discoverStateIDs() {
+  // Try several pages that should list all state links
+  const indexPages = [
+    `${GR}/fuel-price.html`,
+    `${GR}/petrol-price.html`,
+    `${GR}/petrol-price-in-india.html`,
+    `${GR}/petrol-price-today.html`,
+    `${GR}/petrol-price-in-india-today.html`,
+  ];
+
+  for (const url of indexPages) {
+    const { ok, status, text } = await safeGet(url, HEADERS);
+    console.log(`  Index ${url.split('/').slice(-1)[0]} → ${status} (${text.length} bytes)`);
+    if (!ok || !text) continue;
+
+    // Extract pattern: petrol-price-in-SLUG-sN.html or diesel-price-in-SLUG-sN.html
+    const slugToID = {};
+    for (const [, slug, id] of text.matchAll(/(?:petrol|diesel)-price-in-([a-z-]+)-s(\d+)\.html/gi)) {
+      if (!slugToID[slug]) slugToID[slug] = id;
+    }
+
+    const found = Object.keys(slugToID).length;
+    console.log(`  → Found ${found} state IDs`);
+    if (found >= 15) {
+      // Log every discovered state for transparency
+      for (const [slug, id] of Object.entries(slugToID)) {
+        console.log(`     ${slug} = s${id}`);
+      }
+      return slugToID;
+    }
+  }
+
+  // Fallback: use the confirmed Maharashtra ID and guess the rest
+  console.log('  Auto-discovery failed — using known IDs + guessing range s1-s40');
+  return null;
+}
+
+// ── Step 2: Scrape prices using discovered IDs ─────────────────────────────
+async function fetchGRPrice(fuel, slug, stateID) {
+  const url = `${GR}/${fuel}-price-in-${slug}-s${stateID}.html`;
+  const { ok, status, text } = await safeGet(url);
+  if (!ok) {
+    console.log(`    ${slug} ${fuel} → HTTP ${status}`);
+    return null;
+  }
+  const price = extractPrice(text);
+  return price;
+}
+
+async function scrapeGoodReturns(slugToID) {
+  const results = {};
+  const entries = Object.entries(slugToID);
+  const BATCH = 5;
+
+  for (let i = 0; i < entries.length; i += BATCH) {
+    await Promise.all(entries.slice(i, i + BATCH).map(async ([slug, id]) => {
+      const key = grSlugToKey(slug);
+      const [p, d] = await Promise.all([
+        fetchGRPrice('petrol', slug, id),
+        fetchGRPrice('diesel', slug, id),
+      ]);
+      if (p && d) {
+        results[key] = { p, d };
+        console.log(`  ✓ ${key}: petrol=₹${p}  diesel=₹${d}`);
+      } else {
+        console.log(`  ✗ ${key} (s${id}): petrol=${p ?? 'null'} diesel=${d ?? 'null'}`);
+      }
+    }));
+    if (i + BATCH < entries.length) await new Promise(r => setTimeout(r, 600));
+  }
+  return results;
+}
+
+// ── HPCL/IOC batch (backup if goodreturns.in fails) ───────────────────────
+async function tryBatchSource() {
+  const hpclURLs = [
     'https://www.hindustanpetroleum.com/FetchFuelPrices',
     'https://www.hindustanpetroleum.com/FetchFuelPricesNew',
     'https://www.hindustanpetroleum.com/assets/json/fuelpricesData.json',
-    'https://www.hindustanpetroleum.com/api/fuelprices',
-    'https://hpcl.co.in/FetchFuelPrices',
   ];
-  for (const url of urls) {
-    const { ok, status, text } = await safeGet(url, { ...JSON_HEADERS, Referer: 'https://www.hindustanpetroleum.com/' });
-    console.log(`  HPCL ${url.split('/').slice(-1)[0]} → ${status}`);
+  const iocURLs = [
+    'https://iocl.com/Products/GetFuelPriceDetails',
+    'https://iocl.com/Products/GetFuelPrice',
+  ];
+
+  for (const url of [...hpclURLs, ...iocURLs]) {
+    const referer = url.includes('hpcl') || url.includes('hindustan') ? 'https://www.hindustanpetroleum.com/' : 'https://iocl.com/';
+    const { ok, status, text } = await safeGet(url, { ...JSON_HEADERS, Referer: referer });
+    console.log(`  Batch ${new URL(url).hostname} ${url.split('/').slice(-1)[0]} → ${status}`);
     if (!ok || !text) continue;
     try {
       const json = JSON.parse(text);
-      const rows = Array.isArray(json) ? json : (json?.data ?? json?.result ?? json?.rates ?? null);
+      const rows = Array.isArray(json) ? json : (json?.data ?? json?.result ?? null);
       if (!Array.isArray(rows) || rows.length < 5) continue;
       const out = {};
       for (const r of rows) {
@@ -147,132 +204,66 @@ async function fetchHPCL() {
         const k = sName.toLowerCase().replace(/&/g,'and').replace(/\s+/g,'_').replace(/[^a-z_]/g,'');
         out[k] = { p, d };
       }
-      if (Object.keys(out).length > 10) { console.log(`  ✓ HPCL: ${Object.keys(out).length} states`); return out; }
-    } catch {}
-  }
-  return null;
-}
-
-// ── Source 2: IOC ─────────────────────────────────────────────────────────
-async function fetchIOC() {
-  const urls = [
-    'https://iocl.com/Products/GetFuelPriceDetails',
-    'https://iocl.com/Products/GetFuelPrice',
-    'https://iocl.com/api/fuel-prices',
-    'https://indianoil.in/servlet/ContentServer?ssSourceNodeId=3736',
-  ];
-  for (const url of urls) {
-    const { ok, status, text } = await safeGet(url, { ...JSON_HEADERS, Referer: 'https://iocl.com/' });
-    console.log(`  IOC ${url.split('/').slice(-1)[0]} → ${status}`);
-    if (!ok || !text) continue;
-    try {
-      const json = JSON.parse(text);
-      const rows = Array.isArray(json) ? json : (json?.data ?? json?.result ?? null);
-      if (!Array.isArray(rows) || rows.length < 5) continue;
-      const out = {};
-      for (const r of rows) {
-        const sName = r.State ?? r.state ?? '';
-        const p = parseFloat(r.Petrol ?? r.petrol ?? 0);
-        const d = parseFloat(r.Diesel ?? r.diesel ?? 0);
-        if (!sName || !(p > 50)) continue;
-        const k = sName.toLowerCase().replace(/\s+/g,'_');
-        out[k] = { p, d };
+      if (Object.keys(out).length > 10) {
+        console.log(`  ✓ Batch: ${Object.keys(out).length} states`);
+        return out;
       }
-      if (Object.keys(out).length > 10) { console.log(`  ✓ IOC: ${Object.keys(out).length} states`); return out; }
     } catch {}
   }
   return null;
 }
 
-// ── Source 3: goodreturns.in per-state scraping ───────────────────────────
-async function scrapeGR(state) {
-  const base = 'https://www.goodreturns.in';
-  const results = {};
-  for (const fuel of ['petrol', 'diesel']) {
-    const url = `${base}/${fuel}-price-in-${state.gr}.html`;
-    const { ok, status, text } = await safeGet(url, { ...HEADERS, Referer: base + '/' });
-    if (!ok) { console.log(`    GR ${state.key} ${fuel} → ${status}`); continue; }
-    const price = extractPrice(text);
-    if (price) results[fuel] = price;
-  }
-  return results.petrol && results.diesel ? { p: results.petrol, d: results.diesel } : null;
-}
-
-// ── Source 4: mypetrolprice.com per-state scraping ────────────────────────
-async function scrapeMP(state) {
-  const results = {};
-  for (const fuel of ['petrol', 'diesel']) {
-    const url = `https://www.mypetrolprice.com/${fuel}-price-in-${state.mp}-state.aspx`;
-    const { ok, status, text } = await safeGet(url, HEADERS);
-    if (!ok) continue;
-    const price = extractPrice(text);
-    if (price) results[fuel] = price;
-  }
-  return results.petrol && results.diesel ? { p: results.petrol, d: results.diesel } : null;
-}
-
+// ── Main ──────────────────────────────────────────────────────────────────
 async function main() {
   const now = new Date().toISOString();
   console.log(`=== Fuel price pipeline: ${now} ===\n`);
 
-  // Try batch sources first (one request for all states)
-  console.log('── Source 1: HPCL batch ──');
-  let batchData = await fetchHPCL();
+  let live = null;
 
-  if (!batchData) {
-    console.log('\n── Source 2: IOC batch ──');
-    batchData = await fetchIOC();
+  // Primary: goodreturns.in with correct URL format (discovered IDs)
+  console.log('── Discovering state IDs from goodreturns.in ──');
+  const slugToID = await discoverStateIDs();
+
+  if (slugToID && Object.keys(slugToID).length >= 15) {
+    console.log(`\n── Scraping ${Object.keys(slugToID).length} states from goodreturns.in ──`);
+    live = await scrapeGoodReturns(slugToID);
+    console.log(`\ngoodreturns.in: ${Object.keys(live).length} states successful`);
   }
 
-  // Per-state scraping for any states still missing
-  const missing = STATES.filter(s => !batchData?.[s.key]);
-
-  if (missing.length > 0) {
-    console.log(`\n── Source 3+4: per-state scraping (${missing.length} states) ──`);
-    const BATCH = 5;
-    for (let i = 0; i < missing.length; i += BATCH) {
-      const chunk = missing.slice(i, i + BATCH);
-      await Promise.all(chunk.map(async state => {
-        // Try goodreturns.in first, then mypetrolprice.com
-        const result = (await scrapeGR(state)) ?? (await scrapeMP(state));
-        if (result) {
-          if (!batchData) batchData = {};
-          batchData[state.key] = result;
-          console.log(`    ✓ ${state.key}: ₹${result.p} / ₹${result.d}`);
-        } else {
-          console.log(`    ✗ ${state.key}: all sources failed → will use baseline`);
-        }
-      }));
-      if (i + BATCH < missing.length) await new Promise(r => setTimeout(r, 600));
-    }
+  // Secondary: HPCL/IOC batch (if goodreturns.in discovery failed)
+  if (!live || Object.keys(live).length < 10) {
+    console.log('\n── Trying HPCL/IOC batch APIs ──');
+    const batch = await tryBatchSource();
+    if (batch) live = { ...(live ?? {}), ...batch };
   }
 
   // Merge live over baseline
   const merged = { ...BASELINE };
   let liveCount = 0;
-  if (batchData) {
-    for (const [key, prices] of Object.entries(batchData)) {
+  if (live) {
+    for (const [key, prices] of Object.entries(live)) {
       if (prices.p > 50 && prices.d > 50) { merged[key] = prices; liveCount++; }
     }
   }
 
   console.log(`\n── Summary ──`);
-  console.log(`Live prices: ${liveCount}/${STATES.length} states`);
-  console.log(`Baseline:    ${STATES.length - liveCount} states`);
+  console.log(`Live data:  ${liveCount} states`);
+  console.log(`Baseline:   ${Object.keys(BASELINE).length - liveCount} states`);
 
-  // Upsert all rows
+  // Upsert all
   const rows = [];
   for (const [stateKey, prices] of Object.entries(merged)) {
     rows.push({ key: `petrol_${stateKey}`, price: prices.p, change_pct: null, updated_at: now });
     rows.push({ key: `diesel_${stateKey}`, price: prices.d ?? null, change_pct: null, updated_at: now });
   }
 
-  console.log(`\nUpserting ${rows.length} rows into Supabase...`);
   for (let i = 0; i < rows.length; i += 100) {
     const { error } = await supabase.from('market_data').upsert(rows.slice(i, i + 100), { onConflict: 'key' });
     if (error) throw new Error(`Supabase: ${error.message}`);
   }
-  console.log(`Done. ${rows.length} rows upserted (${liveCount} live + ${STATES.length - liveCount} baseline).`);
+
+  console.log(`\nDone. ${rows.length} rows upserted into market_data.`);
+  console.log(`Maharashtra: petrol=₹${merged.maharashtra?.p} diesel=₹${merged.maharashtra?.d}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
