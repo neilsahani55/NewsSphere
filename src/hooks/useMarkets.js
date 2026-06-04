@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
-import { fetchAllMarkets } from '../services/marketService.js';
+import { useCallback, useEffect, useState } from 'react';
+import { clearMarketCache, fetchAllMarkets } from '../services/marketService.js';
 
 export function useMarkets() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let live = true;
-    fetchAllMarkets()
-      .then(d  => { if (live) { setData(d);  setLoading(false); } })
-      .catch(() => { if (live) { setLoading(false); } });
-    return () => { live = false; };
+  const load = useCallback(async (bust = false) => {
+    if (bust) clearMarketCache();
+    setLoading(true);
+    try {
+      const d = await fetchAllMarkets();
+      setData(d);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { data, loading };
+  useEffect(() => { load(); }, [load]);
+
+  // Clears cache and re-fetches fresh data
+  const refresh = useCallback(() => load(true), [load]);
+
+  return { data, loading, refresh };
 }

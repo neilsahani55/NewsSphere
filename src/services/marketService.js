@@ -1,8 +1,22 @@
-// Market data — free APIs, no keys required.
-// Cache: 10 min sessionStorage. Each source fails independently → shows "—".
+import { createClient } from '@supabase/supabase-js';
 
-const CACHE_KEY = 'ns_markets_v6';
-const CACHE_TTL = 10 * 60 * 1000;
+// Market data service — free APIs, no third-party keys required.
+// Sensex / Nifty / Silver: fetched server-side by GitHub Actions every 15 min,
+//   stored in Supabase market_data — works on every device and browser (no CORS).
+// USD/INR / Gold / BTC / ETH: live from CoinGecko (CORS-enabled, no key).
+// Client-side cache: 5 min sessionStorage.
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+);
+
+const CACHE_KEY = 'ns_markets_v7';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function clearMarketCache() {
+  try { sessionStorage.removeItem(CACHE_KEY); } catch {}
+}
 
 function readCache() {
   try {
@@ -19,90 +33,81 @@ function writeCache(data) {
   } catch {}
 }
 
-async function safeJson(url, ms = 5000) {
+// Sensex, Nifty 50, Silver — read from Supabase (server-side cached, always works)
+async function getIndicesFromDB() {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
-    if (!res.ok) return null;
-    return await res.json();
+    const { data, error } = await supabase
+      .from('market_data')
+      .select('key, price, change_pct')
+      .in('key', ['sensex', 'nifty', 'silver']);
+    if (error || !data?.length) return null;
+    return Object.fromEntries(data.map(r => [r.key, { price: r.price, change: r.change_pct }]));
   } catch { return null; }
 }
 
-// Race two CORS proxies in parallel — returns as soon as the first one
-// delivers valid Yahoo Finance chart data. Null if both fail / time out.
-async function yahooChart(symbol) {
-  const yUrl =
-    `https://query2.finance.yahoo.com/v8/finance/chart/` +
-    `${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-
-  const fromProxy = async (proxyUrl) => {
-    const json = await safeJson(proxyUrl, 5000);
-    const m = json?.chart?.result?.[0]?.meta;
-    if (!m?.regularMarketPrice) throw new Error('no data');
-    return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
-  };
-
-  // Fire both proxies simultaneously — first valid response wins
-  return Promise.any([
-    fromProxy(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yUrl)}`),
-    fromProxy(`https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`),
-  ]).catch(() => null);
-}
-
-// One CoinGecko call: BTC, ETH, Gold (PAXG) in INR + USD.
-// USD/INR derived from BTC_INR ÷ BTC_USD (arbitrage-accurate <0.1%).
+// BTC, ETH, Gold (PAXG) in INR + USD — CoinGecko (free, CORS, no key)
+// USD/INR is derived: BTC_INR ÷ BTC_USD, accurate to < 0.1% via arbitrage
 async function getCoinGeckoAll() {
-  const json = await safeJson(
-    'https://api.coingecko.com/api/v3/simple/price' +
-    '?ids=bitcoin,ethereum,pax-gold' +
-    '&vs_currencies=inr,usd' +
-    '&include_24hr_change=true',
-    6000
-  );
-  if (!json) return null;
-  const btcInr = json.bitcoin?.inr;
-  const btcUsd = json.bitcoin?.usd;
-  return {
-    usdInr:  (btcInr && btcUsd) ? btcInr / btcUsd : null,
-    goldUsd: json['pax-gold']?.usd ?? null,
-    btc: { price: btcInr, change: json.bitcoin?.inr_24h_change },
-    eth: { price: json.ethereum?.inr, change: json.ethereum?.inr_24h_change },
-  };
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price' +
+      '?ids=bitcoin,ethereum,pax-gold' +
+      '&vs_currencies=inr,usd' +
+      '&include_24hr_change=true',
+      { signal: AbortSignal.timeout(7000) }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const btcInr = json.bitcoin?.inr;
+    const btcUsd = json.bitcoin?.usd;
+    return {
+      usdInr:  (btcInr && btcUsd) ? btcInr / btcUsd : null,
+      goldUsd: json['pax-gold']?.usd ?? null,
+      btc: { price: btcInr, change: json.bitcoin?.inr_24h_change },
+      eth: { price: json.ethereum?.inr, change: json.ethereum?.inr_24h_change },
+    };
+  } catch { return null; }
 }
 
 export async function fetchAllMarkets() {
   const cached = readCache();
   if (cached) return cached;
 
-  // All fetches in parallel — no waiting on each other
-  const [cgR, sensexR, niftyR, silverR] = await Promise.allSettled([
+  // Fetch Supabase indices + CoinGecko in parallel
+  const [dbR, cgR] = await Promise.allSettled([
+    getIndicesFromDB(),
     getCoinGeckoAll(),
-    yahooChart('^BSESN'),
-    yahooChart('^NSEI'),
-    yahooChart('SI=F'),
   ]);
 
-  const cg          = cgR.status      === 'fulfilled' ? cgR.value      : null;
-  const sensex      = sensexR.status  === 'fulfilled' ? sensexR.value  : null;
-  const nifty       = niftyR.status   === 'fulfilled' ? niftyR.value   : null;
-  const silverChart = silverR.status  === 'fulfilled' ? silverR.value  : null;
+  const db = dbR.status === 'fulfilled' ? dbR.value : null;
+  const cg = cgR.status === 'fulfilled' ? cgR.value : null;
 
   const usdInr = cg?.usdInr ?? null;
 
-  // Gold: PAXG (USD/troy oz) × USD/INR × 1.15 duty ÷ 31.1035 g × 10g
-  let gold24k = null, gold22k = null, silver = null;
+  // Gold: PAXG (USD/troy oz) × USD/INR × 1.15 (duty) ÷ 31.1035 g × 10g
+  let gold24k = null, gold22k = null;
   if (usdInr && cg?.goldUsd) {
     const perGram = (cg.goldUsd * usdInr * 1.15) / 31.1035;
     gold24k = Math.round(perGram * 10);
     gold22k = Math.round(perGram * (22 / 24) * 10);
   }
-  if (usdInr && silverChart?.price) {
-    silver = Math.round((silverChart.price * usdInr * 1.03) / 31.1035 * 1000);
+
+  // Silver: stored as USD/troy oz in DB, convert to INR/kg
+  let silver = null;
+  const silverUsd = db?.silver?.price ?? null;
+  if (usdInr && silverUsd) {
+    silver = Math.round((silverUsd * usdInr * 1.03) / 31.1035 * 1000);
   }
 
   const data = {
-    usdInr, gold24k, gold22k, silver, sensex, nifty,
-    btc: cg?.btc ?? null,
-    eth: cg?.eth ?? null,
+    usdInr,
+    gold24k,
+    gold22k,
+    silver,
+    sensex: db?.sensex ?? null,
+    nifty:  db?.nifty  ?? null,
+    btc:    cg?.btc    ?? null,
+    eth:    cg?.eth    ?? null,
     ts: Date.now(),
   };
 
