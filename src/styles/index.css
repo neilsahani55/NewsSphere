@@ -1926,6 +1926,18 @@ button { font-family: inherit; }
 .hol-item-name  { color: var(--ink2); font-weight: 500; }
 .hol-item-date  { color: var(--ink3); font-size: .72rem; }
 .hol-item-days  { color: var(--ink3); font-size: .7rem; min-width: 28px; text-align: right; }
+.hol-type-dot   { margin-left: .3rem; font-size: .75rem; }
+.hol-skel {
+  height: 70px; border-radius: var(--rsm);
+  background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+  background-size: 200% 100%; animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+.fuel-skel {
+  display: block; height: 52px; border-radius: var(--rsm); width: 100%;
+  background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+  background-size: 200% 100%; animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+.fuel-unavail { font-size: .75rem; color: var(--ink3); margin: 0; }
 
 /* ── Cricket Widget ─────────────────────────────────────────────── */
 .ckt-wrap {

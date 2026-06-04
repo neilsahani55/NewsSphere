@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { daysUntil, getUpcomingHolidays } from '../data/indianHolidays.js';
+import { daysUntil, useHolidays } from '../hooks/useHolidays.js';
 
 function formatDate(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number);
@@ -15,34 +15,62 @@ function DaysChip({ days }) {
   return <span className="hol-chip">{days} days</span>;
 }
 
-export default memo(function HolidayWidget() {
-  const holidays = getUpcomingHolidays(4);
-  if (!holidays.length) return null;
+// Type → compact badge label
+const TYPE_BADGE = {
+  national:   '🇮🇳',
+  festival:   '🎊',
+  vrat:       '🙏',
+  moon:       '🌙',
+  regional:   '📍',
+  observance: '📅',
+};
 
-  const [next, ...rest] = holidays;
-  const nextDays = daysUntil(next.date);
+export default memo(function HolidayWidget() {
+  const { holidays, loading } = useHolidays();
+
+  // Show next 5 upcoming holidays (mix of all types)
+  const shown = holidays.slice(0, 5);
+
+  if (loading && shown.length === 0) {
+    return (
+      <section className="hol-wrap" aria-label="Upcoming holidays">
+        <div className="hol-head"><span className="hol-title">Holidays & Festivals</span></div>
+        <div className="hol-skel" aria-hidden />
+      </section>
+    );
+  }
+
+  if (!loading && shown.length === 0) return null;
+
+  const [next, ...rest] = shown;
+  const nextDays = next ? daysUntil(next.date) : 0;
 
   return (
-    <section className="hol-wrap" aria-label="Upcoming Indian holidays">
+    <section className="hol-wrap" aria-label="Upcoming Indian holidays and festivals">
       <div className="hol-head">
         <span className="hol-title">Holidays & Festivals</span>
       </div>
 
-      {/* Featured next holiday */}
-      <div className="hol-featured">
-        <span className="hol-emoji" aria-hidden>{next.emoji}</span>
-        <div className="hol-feat-body">
-          <span className="hol-feat-name">{next.name}</span>
-          <span className="hol-feat-date">{formatDate(next.date)}</span>
+      {/* Featured next event */}
+      {next && (
+        <div className="hol-featured">
+          <span className="hol-emoji" aria-hidden>{next.emoji}</span>
+          <div className="hol-feat-body">
+            <span className="hol-feat-name">{next.name}</span>
+            <span className="hol-feat-date">
+              {formatDate(next.date)}
+              {next.type && <span className="hol-type-dot">{TYPE_BADGE[next.type]}</span>}
+            </span>
+          </div>
+          <DaysChip days={nextDays} />
         </div>
-        <DaysChip days={nextDays} />
-      </div>
+      )}
 
-      {/* Upcoming list */}
+      {/* Next 4 events */}
       {rest.length > 0 && (
         <ul className="hol-list">
-          {rest.map(h => (
-            <li key={h.date} className="hol-item">
+          {rest.map((h, i) => (
+            <li key={`${h.date}-${i}`} className="hol-item">
               <span className="hol-item-emoji" aria-hidden>{h.emoji}</span>
               <span className="hol-item-name">{h.name}</span>
               <span className="hol-item-date">{formatDate(h.date)}</span>
