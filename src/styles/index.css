@@ -1828,6 +1828,64 @@ button { font-family: inherit; }
 .aqi-value { font-weight: 700; color: var(--aqi-color, var(--ink)); }
 .aqi-cat   { color: var(--aqi-color, var(--ink3)); font-weight: 600; font-size: .72rem; }
 
+/* ── Holiday + Fuel side-by-side row ────────────────────────────── */
+.home-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 720px) {
+  .home-row-2 { grid-template-columns: 1fr; }
+}
+
+/* ── Fuel Widget ─────────────────────────────────────────────────── */
+.fuel-wrap {
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  padding: .75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.fuel-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.fuel-title {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink3);
+}
+.fuel-city {
+  font-size: .72rem; font-weight: 600; color: var(--ink2);
+  background: var(--paper3); border: 1px solid var(--border);
+  border-radius: 10px; padding: .1rem .45rem;
+}
+.fuel-note {
+  font-size: .63rem; color: var(--ink3); margin-left: auto;
+}
+.fuel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+.fuel-card {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  background: var(--paper3);
+  border: 1px solid var(--border);
+  border-radius: var(--rsm);
+  padding: .6rem .75rem;
+}
+.fuel-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+.fuel-body { display: flex; flex-direction: column; gap: .05rem; }
+.fuel-type  { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); }
+.fuel-price { font-size: 1.05rem; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fuel-unit  { font-size: .62rem; color: var(--ink3); }
+
 /* ── Holiday Widget ─────────────────────────────────────────────── */
 .hol-wrap {
   background: var(--paper2);

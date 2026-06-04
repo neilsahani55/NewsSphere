@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchLocation, INDIA_DEFAULT } from './useLocation.js';
 
 // wttr.in weather codes → emoji + short label
 function wttrLabel(code) {
@@ -16,21 +17,7 @@ function wttrLabel(code) {
 }
 
 // Step 1: IP-based location (ipapi.co) — no permission prompt, instant
-async function ipLocation() {
-  try {
-    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
-    if (!res.ok) throw new Error();
-    const j = await res.json();
-    if (j.error) throw new Error();
-    return {
-      lat:  j.latitude  ?? 28.6139,
-      lon:  j.longitude ?? 77.209,
-      city: j.city || j.region || 'India',
-    };
-  } catch {
-    return { lat: 28.6139, lon: 77.209, city: 'India' };
-  }
-}
+// Use shared location hook (de-duplicates the ipapi.co call across all widgets)
 
 // Step 2: wttr.in weather — highly reliable CORS, works from any origin
 async function wttrWeather(lat, lon, city) {
@@ -51,7 +38,7 @@ export function useWeather() {
 
   useEffect(() => {
     let live = true;
-    ipLocation()
+    fetchLocation()
       .then(({ lat, lon, city }) => wttrWeather(lat, lon, city))
       .then(w => { if (live) setWeather(w); })
       .catch(() => { if (live) setWeather(null); });

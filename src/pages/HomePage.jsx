@@ -10,6 +10,7 @@ import QuoteWidget from '../components/QuoteWidget.jsx';
 import AQIBadge from '../components/AQIBadge.jsx';
 import HolidayWidget from '../components/HolidayWidget.jsx';
 import CricketWidget from '../components/CricketWidget.jsx';
+import FuelWidget from '../components/FuelWidget.jsx';
 
 const WeatherBadge = memo(function WeatherBadge() {
   const { weather, loading } = useWeather();
@@ -151,7 +152,10 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
 
       <MarketsWidget />
 
-      <HolidayWidget />
+      <div className="home-row-2">
+        <HolidayWidget />
+        <FuelWidget />
+      </div>
 
       <CricketWidget />
 

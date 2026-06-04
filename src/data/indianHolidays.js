@@ -1,60 +1,153 @@
-// Curated Indian public holidays and major festivals 2025–2026.
-// Fixed-date national holidays are exact; religious festival dates are
-// based on official government gazette / ICCR announcements.
+// Comprehensive Indian holidays, festivals, and observances 2025–2026.
+// Includes national gazetted holidays, major religious festivals across
+// all faiths, regional celebrations, and important cultural observances.
+
 export const HOLIDAYS = [
-  // ── 2025 ──────────────────────────────────────────────────────────────
-  { date: '2025-01-14', name: 'Makar Sankranti',          emoji: '🪁', type: 'festival'  },
+  // ══════════════════════════════════════════════════════════════════
+  // 2025
+  // ══════════════════════════════════════════════════════════════════
+
+  { date: '2025-01-01', name: "New Year's Day",              emoji: '🎉', type: 'observance' },
+  { date: '2025-01-06', name: 'Guru Gobind Singh Jayanti',   emoji: '🙏', type: 'national'   },
+  { date: '2025-01-13', name: 'Lohri',                       emoji: '🔥', type: 'festival'   },
+  { date: '2025-01-14', name: 'Makar Sankranti / Pongal',    emoji: '🪁', type: 'festival'   },
+  { date: '2025-01-15', name: 'Thiruvalluvar Day (Tamil)',   emoji: '📜', type: 'regional'   },
   { date: '2025-01-23', name: 'Netaji Subhas Chandra Bose Jayanti', emoji: '🎖️', type: 'national' },
-  { date: '2025-01-26', name: 'Republic Day',             emoji: '🇮🇳', type: 'national'  },
-  { date: '2025-02-26', name: 'Maha Shivratri',           emoji: '🕉️', type: 'festival'  },
-  { date: '2025-03-14', name: 'Holi',                     emoji: '🎨', type: 'festival'  },
-  { date: '2025-03-30', name: 'Eid al-Fitr (Ramzan Eid)', emoji: '🌙', type: 'festival'  },
-  { date: '2025-04-06', name: 'Ram Navami',               emoji: '🪔', type: 'festival'  },
-  { date: '2025-04-10', name: 'Mahavir Jayanti',          emoji: '☮️', type: 'national'  },
-  { date: '2025-04-13', name: 'Baisakhi',                 emoji: '🌾', type: 'festival'  },
-  { date: '2025-04-14', name: 'Dr. Ambedkar Jayanti',     emoji: '📚', type: 'national'  },
-  { date: '2025-04-18', name: 'Good Friday',              emoji: '✝️', type: 'national'  },
-  { date: '2025-05-12', name: 'Buddha Purnima',           emoji: '☸️', type: 'national'  },
-  { date: '2025-06-07', name: 'Eid al-Adha (Bakrid)',     emoji: '🌙', type: 'festival'  },
-  { date: '2025-07-06', name: 'Muharram',                 emoji: '🌙', type: 'festival'  },
-  { date: '2025-08-15', name: 'Independence Day',         emoji: '🇮🇳', type: 'national'  },
-  { date: '2025-08-16', name: 'Janmashtami',              emoji: '🦚', type: 'festival'  },
-  { date: '2025-08-27', name: 'Ganesh Chaturthi',         emoji: '🐘', type: 'festival'  },
-  { date: '2025-10-02', name: 'Gandhi Jayanti / Dussehra',emoji: '🕊️', type: 'national'  },
-  { date: '2025-10-20', name: 'Diwali',                   emoji: '🪔', type: 'festival'  },
-  { date: '2025-10-22', name: 'Bhai Dooj',                emoji: '🪔', type: 'festival'  },
-  { date: '2025-11-05', name: 'Guru Nanak Jayanti',       emoji: '🙏', type: 'national'  },
-  { date: '2025-12-25', name: 'Christmas',                emoji: '🎄', type: 'national'  },
-  // ── 2026 ──────────────────────────────────────────────────────────────
-  { date: '2026-01-14', name: 'Makar Sankranti',          emoji: '🪁', type: 'festival'  },
-  { date: '2026-01-26', name: 'Republic Day',             emoji: '🇮🇳', type: 'national'  },
-  { date: '2026-02-15', name: 'Maha Shivratri',           emoji: '🕉️', type: 'festival'  },
-  { date: '2026-03-02', name: 'Holi',                     emoji: '🎨', type: 'festival'  },
-  { date: '2026-03-19', name: 'Eid al-Fitr (Ramzan Eid)', emoji: '🌙', type: 'festival'  },
-  { date: '2026-04-03', name: 'Good Friday',              emoji: '✝️', type: 'national'  },
-  { date: '2026-04-14', name: 'Dr. Ambedkar Jayanti / Baisakhi', emoji: '📚', type: 'national' },
-  { date: '2026-05-27', name: 'Eid al-Adha (Bakrid)',     emoji: '🌙', type: 'festival'  },
-  { date: '2026-08-15', name: 'Independence Day',         emoji: '🇮🇳', type: 'national'  },
-  { date: '2026-09-03', name: 'Janmashtami',              emoji: '🦚', type: 'festival'  },
-  { date: '2026-09-19', name: 'Ganesh Chaturthi',         emoji: '🐘', type: 'festival'  },
-  { date: '2026-10-02', name: 'Gandhi Jayanti',           emoji: '🕊️', type: 'national'  },
-  { date: '2026-11-08', name: 'Diwali',                   emoji: '🪔', type: 'festival'  },
-  { date: '2026-11-24', name: 'Guru Nanak Jayanti',       emoji: '🙏', type: 'national'  },
-  { date: '2026-12-25', name: 'Christmas',                emoji: '🎄', type: 'national'  },
+  { date: '2025-01-26', name: 'Republic Day',                emoji: '🇮🇳', type: 'national'   },
+  { date: '2025-02-02', name: 'Vasant Panchami (Saraswati Puja)', emoji: '💛', type: 'festival'   },
+  { date: '2025-02-04', name: 'World Cancer Day',            emoji: '🎗️', type: 'observance' },
+  { date: '2025-02-10', name: 'Hazarat Ali Birthday',        emoji: '🌙', type: 'festival'   },
+  { date: '2025-02-19', name: 'Chhatrapati Shivaji Maharaj Jayanti', emoji: '⚔️', type: 'regional' },
+  { date: '2025-02-26', name: 'Maha Shivratri',              emoji: '🕉️', type: 'festival'   },
+  { date: '2025-03-08', name: "International Women's Day",   emoji: '♀️', type: 'observance' },
+  { date: '2025-03-13', name: 'Holika Dahan (Holi Eve)',     emoji: '🔥', type: 'festival'   },
+  { date: '2025-03-14', name: 'Holi',                        emoji: '🎨', type: 'national'   },
+  { date: '2025-03-30', name: 'Eid al-Fitr (Ramzan Eid)',    emoji: '🌙', type: 'national'   },
+  { date: '2025-03-30', name: 'Ugadi / Gudi Padwa / Telugu New Year', emoji: '🌸', type: 'festival'   },
+  { date: '2025-04-01', name: 'Odisha Day',                  emoji: '🌊', type: 'regional'   },
+  { date: '2025-04-05', name: 'Rama Navami Eve',             emoji: '🪔', type: 'festival'   },
+  { date: '2025-04-06', name: 'Ram Navami',                  emoji: '🪔', type: 'national'   },
+  { date: '2025-04-10', name: 'Mahavir Jayanti',             emoji: '☮️', type: 'national'   },
+  { date: '2025-04-13', name: 'Baisakhi / Vishu (Kerala)',   emoji: '🌾', type: 'festival'   },
+  { date: '2025-04-14', name: 'Dr. B R Ambedkar Jayanti',   emoji: '📚', type: 'national'   },
+  { date: '2025-04-14', name: 'Bihu (Assam)',                emoji: '🥁', type: 'regional'   },
+  { date: '2025-04-14', name: 'Tamil New Year (Puthandu)',   emoji: '🌺', type: 'regional'   },
+  { date: '2025-04-18', name: 'Good Friday',                 emoji: '✝️', type: 'national'   },
+  { date: '2025-04-20', name: 'Easter Sunday',               emoji: '🐣', type: 'festival'   },
+  { date: '2025-04-25', name: 'Hanuman Jayanti',             emoji: '🐒', type: 'festival'   },
+  { date: '2025-04-30', name: 'Akshaya Tritiya',             emoji: '✨', type: 'festival'   },
+  { date: '2025-05-01', name: 'Maharashtra Day / Gujarat Day / Workers Day', emoji: '⚒️', type: 'regional'   },
+  { date: '2025-05-09', name: 'Rabindranath Tagore Jayanti', emoji: '📝', type: 'observance' },
+  { date: '2025-05-12', name: 'Buddha Purnima (Vesak)',      emoji: '☸️', type: 'national'   },
+  { date: '2025-05-23', name: 'Guru Nanak Dev Jayanti (2nd)', emoji: '🙏', type: 'observance' },
+  { date: '2025-06-01', name: 'Maharana Pratap Jayanti',     emoji: '⚔️', type: 'observance' },
+  { date: '2025-06-07', name: 'Eid al-Adha (Bakrid)',        emoji: '🌙', type: 'national'   },
+  { date: '2025-06-21', name: "International Yoga Day",      emoji: '🧘', type: 'observance' },
+  { date: '2025-06-27', name: 'Rath Yatra (Puri)',           emoji: '🛕', type: 'festival'   },
+  { date: '2025-06-28', name: 'Sant Kabir Das Jayanti',      emoji: '🕊️', type: 'observance' },
+  { date: '2025-07-04', name: 'Guru Hargobind Sahib Jayanti',emoji: '🙏', type: 'observance' },
+  { date: '2025-07-06', name: 'Muharram (Islamic New Year)', emoji: '🌙', type: 'national'   },
+  { date: '2025-07-10', name: "Prophet's Birthday (Milad-un-Nabi)", emoji: '🌙', type: 'festival' },
+  { date: '2025-07-21', name: 'Guru Purnima',                emoji: '🙏', type: 'festival'   },
+  { date: '2025-08-08', name: 'Raksha Bandhan',              emoji: '🧵', type: 'festival'   },
+  { date: '2025-08-15', name: 'Independence Day',            emoji: '🇮🇳', type: 'national'   },
+  { date: '2025-08-16', name: 'Janmashtami (Krishna Jayanti)', emoji: '🦚', type: 'national'   },
+  { date: '2025-08-23', name: 'Onam (Atham - first day)',    emoji: '🌺', type: 'regional'   },
+  { date: '2025-08-27', name: 'Ganesh Chaturthi',            emoji: '🐘', type: 'festival'   },
+  { date: '2025-09-05', name: "Teachers' Day / Onam Thiruvonam", emoji: '📖', type: 'national'  },
+  { date: '2025-09-15', name: 'Ganesh Visarjan (Anant Chaturdashi)', emoji: '🐘', type: 'festival' },
+  { date: '2025-09-22', name: 'Navratri Begins',             emoji: '🪔', type: 'festival'   },
+  { date: '2025-09-25', name: 'Durga Puja Begins (Shashti)', emoji: '🔱', type: 'festival'   },
+  { date: '2025-09-28', name: 'Durga Ashtami / Maha Ashtami', emoji: '🔱', type: 'festival'  },
+  { date: '2025-09-29', name: 'Durga Navami / Sandhi Puja', emoji: '🔱', type: 'festival'   },
+  { date: '2025-10-01', name: 'Saraswati Puja (Navami)',     emoji: '🎓', type: 'festival'   },
+  { date: '2025-10-02', name: 'Gandhi Jayanti',              emoji: '🕊️', type: 'national'   },
+  { date: '2025-10-02', name: 'Dussehra (Vijaya Dashami)',   emoji: '⚔️', type: 'national'   },
+  { date: '2025-10-06', name: 'Durga Visarjan (Dashami/Sindoor Khela)', emoji: '🔱', type: 'festival' },
+  { date: '2025-10-13', name: 'Karva Chauth',                emoji: '🌕', type: 'festival'   },
+  { date: '2025-10-16', name: 'Dhanteras',                   emoji: '🪙', type: 'festival'   },
+  { date: '2025-10-17', name: 'Naraka Chaturdashi (Choti Diwali)', emoji: '🪔', type: 'festival' },
+  { date: '2025-10-20', name: 'Diwali (Lakshmi Puja)',       emoji: '🪔', type: 'national'   },
+  { date: '2025-10-21', name: 'Govardhan Puja (Padwa)',      emoji: '🐄', type: 'festival'   },
+  { date: '2025-10-22', name: 'Bhai Dooj',                   emoji: '👫', type: 'festival'   },
+  { date: '2025-10-24', name: 'Chhath Puja (Nahay Khay)',    emoji: '🌅', type: 'festival'   },
+  { date: '2025-10-27', name: 'Chhath Puja (Sandhya Arghya)', emoji: '🌅', type: 'festival'  },
+  { date: '2025-10-28', name: 'Chhath Puja (Usha Arghya)',   emoji: '🌅', type: 'festival'   },
+  { date: '2025-11-05', name: 'Guru Nanak Jayanti (Gurpurab)', emoji: '🙏', type: 'national'  },
+  { date: '2025-11-14', name: "Children's Day / Nehru Jayanti", emoji: '🧒', type: 'national' },
+  { date: '2025-11-19', name: 'Guru Tegh Bahadur Martyrdom Day', emoji: '🕯️', type: 'national' },
+  { date: '2025-12-02', name: 'Sarhul (Jharkhand)',          emoji: '🌳', type: 'regional'   },
+  { date: '2025-12-06', name: 'Mahaparinirvan Diwas (Ambedkar)',  emoji: '📚', type: 'national' },
+  { date: '2025-12-19', name: 'Goa Liberation Day',          emoji: '🌊', type: 'regional'   },
+  { date: '2025-12-22', name: 'National Mathematics Day',    emoji: '🔢', type: 'observance' },
+  { date: '2025-12-24', name: 'Christmas Eve',               emoji: '🎄', type: 'festival'   },
+  { date: '2025-12-25', name: 'Christmas',                   emoji: '🎄', type: 'national'   },
+  { date: '2025-12-31', name: "New Year's Eve",              emoji: '🎆', type: 'observance' },
+
+  // ══════════════════════════════════════════════════════════════════
+  // 2026
+  // ══════════════════════════════════════════════════════════════════
+
+  { date: '2026-01-01', name: "New Year's Day",              emoji: '🎉', type: 'observance' },
+  { date: '2026-01-02', name: 'Guru Gobind Singh Jayanti',   emoji: '🙏', type: 'national'   },
+  { date: '2026-01-13', name: 'Lohri',                       emoji: '🔥', type: 'festival'   },
+  { date: '2026-01-14', name: 'Makar Sankranti / Pongal',    emoji: '🪁', type: 'festival'   },
+  { date: '2026-01-23', name: 'Netaji Jayanti',              emoji: '🎖️', type: 'national'   },
+  { date: '2026-01-26', name: 'Republic Day',                emoji: '🇮🇳', type: 'national'   },
+  { date: '2026-01-22', name: 'Vasant Panchami (Saraswati Puja)', emoji: '💛', type: 'festival' },
+  { date: '2026-02-15', name: 'Maha Shivratri',              emoji: '🕉️', type: 'national'   },
+  { date: '2026-03-01', name: 'Holika Dahan (Holi Eve)',     emoji: '🔥', type: 'festival'   },
+  { date: '2026-03-02', name: 'Holi',                        emoji: '🎨', type: 'national'   },
+  { date: '2026-03-08', name: "International Women's Day",   emoji: '♀️', type: 'observance' },
+  { date: '2026-03-19', name: 'Eid al-Fitr (Ramzan Eid)',    emoji: '🌙', type: 'national'   },
+  { date: '2026-03-19', name: 'Ugadi / Gudi Padwa',          emoji: '🌸', type: 'festival'   },
+  { date: '2026-03-27', name: 'Ram Navami',                  emoji: '🪔', type: 'national'   },
+  { date: '2026-04-02', name: 'Mahavir Jayanti',             emoji: '☮️', type: 'national'   },
+  { date: '2026-04-03', name: 'Good Friday',                 emoji: '✝️', type: 'national'   },
+  { date: '2026-04-05', name: 'Easter Sunday',               emoji: '🐣', type: 'festival'   },
+  { date: '2026-04-13', name: 'Baisakhi',                    emoji: '🌾', type: 'festival'   },
+  { date: '2026-04-14', name: 'Dr. B R Ambedkar Jayanti',   emoji: '📚', type: 'national'   },
+  { date: '2026-04-14', name: 'Bihu (Assam) / Tamil New Year', emoji: '🥁', type: 'regional' },
+  { date: '2026-04-14', name: 'Vishu (Kerala)',              emoji: '🌺', type: 'regional'   },
+  { date: '2026-04-22', name: 'Akshaya Tritiya',             emoji: '✨', type: 'festival'   },
+  { date: '2026-05-01', name: 'Maharashtra Day / Workers Day', emoji: '⚒️', type: 'regional' },
+  { date: '2026-05-03', name: 'Buddha Purnima',              emoji: '☸️', type: 'national'   },
+  { date: '2026-05-27', name: 'Eid al-Adha (Bakrid)',        emoji: '🌙', type: 'national'   },
+  { date: '2026-06-16', name: 'Rath Yatra (Puri)',           emoji: '🛕', type: 'festival'   },
+  { date: '2026-06-21', name: "International Yoga Day",      emoji: '🧘', type: 'observance' },
+  { date: '2026-07-10', name: 'Guru Purnima',                emoji: '🙏', type: 'festival'   },
+  { date: '2026-08-15', name: 'Independence Day',            emoji: '🇮🇳', type: 'national'   },
+  { date: '2026-08-26', name: 'Raksha Bandhan',              emoji: '🧵', type: 'festival'   },
+  { date: '2026-09-03', name: 'Janmashtami',                 emoji: '🦚', type: 'national'   },
+  { date: '2026-09-09', name: 'Onam Thiruvonam (Kerala)',    emoji: '🌺', type: 'regional'   },
+  { date: '2026-09-16', name: 'Ganesh Chaturthi',            emoji: '🐘', type: 'festival'   },
+  { date: '2026-10-02', name: 'Gandhi Jayanti',              emoji: '🕊️', type: 'national'   },
+  { date: '2026-10-11', name: 'Navratri Begins',             emoji: '🪔', type: 'festival'   },
+  { date: '2026-10-15', name: 'Durga Puja / Maha Ashtami',  emoji: '🔱', type: 'festival'   },
+  { date: '2026-10-19', name: 'Dussehra (Vijaya Dashami)',   emoji: '⚔️', type: 'national'   },
+  { date: '2026-10-27', name: 'Karva Chauth',                emoji: '🌕', type: 'festival'   },
+  { date: '2026-11-04', name: 'Dhanteras',                   emoji: '🪙', type: 'festival'   },
+  { date: '2026-11-05', name: 'Naraka Chaturdashi',          emoji: '🪔', type: 'festival'   },
+  { date: '2026-11-08', name: 'Diwali',                      emoji: '🪔', type: 'national'   },
+  { date: '2026-11-09', name: 'Govardhan Puja',              emoji: '🐄', type: 'festival'   },
+  { date: '2026-11-10', name: 'Bhai Dooj',                   emoji: '👫', type: 'festival'   },
+  { date: '2026-11-12', name: 'Chhath Puja (Sandhya Arghya)', emoji: '🌅', type: 'festival'  },
+  { date: '2026-11-14', name: "Children's Day / Nehru Jayanti", emoji: '🧒', type: 'national' },
+  { date: '2026-11-24', name: 'Guru Nanak Jayanti (Gurpurab)', emoji: '🙏', type: 'national'  },
+  { date: '2026-12-06', name: 'Mahaparinirvan Diwas (Ambedkar)', emoji: '📚', type: 'national' },
+  { date: '2026-12-25', name: 'Christmas',                   emoji: '🎄', type: 'national'   },
+  { date: '2026-12-31', name: "New Year's Eve",              emoji: '🎆', type: 'observance' },
 ];
 
-// Returns upcoming holidays starting from today, up to `limit`
-export function getUpcomingHolidays(limit = 4) {
+/** Upcoming holidays from today, up to `limit`. */
+export function getUpcomingHolidays(limit = 5) {
   const today = new Date().toISOString().slice(0, 10);
-  return HOLIDAYS
-    .filter(h => h.date >= today)
-    .slice(0, limit);
+  return HOLIDAYS.filter(h => h.date >= today).slice(0, limit);
 }
 
-// Days until a given ISO date string
+/** Days until a given ISO date (0 = today). */
 export function daysUntil(isoDate) {
-  const now  = new Date();
   const [y, m, d] = isoDate.split('-').map(Number);
-  const target = new Date(y, m - 1, d);
-  return Math.ceil((target - now) / 86400000);
+  const diff = new Date(y, m - 1, d) - new Date(new Date().toDateString());
+  return Math.max(0, Math.ceil(diff / 86400000));
 }
