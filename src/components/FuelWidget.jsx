@@ -3,8 +3,9 @@ import { useLocation } from '../hooks/useLocation.js';
 import { FUEL_LAST_REVISED, getFuelForCity } from '../data/fuelPrices.js';
 
 export default memo(function FuelWidget() {
-  const { city } = useLocation();
-  const { petrol, diesel, city: matchedCity } = getFuelForCity(city);
+  const { city, region } = useLocation();
+  const raw = getFuelForCity(city, region);
+  const petrol = raw.p, diesel = raw.d, matchedCity = raw.city;
 
   return (
     <section className="fuel-wrap" aria-label="Today's fuel prices">
