@@ -1767,6 +1767,16 @@ button { font-family: inherit; }
   color: var(--ink3);
 }
 
+/* ── Briefing right side (weather + AQI badges) ─────────────────── */
+.home-briefing-right {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 /* ── Weather Badge ─────────────────────────────────────────────── */
 .wx-badge {
   display: flex;
@@ -1794,6 +1804,121 @@ button { font-family: inherit; }
 .wx-icon   { font-style: normal; line-height: 1; }
 .wx-label  { color: var(--ink3); }
 .wx-temp   { font-weight: 700; color: var(--ink); }
+
+/* ── AQI Badge ──────────────────────────────────────────────────── */
+.aqi-badge {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  background: var(--aqi-bg, var(--paper2));
+  border: 1px solid color-mix(in srgb, var(--aqi-color, var(--border)) 30%, var(--border));
+  border-radius: 20px;
+  padding: .3rem .7rem;
+  font-size: .78rem;
+  color: var(--ink2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.aqi-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--aqi-color, var(--ink3));
+  flex-shrink: 0;
+}
+.aqi-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); }
+.aqi-value { font-weight: 700; color: var(--aqi-color, var(--ink)); }
+.aqi-cat   { color: var(--aqi-color, var(--ink3)); font-weight: 600; font-size: .72rem; }
+
+/* ── Holiday Widget ─────────────────────────────────────────────── */
+.hol-wrap {
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  padding: .75rem 1rem;
+}
+.hol-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; }
+.hol-title {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink3);
+}
+.hol-featured {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .55rem .7rem; border-radius: var(--rsm);
+  background: var(--paper3); border: 1px solid var(--border);
+  margin-bottom: .5rem;
+}
+.hol-emoji { font-size: 1.6rem; line-height: 1; flex-shrink: 0; }
+.hol-feat-body { display: flex; flex-direction: column; gap: .1rem; flex: 1; min-width: 0; }
+.hol-feat-name { font-size: .9rem; font-weight: 700; color: var(--ink); }
+.hol-feat-date { font-size: .72rem; color: var(--ink3); }
+.hol-chip {
+  flex-shrink: 0; border-radius: 20px; padding: .2rem .6rem;
+  font-size: .68rem; font-weight: 700; background: var(--border2);
+  color: var(--ink3); white-space: nowrap;
+}
+.hol-today { background: #dcfce7; color: #16a34a; }
+.hol-soon  { background: #fef9c3; color: #ca8a04; }
+.hol-list  { list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+.hol-item {
+  display: grid; grid-template-columns: 1.5rem 1fr auto auto;
+  align-items: center; gap: .5rem;
+  padding: .3rem 0; border-top: 1px solid var(--border);
+  font-size: .78rem;
+}
+.hol-item-emoji { text-align: center; font-size: .95rem; }
+.hol-item-name  { color: var(--ink2); font-weight: 500; }
+.hol-item-date  { color: var(--ink3); font-size: .72rem; }
+.hol-item-days  { color: var(--ink3); font-size: .7rem; min-width: 28px; text-align: right; }
+
+/* ── Cricket Widget ─────────────────────────────────────────────── */
+.ckt-wrap {
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  padding: .75rem 1rem;
+}
+.ckt-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .6rem;
+}
+.ckt-title {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink3);
+}
+.ckt-live-count {
+  font-size: .65rem; font-weight: 700; color: #dc2626;
+  background: #fee2e2; border-radius: 10px; padding: .15rem .5rem;
+}
+.ckt-list { display: flex; flex-direction: column; gap: .5rem; }
+.ckt-card {
+  border: 1px solid var(--border); border-radius: var(--rsm);
+  padding: .6rem .75rem; background: var(--paper3);
+}
+.ckt-live { border-color: #fca5a5; background: color-mix(in srgb, #fee2e2 30%, var(--paper3)); }
+.ckt-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-bottom: .4rem;
+}
+.ckt-match-name { font-size: .82rem; font-weight: 600; color: var(--ink); }
+.ckt-badge {
+  font-size: .6rem; font-weight: 700; border-radius: 10px;
+  padding: .1rem .45rem; white-space: nowrap; flex-shrink: 0;
+}
+.ckt-badge-live { background: #dc2626; color: #fff; }
+.ckt-badge-pre  { background: #2563eb; color: #fff; }
+.ckt-badge-post { background: var(--border2); color: var(--ink3); }
+.ckt-scores { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .35rem; }
+.ckt-team { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .82rem; }
+.ckt-winner .ckt-team-name { font-weight: 700; color: #16a34a; }
+.ckt-team-name  { color: var(--ink2); font-weight: 500; flex: 1; }
+.ckt-team-score { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ckt-summary { font-size: .73rem; color: var(--ink3); margin: 0; }
+.ckt-skeleton {
+  height: 80px; border-radius: var(--rsm);
+  background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+
 .home-sec { display: flex; flex-direction: column; gap: .75rem; }
 .home-sec-hdr {
   display: flex;
@@ -2973,10 +3098,19 @@ mark.tts-hl {
   .quote-wrap { padding: .8rem .9rem .8rem 1.2rem; }
   .quote-text { font-size: .8rem; }
 
-  /* Weather: hide label on very small screens, keep emoji + temp */
-  .wx-badge   { padding: .25rem .6rem; font-size: .72rem; gap: .25rem; }
+  /* Weather + AQI: compact on mobile */
+  .wx-badge   { padding: .25rem .55rem; font-size: .7rem; gap: .2rem; }
   .wx-label   { display: none; }
-  .home-briefing-left { gap: .4rem; }
+  .aqi-badge  { padding: .25rem .55rem; font-size: .7rem; gap: .2rem; }
+  .aqi-cat    { display: none; }
+  .home-briefing-left  { gap: .4rem; }
+  .home-briefing-right { gap: .3rem; }
+  /* Holiday: tighter */
+  .hol-wrap   { padding: .6rem .75rem; }
+  .hol-featured { gap: .5rem; }
+  .hol-emoji  { font-size: 1.3rem; }
+  /* Cricket: tighter */
+  .ckt-wrap   { padding: .6rem .75rem; }
 
   /* Today in History: tighter on mobile */
   .th-wrap    { padding: 1.1rem 1.1rem 1rem; margin-bottom: 1.25rem; }

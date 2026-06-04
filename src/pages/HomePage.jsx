@@ -7,6 +7,9 @@ import { useWeather } from '../hooks/useWeather.js';
 import TodayHistory from '../components/TodayHistory.jsx';
 import MarketsWidget from '../components/MarketsWidget.jsx';
 import QuoteWidget from '../components/QuoteWidget.jsx';
+import AQIBadge from '../components/AQIBadge.jsx';
+import HolidayWidget from '../components/HolidayWidget.jsx';
+import CricketWidget from '../components/CricketWidget.jsx';
 
 const WeatherBadge = memo(function WeatherBadge() {
   const { weather, loading } = useWeather();
@@ -140,10 +143,17 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
           <h2 className="home-briefing-title">{t.briefing}</h2>
           <span className="home-briefing-date">{today}</span>
         </div>
-        <WeatherBadge />
+        <div className="home-briefing-right">
+          <WeatherBadge />
+          <AQIBadge />
+        </div>
       </div>
 
       <MarketsWidget />
+
+      <HolidayWidget />
+
+      <CricketWidget />
 
       <TodayHistory target={target} />
 
