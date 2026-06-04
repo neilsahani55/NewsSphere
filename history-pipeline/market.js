@@ -33,18 +33,26 @@ async function fetchYahooQuotes() {
   const map = {};
   for (const q of results) {
     if (!q.symbol || q.regularMarketPrice == null) continue;
-    // regularMarketChangePercent is reliable in v7; fall back to manual calculation
-    const prev = q.regularMarketPreviousClose ?? q.chartPreviousClose;
+    const price = q.regularMarketPrice;
+
+    // Yahoo's regularMarketChangePercent can be 0 outside market hours even when
+    // there IS a real day change. Always calculate from previous close directly —
+    // this is the standard "day change %" shown on all financial sites.
+    const prevClose =
+      q.regularMarketPreviousClose ??
+      q.previousClose             ??
+      q.chartPreviousClose        ??
+      null;
+
     const change =
-      q.regularMarketChangePercent != null
-        ? q.regularMarketChangePercent
-        : prev
-          ? ((q.regularMarketPrice - prev) / prev) * 100
-          : null;
-    map[q.symbol] = { price: q.regularMarketPrice, change };
+      prevClose && Math.abs(prevClose) > 0.0001
+        ? ((price - prevClose) / prevClose) * 100   // calculated — always accurate
+        : (q.regularMarketChangePercent ?? null);    // Yahoo fallback
+
+    map[q.symbol] = { price, change };
     console.log(
-      `  ✓ ${q.symbol.padEnd(12)} ${q.regularMarketPrice.toFixed(2)}` +
-      (change != null ? `  (${change >= 0 ? '+' : ''}${change.toFixed(2)}%)` : ''),
+      `  ✓ ${q.symbol.padEnd(12)} ${price.toFixed(2)}` +
+      (change != null ? `  (${change >= 0 ? '+' : ''}${change.toFixed(2)}%)` : '  (no change data)'),
     );
   }
   return map;

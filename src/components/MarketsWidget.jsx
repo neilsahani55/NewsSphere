@@ -44,12 +44,23 @@ function Tile({ label, value, sub, change, loading, icon }) {
   );
 }
 
-function lastUpdated(ts) {
+function formatIST(ts) {
   if (!ts) return '';
-  const mins = Math.floor((Date.now() - ts) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  return `${Math.floor(mins / 60)}h ago`;
+  const d   = new Date(ts);
+  const now = new Date();
+  const opts = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true };
+  const time = new Intl.DateTimeFormat('en-IN', opts).format(d);
+
+  // If the update happened on a previous day, also show the date
+  const sameDay =
+    d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) ===
+    now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  if (sameDay) return `${time} IST`;
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  }).format(d);
 }
 
 export default memo(function MarketsWidget() {
@@ -121,7 +132,7 @@ export default memo(function MarketsWidget() {
         {(data?.dbUpdatedAt || loading) && (
           <span className="mkt-updated">
             <span className="mkt-dot" aria-hidden />
-            {loading && !data ? 'Loading…' : `Updated ${lastUpdated(data.dbUpdatedAt)}`}
+            {loading && !data ? 'Loading…' : `Updated ${formatIST(data.dbUpdatedAt)}`}
           </span>
         )}
       </div>
