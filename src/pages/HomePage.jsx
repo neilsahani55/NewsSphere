@@ -4,6 +4,8 @@ import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../
 import { getCached } from '../services/translateService.js';
 import { useUIStrings } from '../hooks/useUIStrings.js';
 import TodayHistory from '../components/TodayHistory.jsx';
+import MarketsWidget from '../components/MarketsWidget.jsx';
+import QuoteWidget from '../components/QuoteWidget.jsx';
 
 const HOME_STRINGS = {
   briefing: 'Your briefing',
@@ -121,7 +123,11 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
         <span className="home-briefing-date">{today}</span>
       </div>
 
+      <MarketsWidget />
+
       <TodayHistory target={target} />
+
+      <QuoteWidget />
 
       {loading && topStories.length === 0 && <HomeSkeleton />}
 
