@@ -30,7 +30,7 @@ function ChangeBadge({ change }) {
 
 function Tile({ label, value, sub, change, loading, icon }) {
   return (
-    <div className="mkt-tile">
+    <div className="mkt-tile" role="listitem">
       <span className="mkt-label">{icon && <span className="mkt-icon">{icon}</span>}{label}</span>
       {loading
         ? <span className="mkt-skel" aria-hidden />
@@ -127,9 +127,7 @@ export default memo(function MarketsWidget() {
       </div>
       <div className="mkt-strip" role="list">
         {tiles.map(t => (
-          <div key={t.key} role="listitem">
-            <Tile {...t} loading={loading} />
-          </div>
+          <Tile key={t.key} {...t} loading={loading} />
         ))}
       </div>
     </section>

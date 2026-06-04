@@ -1,7 +1,7 @@
 // Market data — free APIs, no keys required.
 // Cache: 10 min sessionStorage. Each source fails independently → shows "—".
 
-const CACHE_KEY = 'ns_markets_v5';
+const CACHE_KEY = 'ns_markets_v6';
 const CACHE_TTL = 10 * 60 * 1000;
 
 function readCache() {
@@ -19,42 +19,44 @@ function writeCache(data) {
   } catch {}
 }
 
-async function safeJson(url) {
+async function safeJson(url, ms = 5000) {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(ms) });
     if (!res.ok) return null;
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('text')) return null; // skip HTML error pages
     return await res.json();
   } catch { return null; }
 }
 
-// Try Yahoo Finance through two different CORS proxies in sequence.
-// codetabs.com → allorigins.win → return null
+// Race two CORS proxies in parallel — returns as soon as the first one
+// delivers valid Yahoo Finance chart data. Null if both fail / time out.
 async function yahooChart(symbol) {
-  const yUrl = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+  const yUrl =
+    `https://query2.finance.yahoo.com/v8/finance/chart/` +
+    `${encodeURIComponent(symbol)}?interval=1d&range=1d`;
 
-  // Proxy 1: codetabs.com
-  let json = await safeJson(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yUrl)}`);
+  const fromProxy = async (proxyUrl) => {
+    const json = await safeJson(proxyUrl, 5000);
+    const m = json?.chart?.result?.[0]?.meta;
+    if (!m?.regularMarketPrice) throw new Error('no data');
+    return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
+  };
 
-  // Proxy 2: allorigins (fallback)
-  if (!json?.chart?.result) {
-    json = await safeJson(`https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`);
-  }
-
-  const m = json?.chart?.result?.[0]?.meta;
-  if (!m?.regularMarketPrice) return null;
-  return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
+  // Fire both proxies simultaneously — first valid response wins
+  return Promise.any([
+    fromProxy(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yUrl)}`),
+    fromProxy(`https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`),
+  ]).catch(() => null);
 }
 
-// Single CoinGecko call: BTC, ETH, Gold (PAXG) in INR + USD.
-// USD/INR = BTC_INR ÷ BTC_USD  (arbitrage-accurate to <0.1%)
+// One CoinGecko call: BTC, ETH, Gold (PAXG) in INR + USD.
+// USD/INR derived from BTC_INR ÷ BTC_USD (arbitrage-accurate <0.1%).
 async function getCoinGeckoAll() {
   const json = await safeJson(
     'https://api.coingecko.com/api/v3/simple/price' +
     '?ids=bitcoin,ethereum,pax-gold' +
     '&vs_currencies=inr,usd' +
-    '&include_24hr_change=true'
+    '&include_24hr_change=true',
+    6000
   );
   if (!json) return null;
   const btcInr = json.bitcoin?.inr;
@@ -71,6 +73,7 @@ export async function fetchAllMarkets() {
   const cached = readCache();
   if (cached) return cached;
 
+  // All fetches in parallel — no waiting on each other
   const [cgR, sensexR, niftyR, silverR] = await Promise.allSettled([
     getCoinGeckoAll(),
     yahooChart('^BSESN'),
@@ -78,22 +81,22 @@ export async function fetchAllMarkets() {
     yahooChart('SI=F'),
   ]);
 
-  const cg     = cgR.status     === 'fulfilled' ? cgR.value     : null;
-  const sensex = sensexR.status === 'fulfilled' ? sensexR.value : null;
-  const nifty  = niftyR.status  === 'fulfilled' ? niftyR.value  : null;
-  const silver_chart = silverR.status === 'fulfilled' ? silverR.value : null;
+  const cg          = cgR.status      === 'fulfilled' ? cgR.value      : null;
+  const sensex      = sensexR.status  === 'fulfilled' ? sensexR.value  : null;
+  const nifty       = niftyR.status   === 'fulfilled' ? niftyR.value   : null;
+  const silverChart = silverR.status  === 'fulfilled' ? silverR.value  : null;
 
   const usdInr = cg?.usdInr ?? null;
 
-  // Gold: PAXG (USD/troy oz) × USD/INR × 1.15 (import duty+GST) ÷ 31.1035 g × 10g
+  // Gold: PAXG (USD/troy oz) × USD/INR × 1.15 duty ÷ 31.1035 g × 10g
   let gold24k = null, gold22k = null, silver = null;
   if (usdInr && cg?.goldUsd) {
     const perGram = (cg.goldUsd * usdInr * 1.15) / 31.1035;
     gold24k = Math.round(perGram * 10);
     gold22k = Math.round(perGram * (22 / 24) * 10);
   }
-  if (usdInr && silver_chart?.price) {
-    silver = Math.round((silver_chart.price * usdInr * 1.03) / 31.1035 * 1000);
+  if (usdInr && silverChart?.price) {
+    silver = Math.round((silverChart.price * usdInr * 1.03) / 31.1035 * 1000);
   }
 
   const data = {
