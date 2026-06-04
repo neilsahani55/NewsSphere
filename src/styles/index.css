@@ -1628,15 +1628,13 @@ button { font-family: inherit; }
 .mkt-strip {
   display: flex;
   gap: .5rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding-bottom: 2px;
+  /* Desktop: no scroll — tiles fill the row.
+     Mobile override (below) adds overflow-x:auto and fixed tile widths. */
 }
-.mkt-strip::-webkit-scrollbar { display: none; }
 
 .mkt-tile {
-  flex: 1 0 88px; /* grow to fill desktop, min 88px on mobile */
+  flex: 1 1 0;    /* grow equally from 0 → uniform width on any screen */
+  min-width: 80px;
   display: flex;
   flex-direction: column;
   gap: .18rem;
@@ -1645,7 +1643,6 @@ button { font-family: inherit; }
   border-radius: var(--rsm);
   padding: .55rem .75rem;
   cursor: default;
-  min-width: 0;
 }
 .mkt-label {
   display: flex;
@@ -2950,9 +2947,11 @@ mark.tts-hl {
   }
   .chips::-webkit-scrollbar { display: none; }
 
-  /* Markets & Quote: compact on mobile */
+  /* Markets & Quote: compact on mobile — horizontal scroll */
   .mkt-wrap   { padding: .6rem .75rem .7rem; }
-  .mkt-tile   { flex: 0 0 82px; padding: .4rem .55rem; }
+  .mkt-strip  { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .mkt-strip::-webkit-scrollbar { display: none; }
+  .mkt-tile   { flex: 0 0 90px; padding: .4rem .55rem; } /* fixed width → scrolls */
   .mkt-value  { font-size: .8rem; }
   .quote-wrap { padding: .8rem .9rem .8rem 1.2rem; }
   .quote-text { font-size: .8rem; }
