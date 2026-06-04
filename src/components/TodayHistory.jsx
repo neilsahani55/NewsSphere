@@ -108,9 +108,14 @@ export default memo(function TodayHistory({ target }) {
   }, [expanded, ev?.id, target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const evTitle   = evObj ? (getCached(evObj, 'title',       target) || ev.title)       : '';
-  const evDesc    = evObj ? (getCached(evObj, 'description', target) || ev.description) : '';
   const evCat     = evObj ? (getCached(evObj, 'category',    target) || ev.category)    : '';
   const evDetails = evObj ? (getCached(evObj, 'details',     target) || ev.details || '') : '';
+  const rawDesc   = evObj ? (getCached(evObj, 'description', target) || ev.description) : '';
+  // Short raw descriptions (e.g. birth/death entries: "Pankaj Roy, cricketer (born 1931)")
+  // get augmented with the first sentence of the Wikipedia extract for real context.
+  const evDesc    = rawDesc.length < 100 && evDetails.length > 50
+    ? ((evDetails.split(/\.\s+/)[0] || evDetails).trim().replace(/\.?$/, '.'))
+    : rawDesc;
 
   const goPrevDay = useCallback(() => {
     if (!atLimit) setSelectedDate(shiftDate(currentDate, -1));

@@ -78,11 +78,13 @@ function assignCategory(text) {
 }
 
 function makeTitle(text, pageTitle) {
-  // Wikipedia page titles sometimes come with underscores instead of spaces
-  const clean = (pageTitle || '').replace(/_/g, ' ').trim();
-  if (clean && clean.length > 3 && clean.length < 80) return clean;
   const clause = text.split(/[.,]/)[0].trim();
-  return clause.length <= 80 ? clause : clause.slice(0, 77) + '...';
+  const clean  = (pageTitle || '').replace(/_/g, ' ').trim();
+  // Prefer the event-text clause — it's always specific to what happened.
+  // Fall back to the page title only when the clause is too short to be useful.
+  if (clause.length >= 20) return clause.length <= 90 ? clause : clause.slice(0, 87) + '...';
+  if (clean && clean.length > 3 && clean.length < 80) return clean;
+  return clause || clean;
 }
 
 async function fetchFromWikipedia(month, day) {
@@ -99,12 +101,19 @@ async function fetchFromWikipedia(month, day) {
   const deaths   = data.deaths   || [];
   const allItems = [...events, ...births, ...deaths];
 
-  const seenText = new Set();
+  const seenText  = new Set();
+  const selSeenYr = new Set();
 
-  const selPool = selected.filter(ev => ev.text).map(ev => {
+  // selPool: curated picks, deduplicated by year (Wikipedia occasionally lists
+  // two selected events from the same year which produces duplicate titles).
+  const selPool = selected.filter(ev => ev.text).reduce((acc, ev) => {
+    const yr = String(ev.year);
+    if (selSeenYr.has(yr)) return acc;
+    selSeenYr.add(yr);
     seenText.add(ev.text);
-    return { ...ev, _tag: 'selected' };
-  });
+    acc.push({ ...ev, _tag: 'selected' });
+    return acc;
+  }, []);
 
   const indiaSeenYr = new Set();
   const indiaPool = allItems.reduce((acc, ev) => {
@@ -334,11 +343,24 @@ async function insertEvents(raw, date) {
 
   if (rows.length === 0) throw new Error('No valid rows after processing');
 
-  const { error } = await supabase.from(HISTORY_TABLE).insert(rows);
+  // Final dedup by title — catches any same-titled events that slipped through
+  // the pool logic (e.g. same page linked from both selected and general pools).
+  const seen = new Set();
+  const uniqueRows = rows.filter(r => {
+    const key = r.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (uniqueRows.length < rows.length) {
+    console.log(`Deduped ${rows.length - uniqueRows.length} duplicate title(s) before insert`);
+  }
+
+  const { error } = await supabase.from(HISTORY_TABLE).insert(uniqueRows);
   if (error) throw new Error(`Insert failed: ${error.message}`);
 
-  const withDetails = rows.filter(r => r.details && r.details.length > 50).length;
-  console.log(`\nInserted ${rows.length} events — ${withDetails} with details — for ${date}`);
+  const withDetails = uniqueRows.filter(r => r.details && r.details.length > 50).length;
+  console.log(`\nInserted ${uniqueRows.length} events — ${withDetails} with details — for ${date}`);
 }
 
 async function cleanupOld() {

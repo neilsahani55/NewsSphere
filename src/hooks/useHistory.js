@@ -55,7 +55,17 @@ export function useHistory(date) {
       .then(({ data, error }) => {
         if (activeDate.current !== targetDate) return; // stale response
         if (error) { setStatus('error'); return; }
-        const rows = data || [];
+
+        // Deduplicate by (event_year, title) — safety net for any DB-level
+        // duplicates that crept in from concurrent or repeated pipeline runs.
+        const seen = new Set();
+        const rows = (data || []).filter(r => {
+          const key = `${r.event_year}|${(r.title || '').toLowerCase().trim()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         writeCache(targetDate, rows);
         setEvents(rows);
         setStatus(rows.length > 0 ? 'success' : 'empty');
