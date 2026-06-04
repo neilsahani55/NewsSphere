@@ -1602,11 +1602,6 @@ button { font-family: inherit; }
   justify-content: space-between;
   margin-bottom: .6rem;
 }
-.mkt-head-right {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-}
 .mkt-title {
   font-size: .72rem;
   font-weight: 700;
@@ -1621,29 +1616,6 @@ button { font-family: inherit; }
   font-size: .68rem;
   color: var(--ink3);
 }
-.mkt-refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--ink3);
-  cursor: pointer;
-  padding: 0;
-  flex-shrink: 0;
-  transition: color .15s, border-color .15s, background .15s;
-}
-.mkt-refresh:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent2);
-  background: var(--bluebg);
-}
-.mkt-refresh:disabled { opacity: .45; cursor: not-allowed; }
-.mkt-refresh.mkt-spinning svg { animation: mkt-spin .7s linear infinite; }
-@keyframes mkt-spin { to { transform: rotate(360deg); } }
 .mkt-dot {
   width: 6px;
   height: 6px;

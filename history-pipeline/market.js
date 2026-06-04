@@ -1,21 +1,7 @@
 /**
- * Market data pipeline — fetches ALL market values server-side (no CORS)
- * and upserts into Supabase market_data. Each key has exactly ONE row;
- * upsert replaces the old value every run.
- *
- * Keys stored: usd_inr, gold24k, gold22k, silver, sensex, nifty, btc_inr, eth_inr
- *
- * Run ONCE in Supabase SQL Editor if you haven't already:
- *
- *   CREATE TABLE IF NOT EXISTS market_data (
- *     key        TEXT PRIMARY KEY,
- *     price      NUMERIC,
- *     change_pct NUMERIC,
- *     updated_at TIMESTAMPTZ DEFAULT NOW()
- *   );
- *   ALTER TABLE market_data ENABLE ROW LEVEL SECURITY;
- *   CREATE POLICY "Public read market_data"
- *     ON market_data FOR SELECT TO anon USING (true);
+ * Market data pipeline — one batched Yahoo Finance v7 quote call for all symbols.
+ * The v7 quote endpoint returns reliable regularMarketChangePercent (unlike v8 chart).
+ * Upserts into Supabase market_data: one row per key, old value replaced every run.
  */
 
 import 'dotenv/config';
@@ -27,86 +13,88 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-async function yahooQuote(symbol) {
+// Fetch all symbols in a single Yahoo Finance v7 quote request.
+// v7 quote returns proper regularMarketChangePercent for all asset types.
+async function fetchYahooQuotes() {
+  const symbols = ['^BSESN', '^NSEI', 'SI=F', 'USDINR=X', 'GC=F', 'BTC-INR', 'ETH-INR'];
   const url =
-    `https://query2.finance.yahoo.com/v8/finance/chart/` +
-    `${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+    'https://query2.finance.yahoo.com/v7/finance/quote' +
+    `?symbols=${encodeURIComponent(symbols.join(','))}` +
+    '&lang=en-IN&region=IN';
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsSphere-Market/1.0)' },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(15000),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Yahoo v7 HTTP ${res.status}`);
   const json = await res.json();
-  const m = json?.chart?.result?.[0]?.meta;
-  if (!m?.regularMarketPrice) throw new Error('No price in response');
-  return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
+  const results = json?.quoteResponse?.result ?? [];
+  if (!results.length) throw new Error('Empty quoteResponse from Yahoo');
+
+  const map = {};
+  for (const q of results) {
+    if (!q.symbol || q.regularMarketPrice == null) continue;
+    // regularMarketChangePercent is reliable in v7; fall back to manual calculation
+    const prev = q.regularMarketPreviousClose ?? q.chartPreviousClose;
+    const change =
+      q.regularMarketChangePercent != null
+        ? q.regularMarketChangePercent
+        : prev
+          ? ((q.regularMarketPrice - prev) / prev) * 100
+          : null;
+    map[q.symbol] = { price: q.regularMarketPrice, change };
+    console.log(
+      `  ✓ ${q.symbol.padEnd(12)} ${q.regularMarketPrice.toFixed(2)}` +
+      (change != null ? `  (${change >= 0 ? '+' : ''}${change.toFixed(2)}%)` : ''),
+    );
+  }
+  return map;
 }
 
 async function main() {
-  const now = new Date().toISOString();
-  console.log(`=== Market pipeline: ${now} ===\n`);
+  console.log(`=== Market pipeline: ${new Date().toISOString()} ===\n`);
 
-  // Fetch all symbols in parallel
-  const symbols = {
-    usd:    'USDINR=X',   // USD/INR exchange rate
-    gold:   'GC=F',       // Gold futures USD/troy oz
-    silver: 'SI=F',       // Silver futures USD/troy oz
-    sensex: '^BSESN',     // BSE Sensex
-    nifty:  '^NSEI',      // Nifty 50
-    btc:    'BTC-INR',    // Bitcoin in INR
-    eth:    'ETH-INR',    // Ethereum in INR
-  };
+  const quotes = await fetchYahooQuotes();
+  const now    = new Date().toISOString();
+  const q      = (sym) => quotes[sym];
+  const usdInr = q('USDINR=X')?.price ?? null;
+  const rows   = [];
 
-  const entries = Object.entries(symbols);
-  const results = await Promise.allSettled(entries.map(([, sym]) => yahooQuote(sym)));
-
-  const got = {};
-  entries.forEach(([key, sym], i) => {
-    const r = results[i];
-    if (r.status === 'fulfilled') {
-      got[key] = r.value;
-      console.log(`  ✓ ${sym.padEnd(10)} ${r.value.price.toFixed(2)} (${r.value.change.toFixed(2)}%)`);
-    } else {
-      console.warn(`  ✗ ${sym.padEnd(10)} ${r.reason?.message}`);
-    }
-  });
-
-  // Build rows to upsert — each replaces its existing DB row via PRIMARY KEY conflict
-  const rows = [];
-
-  if (got.usd) {
-    rows.push({ key: 'usd_inr', price: got.usd.price, change_pct: got.usd.change, updated_at: now });
+  // USD / INR
+  if (q('USDINR=X')) {
+    rows.push({ key: 'usd_inr', price: q('USDINR=X').price, change_pct: q('USDINR=X').change, updated_at: now });
   }
 
-  // Gold: convert USD/troy oz → INR/10g with Indian import duty (~15%) + GST (~3%)
-  if (got.gold && got.usd) {
-    const perGram = (got.gold.price * got.usd.price * 1.15) / 31.1035;
-    rows.push({ key: 'gold24k', price: Math.round(perGram * 10),             change_pct: got.gold.change, updated_at: now });
-    rows.push({ key: 'gold22k', price: Math.round(perGram * (22 / 24) * 10), change_pct: got.gold.change, updated_at: now });
+  // Gold: GC=F (USD/troy oz) → INR/10g (24 K and 22 K)
+  const goldUsd = q('GC=F')?.price ?? null;
+  if (goldUsd && usdInr) {
+    const perGram  = (goldUsd * usdInr * 1.15) / 31.1035;
+    const goldChg  = q('GC=F').change;
+    rows.push({ key: 'gold24k', price: Math.round(perGram * 10),              change_pct: goldChg, updated_at: now });
+    rows.push({ key: 'gold22k', price: Math.round(perGram * (22 / 24) * 10),  change_pct: goldChg, updated_at: now });
   }
 
-  // Silver: convert USD/troy oz → INR/kg with GST (~3%)
-  if (got.silver && got.usd) {
-    const silverInrKg = Math.round((got.silver.price * got.usd.price * 1.03) / 31.1035 * 1000);
-    rows.push({ key: 'silver', price: silverInrKg, change_pct: got.silver.change, updated_at: now });
+  // Silver: SI=F (USD/troy oz) → INR/kg
+  const silverUsd = q('SI=F')?.price ?? null;
+  if (silverUsd && usdInr) {
+    rows.push({ key: 'silver', price: Math.round((silverUsd * usdInr * 1.03) / 31.1035 * 1000), change_pct: q('SI=F').change, updated_at: now });
   }
 
-  if (got.sensex) rows.push({ key: 'sensex', price: got.sensex.price, change_pct: got.sensex.change, updated_at: now });
-  if (got.nifty)  rows.push({ key: 'nifty',  price: got.nifty.price,  change_pct: got.nifty.change,  updated_at: now });
-  if (got.btc)    rows.push({ key: 'btc_inr', price: got.btc.price,   change_pct: got.btc.change,    updated_at: now });
-  if (got.eth)    rows.push({ key: 'eth_inr', price: got.eth.price,   change_pct: got.eth.change,    updated_at: now });
+  // Sensex, Nifty, BTC, ETH
+  if (q('^BSESN'))  rows.push({ key: 'sensex',  price: q('^BSESN').price,  change_pct: q('^BSESN').change,  updated_at: now });
+  if (q('^NSEI'))   rows.push({ key: 'nifty',   price: q('^NSEI').price,   change_pct: q('^NSEI').change,   updated_at: now });
+  if (q('BTC-INR')) rows.push({ key: 'btc_inr', price: q('BTC-INR').price, change_pct: q('BTC-INR').change, updated_at: now });
+  if (q('ETH-INR')) rows.push({ key: 'eth_inr', price: q('ETH-INR').price, change_pct: q('ETH-INR').change, updated_at: now });
 
-  console.log(`\nUpserting ${rows.length} row(s) → ${rows.map(r => r.key).join(', ')}`);
+  console.log(`\nUpserting ${rows.length} rows → ${rows.map(r => r.key).join(', ')}`);
+  if (!rows.length) { console.warn('Nothing to store.'); return; }
 
-  if (rows.length === 0) { console.warn('Nothing fetched — skipping DB write.'); return; }
-
-  // onConflict:'key' means: if a row with this key already exists → UPDATE it (not insert)
+  // onConflict:'key' → UPDATE existing row (never adds a duplicate)
   const { error } = await supabase
     .from('market_data')
     .upsert(rows, { onConflict: 'key' });
 
   if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
-  console.log('Done. Database has exactly one row per key.');
+  console.log('Done. Database has exactly one row per key (old values replaced).');
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

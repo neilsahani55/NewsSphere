@@ -1,17 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// All market data is read from Supabase market_data table.
-// The pipeline (market.js / GitHub Actions) fetches from Yahoo Finance server-side
-// every 15 min and upserts — one row per key, always replaced, never duplicated.
-// CoinGecko is used as a fallback only when the DB is empty (first deployment).
+// All market data read from Supabase (populated every 15 min by the pipeline).
+// CoinGecko used as fallback only when the DB table is still empty (first run).
+// Client cache: 5 min sessionStorage so page refreshes don't re-fetch instantly.
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
 
-const CACHE_KEY = 'ns_markets_v8';
-const CACHE_TTL = 5 * 60 * 1000; // 5 min client-side cache
+const CACHE_KEY = 'ns_markets_v9';
+const CACHE_TTL = 5 * 60 * 1000;
 
 export function clearMarketCache() {
   try { sessionStorage.removeItem(CACHE_KEY); } catch {}
@@ -32,18 +31,27 @@ function writeCache(data) {
   } catch {}
 }
 
-// Primary: read all 8 keys from Supabase — returns a flat {key: {price, change}} map
+// Primary source: read all keys from Supabase including updated_at
 async function getAllFromDB() {
   try {
     const { data, error } = await supabase
       .from('market_data')
-      .select('key, price, change_pct');
+      .select('key, price, change_pct, updated_at');
     if (error || !data?.length) return null;
-    return Object.fromEntries(data.map(r => [r.key, { price: r.price, change: r.change_pct }]));
+
+    const map = {};
+    let latestTs = 0;
+    for (const r of data) {
+      map[r.key] = { price: r.price, change: r.change_pct };
+      const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+      if (t > latestTs) latestTs = t;
+    }
+    map._dbUpdatedAt = latestTs || null;
+    return map;
   } catch { return null; }
 }
 
-// Fallback: CoinGecko for crypto + gold + USD/INR when DB is empty (first run)
+// Fallback: CoinGecko for crypto/gold when DB is still empty
 async function getCoinGeckoFallback() {
   try {
     const res = await fetch(
@@ -63,9 +71,9 @@ async function getCoinGeckoFallback() {
       gold22k = Math.round(pg * (22 / 24) * 10);
     }
     return {
-      usd_inr: usdInr ? { price: usdInr, change: null } : null,
-      gold24k:  gold24k ? { price: gold24k, change: null } : null,
-      gold22k:  gold22k ? { price: gold22k, change: null } : null,
+      usd_inr: usdInr  ? { price: usdInr,  change: null } : null,
+      gold24k: gold24k ? { price: gold24k, change: null } : null,
+      gold22k: gold22k ? { price: gold22k, change: null } : null,
       btc_inr: { price: btcInr, change: j.bitcoin?.inr_24h_change },
       eth_inr: { price: j.ethereum?.inr, change: j.ethereum?.inr_24h_change },
     };
@@ -76,24 +84,24 @@ export async function fetchAllMarkets() {
   const cached = readCache();
   if (cached) return cached;
 
-  // Fetch Supabase + CoinGecko fallback in parallel
   const [dbR, cgR] = await Promise.allSettled([getAllFromDB(), getCoinGeckoFallback()]);
 
   const db = dbR.status === 'fulfilled' ? dbR.value : null;
   const cg = cgR.status === 'fulfilled' ? cgR.value : null;
 
-  // Prefer DB (server-fetched, reliable); fall back to CoinGecko for empty initial state
+  // Prefer Supabase DB values; fall back to CoinGecko for empty initial state
   const val = (key) => db?.[key] ?? cg?.[key] ?? null;
 
   const data = {
-    usdInr:  val('usd_inr')?.price ?? null,
-    gold24k: val('gold24k')?.price ?? null,
-    gold22k: val('gold22k')?.price ?? null,
-    silver:  val('silver')?.price  ?? null,
-    sensex:  db?.sensex  ? { price: db.sensex.price,  change: db.sensex.change  } : null,
-    nifty:   db?.nifty   ? { price: db.nifty.price,   change: db.nifty.change   } : null,
-    btc:     val('btc_inr') ? { price: val('btc_inr').price, change: val('btc_inr').change } : null,
-    eth:     val('eth_inr') ? { price: val('eth_inr').price, change: val('eth_inr').change } : null,
+    usdInr:     val('usd_inr')?.price ?? null,
+    gold24k:    val('gold24k')?.price  ?? null,
+    gold22k:    val('gold22k')?.price  ?? null,
+    silver:     val('silver')?.price   ?? null,
+    sensex:     db?.sensex  ? { price: db.sensex.price,  change: db.sensex.change  } : null,
+    nifty:      db?.nifty   ? { price: db.nifty.price,   change: db.nifty.change   } : null,
+    btc:        val('btc_inr') ? { price: val('btc_inr').price, change: val('btc_inr').change } : null,
+    eth:        val('eth_inr') ? { price: val('eth_inr').price, change: val('eth_inr').change } : null,
+    dbUpdatedAt: db?._dbUpdatedAt ?? null, // actual pipeline update time
     ts: Date.now(),
   };
 

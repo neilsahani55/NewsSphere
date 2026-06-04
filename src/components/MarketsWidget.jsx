@@ -53,7 +53,7 @@ function lastUpdated(ts) {
 }
 
 export default memo(function MarketsWidget() {
-  const { data, loading, refresh } = useMarkets();
+  const { data, loading } = useMarkets();
 
   const tiles = [
     {
@@ -118,27 +118,12 @@ export default memo(function MarketsWidget() {
     <section className="mkt-wrap" aria-label="Markets">
       <div className="mkt-head">
         <span className="mkt-title">Markets</span>
-        <div className="mkt-head-right">
-          {data?.ts && (
-            <span className="mkt-updated">
-              <span className="mkt-dot" aria-hidden />
-              {lastUpdated(data.ts)}
-            </span>
-          )}
-          <button
-            className={`mkt-refresh${loading ? ' mkt-spinning' : ''}`}
-            onClick={refresh}
-            disabled={loading}
-            title="Refresh market data"
-            aria-label="Refresh market data"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <polyline points="23 4 23 10 17 10"/>
-              <polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </button>
-        </div>
+        {(data?.dbUpdatedAt || loading) && (
+          <span className="mkt-updated">
+            <span className="mkt-dot" aria-hidden />
+            {loading && !data ? 'Loading…' : `Updated ${lastUpdated(data.dbUpdatedAt)}`}
+          </span>
+        )}
       </div>
       <div className="mkt-strip" role="list">
         {tiles.map(t => (
