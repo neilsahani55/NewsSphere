@@ -1656,6 +1656,9 @@ button { font-family: inherit; }
   letter-spacing: .04em;
 }
 .mkt-icon { font-style: normal; line-height: 1; }
+
+/* Value + unit on one line */
+.mkt-value-row { display: flex; align-items: baseline; gap: .2rem; }
 .mkt-value {
   font-size: .88rem;
   font-weight: 700;
@@ -1663,14 +1666,28 @@ button { font-family: inherit; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.mkt-sub { font-size: .62rem; color: var(--ink3); white-space: nowrap; }
+
+/* Change % + period label on one line */
+.mkt-change-row { display: flex; align-items: center; gap: .25rem; }
 .mkt-change {
   font-size: .7rem;
   font-weight: 600;
   white-space: nowrap;
 }
-.mkt-up   { color: #16a34a; }
-.mkt-dn   { color: #dc2626; }
-.mkt-sub  { font-size: .65rem; color: var(--ink3); white-space: nowrap; }
+.mkt-up     { color: #16a34a; }
+.mkt-dn     { color: #dc2626; }
+.mkt-period {
+  font-size: .58rem;
+  font-weight: 600;
+  color: var(--ink3);
+  background: var(--paper3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 .25rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
 
 .mkt-skel {
   display: block;

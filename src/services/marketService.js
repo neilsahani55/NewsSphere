@@ -93,15 +93,19 @@ export async function fetchAllMarkets() {
   const val = (key) => db?.[key] ?? cg?.[key] ?? null;
 
   const data = {
-    usdInr:     val('usd_inr')?.price ?? null,
-    gold24k:    val('gold24k')?.price  ?? null,
-    gold22k:    val('gold22k')?.price  ?? null,
-    silver:     val('silver')?.price   ?? null,
-    sensex:     db?.sensex  ? { price: db.sensex.price,  change: db.sensex.change  } : null,
-    nifty:      db?.nifty   ? { price: db.nifty.price,   change: db.nifty.change   } : null,
-    btc:        val('btc_inr') ? { price: val('btc_inr').price, change: val('btc_inr').change } : null,
-    eth:        val('eth_inr') ? { price: val('eth_inr').price, change: val('eth_inr').change } : null,
-    dbUpdatedAt: db?._dbUpdatedAt ?? null, // actual pipeline update time
+    usdInr:        val('usd_inr')?.price  ?? null,
+    usdInrChange:  val('usd_inr')?.change ?? null,
+    gold24k:       val('gold24k')?.price  ?? null,
+    gold24kChange: val('gold24k')?.change ?? null,
+    gold22k:       val('gold22k')?.price  ?? null,
+    gold22kChange: val('gold22k')?.change ?? null,
+    silver:        val('silver')?.price   ?? null,
+    silverChange:  val('silver')?.change  ?? null,
+    sensex: db?.sensex  ? { price: db.sensex.price,  change: db.sensex.change  } : null,
+    nifty:  db?.nifty   ? { price: db.nifty.price,   change: db.nifty.change   } : null,
+    btc:    val('btc_inr') ? { price: val('btc_inr').price, change: val('btc_inr').change } : null,
+    eth:    val('eth_inr') ? { price: val('eth_inr').price, change: val('eth_inr').change } : null,
+    dbUpdatedAt: db?._dbUpdatedAt ?? null,
     ts: Date.now(),
   };
 
