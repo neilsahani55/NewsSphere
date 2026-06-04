@@ -1,9 +1,9 @@
-// Market data service — fetches forex, metals, indices, crypto in parallel.
-// Every source fails independently; missing data shows "—" in the UI.
-// Results are cached in sessionStorage for 10 minutes.
+// Market data service — all sources are free with no API keys.
+// Each source fails independently; missing data shows "—" in the UI.
+// Results cached 10 min in sessionStorage.
 
-const CACHE_KEY = 'ns_markets_v2';
-const CACHE_TTL = 10 * 60 * 1000; // 10 min
+const CACHE_KEY = 'ns_markets_v3';
+const CACHE_TTL = 10 * 60 * 1000;
 
 function readCache() {
   try {
@@ -22,49 +22,57 @@ function writeCache(data) {
 
 async function safeJson(url, opts = {}) {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(7000), ...opts });
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), ...opts });
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
 }
 
-// USD/INR — open.er-api.com (free, CORS, no key)
+// Proxy Yahoo Finance through allorigins.win (server-side fetch, no CORS issues)
+async function yahooChart(symbol) {
+  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+  const json = await safeJson(`https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`);
+  const m = json?.chart?.result?.[0]?.meta;
+  if (!m?.regularMarketPrice) return null;
+  return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
+}
+
+// USD/INR — Frankfurter (ECB data, free, CORS, no key)
 async function getForex() {
-  const json = await safeJson('https://open.er-api.com/v6/latest/USD');
+  const json = await safeJson('https://api.frankfurter.app/latest?from=USD&to=INR');
   return json?.rates?.INR ?? null;
 }
 
-// Gold & Silver spot in USD/troy oz — metals.live (free, no key)
+// Gold from CoinGecko PAXG (1 PAXG = 1 troy oz of gold, pegged to spot price)
+// Silver from Yahoo Finance SI=F futures via allorigins proxy
 async function getMetals() {
-  const json = await safeJson('https://api.metals.live/v1/spot');
-  if (!json) return null;
-  const d = Array.isArray(json) ? json[0] : json;
-  return { goldUsd: d?.gold ?? null, silverUsd: d?.silver ?? null };
-}
-
-// Sensex & Nifty — Yahoo Finance v8 chart (free, CORS best-effort)
-async function getIndices() {
-  const h = { Accept: 'application/json' };
-  const [sR, nR] = await Promise.all([
-    safeJson('https://query1.finance.yahoo.com/v8/finance/chart/%5EBSESN?interval=1d&range=1d', { headers: h }),
-    safeJson('https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1d&range=1d', { headers: h }),
+  const [goldJson, silverChart] = await Promise.all([
+    safeJson('https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd'),
+    yahooChart('SI=F'),
   ]);
-  const parse = (d) => {
-    const m = d?.chart?.result?.[0]?.meta;
-    if (!m?.regularMarketPrice) return null;
-    return { price: m.regularMarketPrice, change: m.regularMarketChangePercent ?? 0 };
+  return {
+    goldUsd:   goldJson?.['pax-gold']?.usd ?? null,
+    silverUsd: silverChart?.price          ?? null,
   };
-  return { sensex: parse(sR), nifty: parse(nR) };
 }
 
-// BTC & ETH in INR — CoinGecko (free, CORS, no key)
+// Sensex and Nifty 50 from Yahoo Finance via allorigins proxy
+async function getIndices() {
+  const [s, n] = await Promise.all([
+    yahooChart('^BSESN'),
+    yahooChart('^NSEI'),
+  ]);
+  return { sensex: s, nifty: n };
+}
+
+// BTC & ETH in INR from CoinGecko (free, CORS, no key)
 async function getCrypto() {
   const json = await safeJson(
     'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=inr&include_24hr_change=true'
   );
   if (!json) return null;
   return {
-    btc: { price: json.bitcoin?.inr, change: json.bitcoin?.inr_24h_change },
+    btc: { price: json.bitcoin?.inr,  change: json.bitcoin?.inr_24h_change  },
     eth: { price: json.ethereum?.inr, change: json.ethereum?.inr_24h_change },
   };
 }
@@ -73,6 +81,7 @@ export async function fetchAllMarkets() {
   const cached = readCache();
   if (cached) return cached;
 
+  // Fetch all in parallel — each resolves independently on failure
   const [forexR, metalsR, indicesR, cryptoR] = await Promise.allSettled([
     getForex(), getMetals(), getIndices(), getCrypto(),
   ]);
@@ -82,7 +91,7 @@ export async function fetchAllMarkets() {
   const indices = indicesR.status === 'fulfilled' ? indicesR.value : null;
   const crypto  = cryptoR.status  === 'fulfilled' ? cryptoR.value  : null;
 
-  // USD/troy oz → INR/10g. Indian market price ≈ intl price × ~1.15 (customs + GST).
+  // USD/troy oz → INR/10g. Indian price ≈ international × 1.15 (import duty + GST)
   let gold24k = null, gold22k = null, silver = null;
   if (usdInr && metals?.goldUsd) {
     const perGram = (metals.goldUsd * usdInr * 1.15) / 31.1035;
@@ -95,9 +104,7 @@ export async function fetchAllMarkets() {
 
   const data = {
     usdInr,
-    gold24k,
-    gold22k,
-    silver,
+    gold24k, gold22k, silver,
     sensex: indices?.sensex ?? null,
     nifty:  indices?.nifty  ?? null,
     btc:    crypto?.btc     ?? null,

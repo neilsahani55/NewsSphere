@@ -1,11 +1,28 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { matchesTopic } from '../utils/categories.js';
 import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
 import { useUIStrings } from '../hooks/useUIStrings.js';
+import { useWeather } from '../hooks/useWeather.js';
 import TodayHistory from '../components/TodayHistory.jsx';
 import MarketsWidget from '../components/MarketsWidget.jsx';
 import QuoteWidget from '../components/QuoteWidget.jsx';
+
+const WeatherBadge = memo(function WeatherBadge() {
+  const { weather, loading } = useWeather();
+  if (loading) return <span className="wx-badge wx-loading" aria-hidden />;
+  if (!weather) return null;
+  return (
+    <div className="wx-badge" title={`${weather.city} · ${weather.label} · ${weather.temp}°C`}>
+      <span className="wx-city">{weather.city}</span>
+      <span className="wx-sep" aria-hidden>·</span>
+      <span className="wx-icon" aria-hidden>{weather.emoji}</span>
+      <span className="wx-label">{weather.label}</span>
+      <span className="wx-sep" aria-hidden>·</span>
+      <span className="wx-temp">{weather.temp}°C</span>
+    </div>
+  );
+});
 
 const HOME_STRINGS = {
   briefing: 'Your briefing',
@@ -119,8 +136,11 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
   return (
     <div className="home-pg">
       <div className="home-briefing">
-        <h2 className="home-briefing-title">{t.briefing}</h2>
-        <span className="home-briefing-date">{today}</span>
+        <div className="home-briefing-left">
+          <h2 className="home-briefing-title">{t.briefing}</h2>
+          <span className="home-briefing-date">{today}</span>
+        </div>
+        <WeatherBadge />
       </div>
 
       <MarketsWidget />

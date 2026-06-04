@@ -1631,21 +1631,21 @@ button { font-family: inherit; }
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding-bottom: 2px; /* prevent clipping */
+  padding-bottom: 2px;
 }
 .mkt-strip::-webkit-scrollbar { display: none; }
 
 .mkt-tile {
-  flex-shrink: 0;
+  flex: 1 0 88px; /* grow to fill desktop, min 88px on mobile */
   display: flex;
   flex-direction: column;
   gap: .18rem;
   background: var(--paper3);
   border: 1px solid var(--border);
   border-radius: var(--rsm);
-  padding: .5rem .7rem;
-  min-width: 88px;
+  padding: .55rem .75rem;
   cursor: default;
+  min-width: 0;
 }
 .mkt-label {
   display: flex;
@@ -1725,10 +1725,6 @@ button { font-family: inherit; }
   font-style: normal;
 }
 
-/* ─── WhatsApp share button ──────────────────────────────────────── */
-.wa-btn { color: #16a34a; border-color: #bbf7d0; }
-.wa-btn:hover { background: #f0fdf4; border-color: #16a34a; color: #15803d; }
-
 /* ─── Home page ─────────────────────────────────────────────────── */
 .home-pg {
   display: flex;
@@ -1739,11 +1735,13 @@ button { font-family: inherit; }
 }
 .home-briefing {
   display: flex;
-  align-items: baseline;
-  gap: .75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding-bottom: .5rem;
   border-bottom: 1px solid var(--border);
 }
+.home-briefing-left { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
 .home-briefing-title {
   font-family: var(--ffd);
   font-size: 1.4rem;
@@ -1754,6 +1752,34 @@ button { font-family: inherit; }
   font-size: .88rem;
   color: var(--ink3);
 }
+
+/* ── Weather Badge ─────────────────────────────────────────────── */
+.wx-badge {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: .3rem .75rem;
+  font-size: .78rem;
+  color: var(--ink2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wx-loading {
+  width: 140px;
+  height: 30px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+.wx-city   { font-weight: 600; color: var(--ink); }
+.wx-sep    { color: var(--ink3); }
+.wx-icon   { font-style: normal; line-height: 1; }
+.wx-label  { color: var(--ink3); }
+.wx-temp   { font-weight: 700; color: var(--ink); }
 .home-sec { display: flex; flex-direction: column; gap: .75rem; }
 .home-sec-hdr {
   display: flex;
@@ -2926,10 +2952,15 @@ mark.tts-hl {
 
   /* Markets & Quote: compact on mobile */
   .mkt-wrap   { padding: .6rem .75rem .7rem; }
-  .mkt-tile   { min-width: 78px; padding: .4rem .55rem; }
+  .mkt-tile   { flex: 0 0 82px; padding: .4rem .55rem; }
   .mkt-value  { font-size: .8rem; }
   .quote-wrap { padding: .8rem .9rem .8rem 1.2rem; }
   .quote-text { font-size: .8rem; }
+
+  /* Weather: hide label on very small screens, keep emoji + temp */
+  .wx-badge   { padding: .25rem .6rem; font-size: .72rem; gap: .25rem; }
+  .wx-label   { display: none; }
+  .home-briefing-left { gap: .4rem; }
 
   /* Today in History: tighter on mobile */
   .th-wrap    { padding: 1.1rem 1.1rem 1rem; margin-bottom: 1.25rem; }
