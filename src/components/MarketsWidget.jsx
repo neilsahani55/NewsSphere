@@ -123,7 +123,7 @@ export default memo(function MarketsWidget() {
       label: 'Bitcoin',
       value: inr(data?.btc?.price),
       change: data?.btc?.change,
-      period: '24h',
+      period: '1D',
     },
     {
       key: 'eth',
@@ -131,7 +131,7 @@ export default memo(function MarketsWidget() {
       label: 'Ethereum',
       value: inr(data?.eth?.price),
       change: data?.eth?.change,
-      period: '24h',
+      period: '1D',
     },
   ];
 
