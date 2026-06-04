@@ -227,16 +227,29 @@ async function searchWikiTitle(query) {
   } catch { return ''; }
 }
 
-// Generate a factual write-up using Gemini AI when Wikipedia has nothing.
+// Generate event-specific details using Gemini AI.
+// wikiContext (optional) is the Wikipedia article intro — used only as a
+// factual accuracy reference so Gemini doesn't hallucinate. The prompt
+// explicitly instructs Gemini to write about THIS specific day's event,
+// not a general topic overview.
 // Tries gemini-2.0-flash first (faster), falls back to gemini-1.5-flash.
-async function generateWithGemini(title, year, desc) {
+async function generateWithGemini(title, year, eventText, wikiContext) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return '';
 
+  const bg = wikiContext?.length > 50
+    ? `\n\nBackground (for factual accuracy only):\n${wikiContext.slice(0, 1500)}`
+    : '';
+
   const prompt =
-    `Write a factual, educational 2-3 paragraph description about this historical event ` +
-    `for a "Today in History" feature:\n\nEvent: ${title} (${year})\nContext: ${desc}\n\n` +
-    `Write in engaging plain prose. No markdown, no bullet points, no headers.`;
+    `You are writing content for a "Today in History" feature. ` +
+    `Write 2-3 paragraphs specifically about the following event that occurred on this date in ${year}:\n\n` +
+    `"${eventText}"${bg}\n\n` +
+    `IMPORTANT:\n` +
+    `- Write ONLY about what happened on this specific date in ${year}\n` +
+    `- Explain what the event was, why it happened, and its immediate significance or impact\n` +
+    `- Do NOT write a general overview of the broader topic or person\n` +
+    `- Plain prose only — no markdown, no bullet points, no headers`;
 
   for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
     try {
@@ -333,8 +346,20 @@ async function insertEvents(raw, date) {
     if (!yr || !title || !desc) continue;
 
     console.log(`  [${yr}] ${title} (${pages.length} pages)`);
-    let details = await fetchWikiExtract(pages, text);
-    if (details.length < 50) details = await generateWithGemini(title, yr, desc);
+
+    // Step 1: Fetch Wikipedia extract as background context for factual accuracy.
+    const wikiContext = await fetchWikiExtract(pages, text);
+
+    // Step 2: Always generate event-specific details with Gemini, passing the
+    // Wikipedia extract so it can write accurately about THIS specific event.
+    // If Gemini key is absent or fails, fall back to the raw Wikipedia extract.
+    let details = '';
+    if (process.env.GEMINI_API_KEY) {
+      details = await generateWithGemini(title, yr, text, wikiContext);
+    }
+    if (details.length < 50) {
+      details = wikiContext; // fallback: generic Wikipedia extract
+    }
     if (details.length < 50) console.warn(`    ✗ No details obtained for: ${title}`);
     rows.push({ history_date: date, event_year: yr, title, description: desc, category: cat, details });
 
