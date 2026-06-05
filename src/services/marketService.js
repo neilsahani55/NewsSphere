@@ -79,10 +79,9 @@ export async function fetchAllMarkets() {
   const cached = readCache();
   if (cached) return cached;
 
-  const [dbR, cgR] = await Promise.allSettled([getAllFromDB(), getCoinGeckoFallback()]);
-
-  const db = dbR.status === 'fulfilled' ? dbR.value : null;
-  const cg = cgR.status === 'fulfilled' ? cgR.value : null;
+  // Supabase first; CoinGecko only if Supabase returns nothing (first-run / empty DB)
+  const db = await getAllFromDB();
+  const cg = db ? null : await getCoinGeckoFallback();
 
   // Prefer Supabase DB values; fall back to CoinGecko for empty initial state
   const val = (key) => db?.[key] ?? cg?.[key] ?? null;
