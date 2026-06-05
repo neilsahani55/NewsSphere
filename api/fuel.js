@@ -1,18 +1,23 @@
 /**
  * /api/fuel  — Vercel serverless function (Node.js runtime)
  *
- * Fetches live petrol, diesel and CNG prices for all Indian states from:
- *   https://www.goodreturns.in/petrol-price.html  (full state table)
- *   https://www.goodreturns.in/diesel-price.html  (full state table)
- *   https://www.goodreturns.in/cng-price.html     (city-level CNG)
+ * Scrapes goodreturns.in state tables → writes every state to Supabase
+ * market_data → returns the full dataset as JSON.
  *
- * These pages are server-rendered and contain a table with all states.
- * Vercel's edge nodes have IPs that differ from GitHub Actions, so this
- * succeeds where the pipeline scraping was blocked.
+ * Sources:
+ *   /petrol-price.html  — full Indian state petrol table
+ *   /diesel-price.html  — full Indian state diesel table
+ *   /cng-price.html     — city-level CNG table
  *
- * Response: { maharashtra: { petrol, diesel, cng }, delhi: { ... }, ... }
- * CDN cache: 1 hour (s-maxage=3600)   stale-while-revalidate: 2 hours
+ * Side-effect: upserts petrol_{state} / diesel_{state} / cng_{state}
+ * into market_data so the frontend can read from Supabase for instant load.
+ *
+ * Requires Vercel env var: SUPABASE_SERVICE_KEY
+ * (Add in Vercel Dashboard → Settings → Environment Variables)
+ *
+ * CDN cache: 1 hour (s-maxage=3600)
  */
+import { createClient } from '@supabase/supabase-js';
 
 // State/city name → Supabase key
 const NAME_KEY = {
@@ -174,9 +179,38 @@ export default async function handler(req, res) {
     };
   }
 
+  const source  = liveOk ? 'goodreturns' : 'baseline';
+  const updated = new Date().toISOString();
+
+  // Write all state prices to Supabase so the frontend can read them instantly
+  // Requires SUPABASE_SERVICE_KEY set as a Vercel environment variable
+  const sbUrl = process.env.SUPABASE_URL        || process.env.VITE_SUPABASE_URL;
+  const sbKey = process.env.SUPABASE_SERVICE_KEY;
+  if (sbUrl && sbKey) {
+    try {
+      const sb   = createClient(sbUrl, sbKey, { auth: { persistSession: false } });
+      const rows = [];
+      for (const [key, prices] of Object.entries(allStates)) {
+        rows.push({ key: `petrol_${key}`, price: prices.petrol,        change_pct: null, updated_at: updated });
+        rows.push({ key: `diesel_${key}`, price: prices.diesel ?? null, change_pct: null, updated_at: updated });
+        if (prices.cng) rows.push({ key: `cng_${key}`, price: prices.cng, change_pct: null, updated_at: updated });
+      }
+      // Upsert in batches of 100
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await sb.from('market_data').upsert(rows.slice(i, i + 100), { onConflict: 'key' });
+        if (error) console.error(`Supabase upsert error (batch ${i}):`, error.message);
+      }
+      console.log(`Wrote ${rows.length} rows to Supabase (source: ${source})`);
+    } catch (e) {
+      console.error('Supabase write failed:', e.message);
+    }
+  } else {
+    console.warn('SUPABASE_SERVICE_KEY not set — Supabase write skipped');
+  }
+
   return res.status(200).json({
-    _source:  liveOk ? 'goodreturns' : 'baseline',
-    _updated: new Date().toISOString(),
+    _source:  source,
+    _updated: updated,
     ...allStates,
   });
 }

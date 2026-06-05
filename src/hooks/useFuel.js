@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation } from './useLocation.js';
+import { supabase } from '../lib/supabase.js';
 
 // Map ipapi.co region → state key
 const REGION_KEY = {
@@ -73,35 +74,56 @@ export function useFuel() {
     let mounted = true;
 
     async function load() {
-      const stateKey = regionToKey(region);
-      const ref = REF[stateKey] ?? DEFAULT;
+      const stateKey  = regionToKey(region);
+      const ref       = REF[stateKey] ?? DEFAULT;
       const displayCity = city || stateKey.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
 
-      // Step 1: Show reference prices immediately
+      // Step 1: Show reference prices immediately (no blank state)
       if (mounted) {
         setData({ petrol: ref.p, diesel: ref.d, cng: null, city: displayCity, source: 'reference' });
         setLoading(false);
       }
 
-      // Step 2: Call /api/fuel — Vercel scrapes goodreturns.in server-side
+      // Step 2: Read from Supabase market_data (fast — populated by /api/fuel)
+      try {
+        const { data: rows } = await supabase
+          .from('market_data')
+          .select('key, price, updated_at')
+          .in('key', [`petrol_${stateKey}`, `diesel_${stateKey}`, `cng_${stateKey}`]);
+
+        if (rows?.length) {
+          const p   = rows.find(r => r.key === `petrol_${stateKey}`);
+          const d   = rows.find(r => r.key === `diesel_${stateKey}`);
+          const cng = rows.find(r => r.key === `cng_${stateKey}`);
+          if (p?.price && mounted) {
+            setData({
+              petrol: p.price, diesel: d?.price ?? null, cng: cng?.price ?? null,
+              city: displayCity, source: 'live', updatedAt: p.updated_at,
+            });
+            // Data from Supabase is good — still call /api/fuel in background
+            // to keep Supabase fresh (non-blocking, fire-and-forget)
+            fetch('/api/fuel').catch(() => {});
+            return;
+          }
+        }
+      } catch {}
+
+      // Step 3: Supabase empty → call /api/fuel directly (also populates Supabase)
       try {
         const res = await fetch('/api/fuel', { signal: AbortSignal.timeout(15000) });
         if (!res.ok) return;
         const json = await res.json();
-
         const stateData = json[stateKey];
         if (stateData?.petrol && mounted) {
           setData({
             petrol: Number(stateData.petrol),
             diesel: stateData.diesel ? Number(stateData.diesel) : null,
             cng:    stateData.cng    ? Number(stateData.cng)    : null,
-            city:   displayCity,
-            source: json._source || 'live',
+            city: displayCity, source: json._source || 'live',
           });
         }
       } catch (e) {
         console.warn('[useFuel] API error:', e.message);
-        // Reference prices from step 1 remain displayed
       }
     }
 
