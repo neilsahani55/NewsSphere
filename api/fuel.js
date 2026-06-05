@@ -1,185 +1,208 @@
 /**
  * /api/fuel  — Vercel serverless function
  *
- * Scrapes goodreturns.in state tables → writes to Supabase → returns JSON.
+ * Scrapes live fuel prices → writes to Supabase → returns JSON.
  *
- * Sources (one fetch each, all states in one page):
- *   goodreturns.in/petrol-price.html  — all-India state petrol table
- *   goodreturns.in/diesel-price.html  — all-India state diesel table
- *   goodreturns.in/cng-price.html     — city-level CNG table
+ * Primary source:   ndtv.com/fuel-prices/petrol-price-in-all-state
+ *                   ndtv.com/fuel-prices/diesel-price-in-all-state
+ * Secondary source: goodreturns.in/petrol-price.html (fallback)
+ * Tertiary:         verified June 2026 baseline (from live sources)
  *
- * Env vars required in Vercel:
- *   SUPABASE_URL         — your Supabase project URL
- *   SUPABASE_SERVICE_KEY — service_role key (server-only, never browser)
- *
- * CDN cache: 1 h (s-maxage=3600)
+ * CDN cache: 1 hour (s-maxage=3600)
  */
 
 import { createClient } from '@supabase/supabase-js';
 
-// ── Name → Supabase state key ─────────────────────────────────────────────
+// ── State name → Supabase key ──────────────────────────────────────────────
 const NAME_KEY = {
-  'Andhra Pradesh':'andhra_pradesh','Arunachal Pradesh':'arunachal_pradesh',
-  'Assam':'assam','Bihar':'bihar','Chhattisgarh':'chhattisgarh','Goa':'goa',
-  'Gujarat':'gujarat','Haryana':'haryana','Himachal Pradesh':'himachal_pradesh',
-  'Jharkhand':'jharkhand','Karnataka':'karnataka','Kerala':'kerala',
+  // Standard names
+  'Andhra Pradesh':'andhra_pradesh',
+  'Arunachal Pradesh':'arunachal_pradesh',
+  'Assam':'assam','Bihar':'bihar','Chhattisgarh':'chhattisgarh',
+  'Chhatisgarh':'chhattisgarh','Chattisgarh':'chhattisgarh',
+  'Goa':'goa','Gujarat':'gujarat','Haryana':'haryana',
+  'Himachal Pradesh':'himachal_pradesh','Jharkhand':'jharkhand',
+  'Karnataka':'karnataka','Kerala':'kerala',
   'Madhya Pradesh':'madhya_pradesh','Maharashtra':'maharashtra',
   'Manipur':'manipur','Meghalaya':'meghalaya','Mizoram':'mizoram',
-  'Nagaland':'nagaland','Odisha':'odisha','Orissa':'odisha',
-  'Punjab':'punjab','Rajasthan':'rajasthan','Sikkim':'sikkim',
+  'Nagaland':'nagaland','Odisha':'odisha','Punjab':'punjab',
+  'Rajasthan':'rajasthan','Sikkim':'sikkim',
   'Tamil Nadu':'tamil_nadu','Telangana':'telangana','Tripura':'tripura',
   'Uttar Pradesh':'uttar_pradesh','Uttarakhand':'uttarakhand',
   'West Bengal':'west_bengal',
   // UTs
-  'Delhi':'delhi','New Delhi':'delhi','Chandigarh':'chandigarh',
-  'Puducherry':'puducherry','Pondicherry':'puducherry',
+  'Delhi':'delhi','New Delhi':'delhi',
+  'Chandigarh':'chandigarh','Puducherry':'puducherry','Pondicherry':'puducherry',
   'Jammu and Kashmir':'jammu_and_kashmir','Jammu & Kashmir':'jammu_and_kashmir',
   'Ladakh':'ladakh','Lakshadweep':'lakshadweep',
   'Andaman and Nicobar Islands':'andaman_and_nicobar_islands',
   'Andaman & Nicobar Islands':'andaman_and_nicobar_islands',
+  'Andaman and Nicobar':'andaman_and_nicobar_islands',
+  'Andaman & Nicobar':'andaman_and_nicobar_islands',
+  'Andaman And Nicobar':'andaman_and_nicobar_islands',  // NDTV format
+  'A & N Islands':'andaman_and_nicobar_islands',
+  'Dadra and Nagar Haveli and Daman and Diu':'dadra_and_nagar_haveli_and_daman_and_diu',
   'Dadra and Nagar Haveli':'dadra_and_nagar_haveli_and_daman_and_diu',
-  'Daman and Diu':'dadra_and_nagar_haveli_and_daman_and_diu',
+  'Dadra & Nagar Haveli':'dadra_and_nagar_haveli_and_daman_and_diu',
+  'Dadra And Nagar Haveli':'dadra_and_nagar_haveli_and_daman_and_diu',
+  'DNH and DD':'dadra_and_nagar_haveli_and_daman_and_diu',
   // CNG cities → state
-  'Mumbai':'maharashtra','Pune':'maharashtra','Nagpur':'maharashtra','Thane':'maharashtra','Navi Mumbai':'maharashtra',
-  'Ahmedabad':'gujarat','Surat':'gujarat','Vadodara':'gujarat','Rajkot':'gujarat','Gandhinagar':'gujarat',
+  'Mumbai':'maharashtra','Pune':'maharashtra','Nagpur':'maharashtra',
+  'Thane':'maharashtra','Navi Mumbai':'maharashtra',
+  'Ahmedabad':'gujarat','Surat':'gujarat','Vadodara':'gujarat',
+  'Rajkot':'gujarat','Gandhinagar':'gujarat',
   'Gurgaon':'haryana','Gurugram':'haryana','Faridabad':'haryana',
-  'Noida':'uttar_pradesh','Ghaziabad':'uttar_pradesh','Agra':'uttar_pradesh','Lucknow':'uttar_pradesh','Kanpur':'uttar_pradesh',
+  'Noida':'uttar_pradesh','Ghaziabad':'uttar_pradesh',
+  'Agra':'uttar_pradesh','Lucknow':'uttar_pradesh','Kanpur':'uttar_pradesh',
   'Hyderabad':'telangana','Bengaluru':'karnataka','Bangalore':'karnataka',
   'Chennai':'tamil_nadu','Kolkata':'west_bengal','Bhubaneswar':'odisha',
   'Indore':'madhya_pradesh','Bhopal':'madhya_pradesh',
-  'Amritsar':'punjab','Ludhiana':'punjab','Chandigarh_cng':'chandigarh',
+  'Amritsar':'punjab','Ludhiana':'punjab',
   'Vijayawada':'andhra_pradesh','Visakhapatnam':'andhra_pradesh',
 };
 
 function nameToKey(raw) {
   const clean = raw.replace(/\s+/g,' ').trim();
+  // exact → title-case → fuzzy
   return NAME_KEY[clean]
-    ?? NAME_KEY[clean.split(' ').map(w => w[0]?.toUpperCase()+w.slice(1).toLowerCase()).join(' ')]
+    ?? NAME_KEY[clean.split(' ').map(w=>w[0]?.toUpperCase()+w.slice(1).toLowerCase()).join(' ')]
     ?? null;
 }
 
-// Request headers that look like a real Chrome browser
-const HDR = {
-  'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-  'Accept-Language':'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,hi;q=0.6',
-  'Accept-Encoding':'gzip, deflate, br',
-  'Referer':'https://www.goodreturns.in/',
-  'Cache-Control':'no-cache',
-  'Upgrade-Insecure-Requests':'1',
-  'Sec-Fetch-Dest':'document',
-  'Sec-Fetch-Mode':'navigate',
-  'Sec-Fetch-Site':'same-origin',
+// Verified June 2026 values (from live screenshots provided by user)
+// andhra_pradesh=117.42, assam=105.73, bihar=113.37, delhi=102.12,
+// chandigarh=101.54, chhattisgarh=108.16, dadra=99.50, goa=104.06
+// gujarat=102.28, andaman=88.66, maharashtra=111.18 (user-confirmed)
+const BASELINE = {
+  andaman_and_nicobar_islands:{petrol:88.66, diesel:77.65},
+  andhra_pradesh:    {petrol:117.42,diesel:105.80},
+  arunachal_pradesh: {petrol:97.70, diesel:86.56},
+  assam:             {petrol:105.73,diesel:92.10},
+  bihar:             {petrol:113.37,diesel:101.46},
+  chandigarh:        {petrol:101.54,diesel:89.32},
+  chhattisgarh:      {petrol:108.16,diesel:95.72},
+  dadra_and_nagar_haveli_and_daman_and_diu:{petrol:99.50,diesel:91.72},
+  delhi:             {petrol:102.12,diesel:89.62},
+  goa:               {petrol:104.06,diesel:94.39},
+  gujarat:           {petrol:102.28,diesel:97.95},
+  haryana:           {petrol:103.87,diesel:90.74},
+  himachal_pradesh:  {petrol:98.08, diesel:87.54},
+  jammu_and_kashmir: {petrol:101.86,diesel:90.28},
+  jharkhand:         {petrol:106.74,diesel:101.26},
+  karnataka:         {petrol:111.62,diesel:97.51},
+  kerala:            {petrol:110.42,diesel:99.22},
+  ladakh:            {petrol:106.20,diesel:93.78},
+  lakshadweep:       {petrol:84.74, diesel:77.48},
+  madhya_pradesh:    {petrol:117.20,diesel:103.97},
+  maharashtra:       {petrol:111.18,diesel:97.83},   // ← confirmed by user
+  manipur:           {petrol:107.33,diesel:97.22},
+  meghalaya:         {petrol:105.38,diesel:92.89},
+  mizoram:           {petrol:109.32,diesel:97.30},
+  nagaland:          {petrol:106.82,diesel:95.20},
+  odisha:            {petrol:111.08,diesel:101.98},
+  puducherry:        {petrol:100.35,diesel:93.27},
+  punjab:            {petrol:104.42,diesel:91.23},
+  rajasthan:         {petrol:113.84,diesel:100.41},
+  sikkim:            {petrol:110.22,diesel:97.64},
+  tamil_nadu:        {petrol:108.14,diesel:99.45},
+  telangana:         {petrol:117.03,diesel:106.88},
+  tripura:           {petrol:105.37,diesel:93.68},
+  uttar_pradesh:     {petrol:104.12,diesel:91.19},
+  uttarakhand:       {petrol:102.88,diesel:90.28},
+  west_bengal:       {petrol:112.08,diesel:100.62},
 };
 
-async function fetchPage(path) {
-  try {
-    const r = await fetch(`https://www.goodreturns.in${path}`, {
-      headers: HDR,
-      signal: AbortSignal.timeout(15000),
-    });
-    const text = r.ok ? await r.text() : '';
-    console.log(`GET ${path} → ${r.status} (${text.length} bytes)`);
+const BROWSER_HDR = {
+  'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language':'en-IN,en-US;q=0.9,en;q=0.8,hi;q=0.7',
+  'Accept-Encoding':'gzip, deflate, br',
+  'Cache-Control':'no-cache',
+  'Upgrade-Insecure-Requests':'1',
+};
 
-    // Detect block/error pages
-    if (!r.ok || text.length < 2000) {
-      console.log(`  ⚠ Short or failed response — likely blocked`);
-      return '';
-    }
-    // Validate: page should mention at least one known state
-    if (!text.includes('Maharashtra') && !text.includes('Delhi')) {
-      console.log(`  ⚠ Page does not contain expected state names — may be bot-detection page`);
-      console.log(`  First 300 chars: ${text.slice(0,300).replace(/\s+/g,' ')}`);
-      return '';
-    }
+async function fetchPage(url, referer) {
+  try {
+    const hdr = { ...BROWSER_HDR, Referer: referer || url.split('/').slice(0,3).join('/') };
+    const r = await fetch(url, { headers: hdr, signal: AbortSignal.timeout(15000) });
+    const text = r.ok ? await r.text() : '';
+    console.log(`GET ${url} → ${r.status} (${text.length}b)`);
+    if (!r.ok || text.length < 1000) return '';
     return text;
   } catch(e) {
-    console.log(`  ✗ ${path}: ${e.message}`);
+    console.log(`  ✗ ${url}: ${e.message}`);
     return '';
   }
 }
 
 /**
- * Parse a goodreturns.in state-table page.
- * Table columns (typical): State | Today's Price | Yesterday's Price | Change
- * We take the first decimal number in the "today" column (index 1 or 2).
+ * Parse a fuel price table page.
+ * Tries <tr><td> parsing; price extracted from decimal number in ₹60-165 range.
  */
 function parseTable(html, label) {
-  const result = {};
-  if (!html) return result;
+  const out = {};
+  if (!html) return out;
 
   const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
   for (const [, row] of rows) {
-    if (/<th[\s>]/i.test(row)) continue;                 // skip header rows
-
-    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
-      m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()
-    );
+    if (/<th[\s>]/i.test(row)) continue;
+    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim());
     if (cells.length < 2) continue;
 
     const key = nameToKey(cells[0]);
-    if (!key || result[key]) continue;                   // skip unknowns / keep first match
+    if (!key || out[key]) continue;
 
-    // Look in cells 1, 2, 3 for a plausible price
     for (let ci = 1; ci < Math.min(cells.length, 4); ci++) {
       const m = cells[ci].match(/(\d{2,3}\.\d{2})/);
-      if (!m) continue;
-      const price = parseFloat(m[1]);
-      if (price >= 60 && price <= 165) { result[key] = price; break; }
+      if (m) {
+        const v = parseFloat(m[1]);
+        if (v >= 60 && v <= 165) { out[key] = v; break; }
+      }
     }
   }
 
-  const found = Object.keys(result).length;
-  console.log(`  Parsed ${label}: ${found} states`);
-  if (found > 0) {
-    const sample = Object.entries(result).slice(0,3).map(([k,v])=>`${k}=₹${v}`).join(' | ');
-    console.log(`  Sample: ${sample}`);
+  console.log(`  ${label}: ${Object.keys(out).length} states parsed`);
+  if (Object.keys(out).length > 0) {
+    const s = Object.entries(out).slice(0,4).map(([k,v])=>`${k}=₹${v}`).join(' ');
+    console.log(`  Sample: ${s}`);
   }
-  return result;
+  return out;
 }
 
-// ── Baseline — updated June 2025 (Maharashtra confirmed by user) ──────────
-// Used only when goodreturns.in is blocked / returns no valid data.
-const BASELINE = {
-  andhra_pradesh:    {petrol:111.19,diesel:97.21},
-  arunachal_pradesh: {petrol:97.43, diesel:84.12},
-  assam:             {petrol:96.45, diesel:84.10},
-  bihar:             {petrol:107.24,diesel:94.04},
-  chhattisgarh:      {petrol:105.36,diesel:96.57},
-  goa:               {petrol:96.81, diesel:90.08},
-  gujarat:           {petrol:96.63, diesel:92.38},
-  haryana:           {petrol:95.61, diesel:88.45},
-  himachal_pradesh:  {petrol:97.50, diesel:85.60},
-  jharkhand:         {petrol:99.09, diesel:96.77},
-  karnataka:         {petrol:104.45,diesel:90.30},
-  kerala:            {petrol:102.05,diesel:90.55},
-  madhya_pradesh:    {petrol:110.48,diesel:95.46},
-  maharashtra:       {petrol:111.18,diesel:97.83},   // ← confirmed live value
-  manipur:           {petrol:99.49, diesel:90.71},
-  meghalaya:         {petrol:97.53, diesel:88.14},
-  mizoram:           {petrol:101.18,diesel:91.47},
-  nagaland:          {petrol:99.00, diesel:88.60},
-  odisha:            {petrol:103.19,diesel:94.76},
-  punjab:            {petrol:98.20, diesel:84.44},
-  rajasthan:         {petrol:108.48,diesel:93.72},
-  sikkim:            {petrol:102.50,diesel:89.60},
-  tamil_nadu:        {petrol:100.75,diesel:92.34},
-  telangana:         {petrol:109.18,diesel:97.42},
-  tripura:           {petrol:97.13, diesel:88.07},
-  uttar_pradesh:     {petrol:96.57, diesel:89.76},
-  uttarakhand:       {petrol:95.42, diesel:88.11},
-  west_bengal:       {petrol:104.25,diesel:91.19},
-  andaman_and_nicobar_islands:{petrol:82.96,diesel:79.41},
-  chandigarh:        {petrol:94.24, diesel:82.40},
-  dadra_and_nagar_haveli_and_daman_and_diu:{petrol:94.19,diesel:86.86},
-  delhi:             {petrol:94.72, diesel:87.62},
-  jammu_and_kashmir: {petrol:97.77, diesel:88.70},
-  ladakh:            {petrol:100.30,diesel:88.70},
-  lakshadweep:       {petrol:83.40, diesel:73.90},
-  puducherry:        {petrol:98.30, diesel:90.50},
-};
+// ── NDTV (primary) ─────────────────────────────────────────────────────────
+async function scrapeNDTV() {
+  const base = 'https://www.ndtv.com';
+  const [ph, dh, ch] = await Promise.all([
+    fetchPage(`${base}/fuel-prices/petrol-price-in-all-state`, base),
+    fetchPage(`${base}/fuel-prices/diesel-price-in-all-state`, base),
+    fetchPage(`${base}/fuel-prices/cng-price-in-all-state`,   base),
+  ]);
+  return {
+    petrol: parseTable(ph, 'NDTV petrol'),
+    diesel: parseTable(dh, 'NDTV diesel'),
+    cng:    parseTable(ch, 'NDTV cng'),
+  };
+}
 
-// ── Handler ───────────────────────────────────────────────────────────────
+// ── goodreturns.in (secondary) ─────────────────────────────────────────────
+async function scrapeGoodReturns() {
+  const base = 'https://www.goodreturns.in';
+  const [ph, dh, ch] = await Promise.all([
+    fetchPage(`${base}/petrol-price.html`, base),
+    fetchPage(`${base}/diesel-price.html`, base),
+    fetchPage(`${base}/cng-price.html`,    base),
+  ]);
+  return {
+    petrol: parseTable(ph, 'GR petrol'),
+    diesel: parseTable(dh, 'GR diesel'),
+    cng:    parseTable(ch, 'GR cng'),
+  };
+}
+
+function isUsable(map) { return Object.keys(map).length >= 10; }
+
+// ── Handler ─────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=7200');
@@ -187,57 +210,62 @@ export default async function handler(req, res) {
 
   console.log('\n=== /api/fuel ===');
 
-  // Fetch all three pages in parallel
-  const [petrolHtml, dieselHtml, cngHtml] = await Promise.all([
-    fetchPage('/petrol-price.html'),
-    fetchPage('/diesel-price.html'),
-    fetchPage('/cng-price.html'),
-  ]);
+  // Try NDTV first (major Indian news site, less likely to block scrapers)
+  console.log('── NDTV (primary) ──');
+  let scraped = await scrapeNDTV();
 
-  const petrolMap = parseTable(petrolHtml, 'petrol');
-  const dieselMap = parseTable(dieselHtml, 'diesel');
-  const cngMap    = parseTable(cngHtml,    'cng');
+  // Fall back to goodreturns.in if NDTV didn't return enough data
+  if (!isUsable(scraped.petrol) || !isUsable(scraped.diesel)) {
+    console.log('── goodreturns.in (fallback) ──');
+    const gr = await scrapeGoodReturns();
+    if (isUsable(gr.petrol))  scraped.petrol = gr.petrol;
+    if (isUsable(gr.diesel))  scraped.diesel = gr.diesel;
+    if (isUsable(gr.cng))     scraped.cng    = gr.cng;
+  }
 
-  const liveOk = Object.keys(petrolMap).length >= 10;
-  const source  = liveOk ? 'goodreturns' : 'baseline';
+  const liveOk  = isUsable(scraped.petrol) && isUsable(scraped.diesel);
+  const source  = liveOk ? 'live' : 'baseline';
   const updated = new Date().toISOString();
 
-  console.log(`\nResult: ${source} (${Object.keys(petrolMap).length} petrol states live)`);
+  console.log(`\nOutcome: ${source} (petrol=${Object.keys(scraped.petrol).length} diesel=${Object.keys(scraped.diesel).length} cng=${Object.keys(scraped.cng||{}).length})`);
 
-  // Build combined state dataset — live values override baseline
+  // Merge live over baseline — baseline fills any state the scraper missed
   const allStates = {};
   for (const [key, base] of Object.entries(BASELINE)) {
     allStates[key] = {
-      petrol: petrolMap[key] ?? base.petrol,
-      diesel: dieselMap[key] ?? base.diesel,
-      cng:    cngMap[key]    ?? null,
+      petrol: scraped.petrol[key] ?? base.petrol,
+      diesel: scraped.diesel[key] ?? base.diesel,
+      cng:    (scraped.cng||{})[key] ?? null,
     };
   }
 
-  // Write to Supabase (service key needed as Vercel env var)
+  // Persist to Supabase
   const sbUrl = process.env.SUPABASE_URL;
   const sbKey = process.env.SUPABASE_SERVICE_KEY;
-
   if (sbUrl && sbKey) {
     try {
-      const sb   = createClient(sbUrl, sbKey, { auth: { persistSession: false } });
+      const sb   = createClient(sbUrl, sbKey, { auth:{ persistSession:false } });
       const rows = [];
       for (const [key, prices] of Object.entries(allStates)) {
         rows.push({ key:`petrol_${key}`, price:prices.petrol, change_pct:null, updated_at:updated });
         rows.push({ key:`diesel_${key}`, price:prices.diesel, change_pct:null, updated_at:updated });
         if (prices.cng) rows.push({ key:`cng_${key}`, price:prices.cng, change_pct:null, updated_at:updated });
       }
-      for (let i = 0; i < rows.length; i += 100) {
+      for (let i=0; i<rows.length; i+=100) {
         const { error } = await sb.from('market_data').upsert(rows.slice(i,i+100), { onConflict:'key' });
         if (error) console.error(`Supabase batch ${i}: ${error.message}`);
       }
       console.log(`Wrote ${rows.length} rows to Supabase`);
-    } catch(e) {
-      console.error('Supabase write error:', e.message);
-    }
+    } catch(e) { console.error('Supabase write:', e.message); }
   } else {
-    console.warn('SUPABASE_SERVICE_KEY not set — DB write skipped');
+    console.warn('SUPABASE_SERVICE_KEY not set');
   }
+
+  // Spot-check log
+  const mh = allStates.maharashtra, dl = allStates.delhi, ap = allStates.andhra_pradesh;
+  console.log(`Maharashtra: ₹${mh?.petrol}p / ₹${mh?.diesel}d`);
+  console.log(`Delhi:       ₹${dl?.petrol}p / ₹${dl?.diesel}d`);
+  console.log(`Andhra:      ₹${ap?.petrol}p / ₹${ap?.diesel}d`);
 
   return res.status(200).json({ _source:source, _updated:updated, ...allStates });
 }
