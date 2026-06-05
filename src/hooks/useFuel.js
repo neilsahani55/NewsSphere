@@ -103,15 +103,16 @@ async function fromSupabase(stateKey) {
     const { data, error } = await supabase
       .from('market_data')
       .select('key, price, updated_at')
-      .in('key', [`petrol_${stateKey}`, `diesel_${stateKey}`]);
+      .in('key', [`petrol_${stateKey}`, `diesel_${stateKey}`, `cng_${stateKey}`]);
 
     if (error || !data?.length) return null;
 
-    const p = data.find(r => r.key === `petrol_${stateKey}`);
-    const d = data.find(r => r.key === `diesel_${stateKey}`);
+    const p   = data.find(r => r.key === `petrol_${stateKey}`);
+    const d   = data.find(r => r.key === `diesel_${stateKey}`);
+    const cng = data.find(r => r.key === `cng_${stateKey}`);
     if (!p?.price) return null;
 
-    return { petrol: p.price, diesel: d?.price ?? null, updatedAt: p.updated_at, source: 'live' };
+    return { petrol: p.price, diesel: d?.price ?? null, cng: cng?.price ?? null, updatedAt: p.updated_at, source: 'live' };
   } catch { return null; }
 }
 
