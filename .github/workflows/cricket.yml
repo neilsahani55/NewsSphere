@@ -1,0 +1,35 @@
+name: NewsSphere — Cricket
+
+on:
+  schedule:
+    # Every 15 minutes — cricket matches update frequently (live scores)
+    - cron: '*/15 * * * *'
+  workflow_dispatch:   # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  fetch-cricket:
+    name: Scrape Cricket → Store in Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: history-pipeline/package.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: history-pipeline
+
+      - name: Fetch and store cricket matches
+        run: node cricket.js
+        working-directory: history-pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

@@ -3,7 +3,8 @@
  *
  * ── CRICKET ──────────────────────────────────────────────────────────────
  *  HOW TO GET CRICKET DATA (Cricbuzz + ESPNCricinfo block Vercel IPs):
- *  1. Go to https://cricapi.com → Sign Up FREE (email only, no credit card)
+ *  1. Go to https://www.cricketdata.org → Sign Up FREE (email only, no credit card)
+ *     (CricAPI has rebranded to CricketData.org — same service, new name)
  *  2. Copy your API key from the dashboard
  *  3. Vercel Dashboard → Project → Settings → Environment Variables
  *     → Add  CRICAPI_KEY = your_key_here  → Save → Redeploy
@@ -28,11 +29,15 @@
  * Name fix:      Tennis/Badminton empty strHomeTeam → parsed from strEvent
  */
 
-// ── CricAPI ─────────────────────────────────────────────────────────────────
-// Free cricket API — https://cricapi.com — 100 req/day, no credit card needed
-// Set CRICAPI_KEY in Vercel env vars to enable. Without it all other sources run.
+// ── Supabase (for cricket data written by GitHub Actions pipeline) ────────────
+// The cricket GitHub Actions pipeline runs every 15 min and stores matches here.
+// Vercel reads from Supabase — no scraping from Vercel needed for cricket.
+const SUPABASE_URL  = process.env.SUPABASE_URL  ?? process.env.VITE_SUPABASE_URL  ?? '';
+const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
+
+// Kept for backward compat if user still wants to set a CricketData.org key
 const CRICAPI_KEY = process.env.CRICAPI_KEY ?? '';
-const CRICAPI     = 'https://api.cricapi.com/v1';
+const CRICAPI     = 'https://api.cricketdata.org/v1';
 
 const ESPNCI = 'https://hs-consumer-api.espncricinfo.com/v1/pages';
 const ESPN   = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -246,6 +251,68 @@ async function fetchCricAPI() {
   }
 
   return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CRICKET SUPABASE — Read from DB (written by GitHub Actions cricket.yml)
+// GitHub Actions (Azure IPs) can reach ESPNCricinfo + Cricbuzz.
+// Vercel just reads the pre-fetched data. Updated every 15 minutes.
+// ─────────────────────────────────────────────────────────────────────────
+async function fetchCricketFromSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_ANON) return [];
+
+  try {
+    const cutoff = new Date(NOW - H7D).toISOString();
+    const url = `${SUPABASE_URL}/rest/v1/cricket_matches`
+      + `?select=*&updated_at=gte.${encodeURIComponent(cutoff)}&order=updated_at.desc&limit=100`;
+
+    const r = await fetch(url, {
+      headers: {
+        apikey:        SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`,
+        Accept:        'application/json',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!r.ok) { console.log(`Supabase cricket HTTP ${r.status}`); return []; }
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) { console.log('Supabase cricket: no rows'); return []; }
+
+    console.log(`Supabase cricket: ${rows.length} matches`);
+
+    return rows.map(row => {
+      const teams = Array.isArray(row.teams) ? row.teams : [];
+      const state = row.state ?? 'pre';
+      if (!inWindow(row.match_date, state, H7D, H72)) return null;
+
+      return {
+        id:          row.match_id,
+        sport:       'cricket',
+        sportName:   'Cricket',
+        emoji:       '🏏',
+        match:       row.match_title || '',
+        league:      row.series_name || '',
+        state,
+        date:        row.match_date,
+        summary:     row.status_text || '',
+        detail:      row.status_text || '',
+        clock:       state === 'in' ? '🔴 Live' : '',
+        period:      null,
+        venue:       row.venue || '',
+        competitors: teams.map(t => ({
+          name:   t.name   ?? '?',
+          score:  t.score  ?? '',
+          winner: t.winner ?? false,
+        })),
+        isIndia: row.is_india ?? false,
+        source:  'supabase_cricket',
+      };
+    }).filter(Boolean);
+  } catch (e) {
+    console.log(`Supabase cricket error: ${e.message}`);
+    return [];
+  }
 }
 
 async function fetchCricketHTMLPage() {
@@ -720,16 +787,18 @@ export default async function handler(req, res) {
 
   // All sources in parallel
   const [
-    cricApiEvents,  // 0: CricAPI (primary — set CRICAPI_KEY env var)
-    ciHtmlEvents,   // A: ESPNCricinfo HTML page
-    ciApiEvents,    // B: ESPNCricinfo consumer API
-    espnCricket,    // C: ESPN cricket API
-    cbEvents,       // D: Cricbuzz HTML
-    sdbCricket,     // E+F: SportsDB cricket
-    indiaSDB,       // G: SportsDB India non-cricket
-    todaySDB,       // H: SportsDB today broad
-    espnEvents,     // I: ESPN F1 + Golf
+    supabaseCricket, // PRIMARY: Supabase DB (written by GitHub Actions pipeline)
+    cricApiEvents,   // BACKUP:  CricAPI (set CRICAPI_KEY env var)
+    ciHtmlEvents,    // A: ESPNCricinfo HTML page
+    ciApiEvents,     // B: ESPNCricinfo consumer API
+    espnCricket,     // C: ESPN cricket API
+    cbEvents,        // D: Cricbuzz HTML
+    sdbCricket,      // E+F: SportsDB cricket
+    indiaSDB,        // G: SportsDB India non-cricket
+    todaySDB,        // H: SportsDB today broad
+    espnEvents,      // I: ESPN F1 + Golf
   ] = await Promise.all([
+    fetchCricketFromSupabase(),
     fetchCricAPI(),
     fetchCricketHTMLPage(),
     fetchESPNCricinfoAPI(),
@@ -745,7 +814,8 @@ export default async function handler(req, res) {
   const all  = [];
   const add  = (evs) => { for (const ev of evs) { if (!ev?.id || seen.has(ev.id)) continue; seen.add(ev.id); all.push(ev); } };
 
-  // Cricket first — CricAPI is best quality, rest fill gaps
+  // Cricket: Supabase (GitHub Actions pipeline) first → CricAPI → rest as fallback
+  add(supabaseCricket);
   add(cricApiEvents);
   add(ciHtmlEvents);
   add(ciApiEvents);
