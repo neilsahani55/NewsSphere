@@ -3402,7 +3402,237 @@ mark.tts-hl {
   .sp-tab { padding: .5rem .2rem; gap: .2rem; }
   .sp-tab-icon { font-size: .9rem; }
   .sp-tab-label { font-size: .7rem; }
-
   /* AllNews filter row */
   .allnews-filter { gap: .4rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   COMPREHENSIVE RESPONSIVE — All components, all breakpoints
+   Desktop-first. Each block overrides only what changes at that size.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Large tablet ≤ 1024px ──────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .hdr-in { gap: 1rem; padding: .8rem 1.5rem; }
+  .brand-name { font-size: 1.55rem; }
+  .brand-sub { display: none; }
+  .layout { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .filters { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* ── Tablet ≤ 768px ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Header */
+  .hdr-in { padding: .72rem 1.2rem; gap: .75rem; }
+  .brand-name { font-size: 1.4rem; }
+  .ctrls { gap: .45rem; }
+  .tr-global { padding: .3rem .7rem; }
+  .tr-global-select { max-width: 95px; font-size: .78rem; }
+  .btn-p { padding: .48rem 1rem; font-size: .8rem; }
+  .icon-btn { width: 40px; height: 40px; }
+
+  /* Layout */
+  .layout { padding: 0 1.2rem 2rem; margin-top: 1rem; }
+  .filters { padding: 0 1.2rem; }
+
+  /* Home page */
+  .home-pg { gap: 1.5rem; padding-bottom: 1.5rem; }
+  .home-briefing-title { font-size: 1.25rem; }
+  .home-briefing-date { font-size: .83rem; }
+  .home-sec-hdr h3 { font-size: .95rem; }
+
+  /* Markets */
+  .mkt-value { font-size: .84rem; }
+
+  /* Holidays + Fuel */
+  .hol-featured { gap: .55rem; }
+  .fuel-grid { gap: .45rem; }
+
+  /* Sports */
+  .sp-grid4 { grid-template-columns: repeat(3, 1fr); }
+  .sp-match { font-size: .82rem; }
+}
+
+/* ── Large phone ≤ 640px ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Header — compact but complete */
+  .hdr-in { padding: .65rem 1rem; gap: .6rem; }
+  .brand-name { font-size: 1.3rem; letter-spacing: -.3px; }
+  .brand-dot { width: 6px; height: 6px; }
+  .ctrls { gap: .35rem; }
+  .icon-btn { width: 38px; height: 38px; font-size: .9rem; }
+  .btn-p { padding: .42rem .9rem; font-size: .78rem; gap: 5px; }
+  .tr-global { padding: .28rem .6rem; }
+  .tr-global-select { max-width: 80px; font-size: .76rem; }
+  .search { max-width: none; border-radius: 30px; padding: .38rem .85rem; }
+  .search input { font-size: .8rem; }
+  .kbd { display: none; }
+
+  /* Layout */
+  .layout { padding: 0 .9rem 1.75rem; margin-top: .75rem; }
+  .filters { padding: 0 .9rem; margin: .65rem auto 0; }
+
+  /* Navigation tabs */
+  .tnav-in { padding: 0 .9rem; gap: 0; }
+  .tnav-tab { padding: .7rem .8rem; font-size: .83rem; }
+
+  /* Home page */
+  .home-pg { gap: 1.25rem; padding-bottom: 1.25rem; }
+  .home-briefing { flex-direction: column; align-items: flex-start; gap: .35rem; padding-bottom: .4rem; }
+  .home-briefing-left { gap: .3rem; }
+  .home-briefing-right { flex-wrap: wrap; gap: .3rem; }
+  .home-briefing-title { font-size: 1.1rem; }
+  .home-briefing-date { font-size: .8rem; }
+  .home-sec-hdr h3 { font-size: .9rem; }
+  .home-see-all { font-size: .75rem; min-height: 38px; }
+  .hcard { padding: .8rem .9rem; }
+  .hcard-feat { padding: 1rem 1rem; }
+  .hcard-feat .hcard-title { font-size: 1rem; line-height: 1.3; }
+  .hcard-title { font-size: .85rem; }
+  .hcard-meta { font-size: .72rem; }
+
+  /* Markets widget */
+  .mkt-wrap { padding: .6rem .85rem .72rem; }
+  .mkt-tile { flex: 0 0 84px; padding: .38rem .5rem; }
+  .mkt-value { font-size: .8rem; }
+  .mkt-label { font-size: .6rem; letter-spacing: .03em; }
+  .mkt-change { font-size: .65rem; }
+  .mkt-period { display: none; }
+  .mkt-sub { font-size: .6rem; }
+
+  /* Weather + AQI badges */
+  .wx-badge { padding: .25rem .55rem; font-size: .7rem; gap: .22rem; }
+  .wx-label { display: none; }
+  .aqi-badge { padding: .25rem .55rem; font-size: .7rem; gap: .22rem; }
+  .aqi-cat { display: none; }
+  .home-briefing-right { gap: .28rem; }
+
+  /* On This Day */
+  .th-wrap { padding: 1rem 1rem .9rem; margin-bottom: 1.25rem; }
+  .th-year { font-size: 2rem; }
+  .th-title { font-size: .95rem; }
+  .th-desc { font-size: .78rem; }
+  .th-dot { padding: 12px 6px; }
+
+  /* Quote widget */
+  .quote-wrap { padding: .8rem .9rem .8rem 1.15rem; }
+  .quote-text { font-size: .8rem; line-height: 1.55; }
+  .quote-author { font-size: .72rem; }
+  .quote-mark { font-size: 2.2rem; }
+
+  /* Holidays + Fuel (row) */
+  .home-row-2 { grid-template-columns: 1fr; gap: .75rem; }
+  .hol-wrap { padding: .6rem .8rem .7rem; }
+  .hol-title { font-size: .68rem; }
+  .hol-featured { padding: .48rem .6rem; gap: .45rem; }
+  .hol-feat-name { font-size: .85rem; }
+  .hol-feat-date { font-size: .68rem; }
+  .hol-item { font-size: .74rem; gap: .35rem; }
+  .fuel-wrap { padding: .6rem .8rem .7rem; }
+  .fuel-title { font-size: .68rem; }
+  .fuel-price { font-size: .95rem; }
+  .fuel-type { font-size: .6rem; }
+  .fuel-unit { font-size: .58rem; }
+
+  /* Sports widget */
+  .sp-wrap { padding: .65rem .8rem .85rem; }
+  .sp-grid4 { grid-template-columns: repeat(2, 1fr); gap: .35rem; }
+  .sp-filter { gap: .25rem; margin-bottom: .6rem; }
+  .sp-filter-btn { padding: .18rem .5rem; font-size: .67rem; }
+  .sp-tabs { border-bottom-width: 1.5px; }
+  .sp-tab { padding: .35rem .7rem; font-size: .77rem; }
+  .sp-tab-cnt { font-size: .58rem; padding: .03rem .28rem; }
+  .sp-card { padding: .48rem .58rem; gap: .2rem; }
+  .sp-match { font-size: .78rem; }
+  .sp-team { font-size: .72rem; }
+  .sp-time { font-size: .64rem; }
+  .sp-venue, .sp-summary, .sp-meta-date { font-size: .6rem; }
+  .sp-live-clock { font-size: .6rem; }
+  .sp-sport-tag { font-size: .59rem; }
+  .sp-league-tag { display: none; }
+
+  /* News feed */
+  .feed-hdr { padding: .6rem 0; }
+  .feed-title { font-size: .95rem; }
+  .home-cat-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Phone ≤ 480px ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Header: absolute minimum */
+  .hdr-in { padding: .58rem .85rem; gap: .5rem; }
+  .brand-name { font-size: 1.18rem; }
+  .brand-sub { display: none; }
+  .ctrls { gap: .28rem; }
+  .icon-btn { width: 36px; height: 36px; font-size: .85rem; }
+  .btn-p { padding: .38rem .8rem; font-size: .76rem; }
+  .tr-global-select { max-width: 70px; font-size: .73rem; }
+  .search { padding: .34rem .75rem; }
+  .search input { font-size: .78rem; }
+
+  /* Tighter layout */
+  .layout { padding: 0 .75rem 1.5rem; margin-top: .6rem; }
+  .filters { padding: 0 .75rem; }
+  .home-pg { gap: 1rem; }
+
+  /* Markets: tighter */
+  .mkt-tile { flex: 0 0 75px; padding: .32rem .42rem; }
+  .mkt-value { font-size: .76rem; }
+
+  /* Sports: single column */
+  .sp-grid4 { grid-template-columns: 1fr; }
+  .sp-tab { padding: .3rem .58rem; font-size: .74rem; }
+
+  /* Cards smaller */
+  .hcard { padding: .72rem .8rem; gap: .4rem; }
+  .hcard-feat .hcard-title { font-size: .92rem; }
+  .hcard-title { font-size: .82rem; }
+  .hcard-prev { font-size: .78rem; }
+  .hcard-meta { font-size: .7rem; }
+
+  /* On This Day */
+  .th-year { font-size: 1.8rem; }
+  .th-title { font-size: .88rem; }
+
+  /* Fuel: stack grid if 3 fuels */
+  .fuel-grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .fuel-price { font-size: .88rem; }
+
+  /* Modals full screen */
+  .th-overlay { padding: 0; }
+  .th-modal { border-radius: 0; max-height: 100vh; width: 100%; }
+}
+
+/* ── Small phone ≤ 380px ────────────────────────────────────────── */
+@media (max-width: 380px) {
+  .hdr-in { padding: .52rem .72rem; }
+  .brand-name { font-size: 1.08rem; }
+  .layout, .filters, .foot { padding-left: .72rem; padding-right: .72rem; }
+  .mkt-tile { flex: 0 0 68px; }
+  .mkt-value { font-size: .72rem; }
+  .sp-grid4 { grid-template-columns: 1fr; }
+  .th-year { font-size: 1.65rem; }
+  .hcard-title { font-size: .8rem; }
+  .hcard-feat .hcard-title { font-size: .88rem; }
+  .fuel-grid, .fuel-grid-3 { grid-template-columns: 1fr; }
+  .home-top-grid { grid-template-columns: 1fr; }
+  .home-top-side { display: none; }
+  .sp-tab { padding: .28rem .48rem; font-size: .7rem; }
+}
+
+/* ── Touch: larger tap targets on touch devices ─────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  .tnav-tab { min-height: 44px; }
+  .sp-filter-btn { min-height: 36px; }
+  .sp-tab { min-height: 40px; }
+  .hol-item { min-height: 40px; }
+  .mkt-tile { min-height: 60px; }
+  .btn-p { min-height: 44px; }
+  .icon-btn { min-height: 44px; min-width: 44px; }
+  .home-see-all { min-height: 44px; }
+}
+
+/* ── High-DPI / Retina ──────────────────────────────────────────── */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .brand-dot { width: 6px; height: 6px; }
 }
