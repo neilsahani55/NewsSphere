@@ -1987,6 +1987,29 @@ button { font-family: inherit; }
   background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600;
 }
 
+/* Section toggle row */
+.sp-toggles {
+  display: flex; gap: .4rem; margin-bottom: .1rem; flex-wrap: wrap;
+}
+.sp-toggle {
+  display: inline-flex; align-items: center; gap: .3rem;
+  border: 1.5px solid var(--border); border-radius: 20px;
+  background: none; padding: .28rem .75rem;
+  font-size: .75rem; font-weight: 600; cursor: pointer;
+  color: var(--ink3); transition: all .18s; white-space: nowrap;
+}
+.sp-toggle:disabled { opacity: .35; cursor: not-allowed; }
+.sp-toggle:not(:disabled):hover { background: var(--paper3); }
+/* Active states per type */
+.sp-toggle-live.sp-toggle-on  { background: #fee2e2; border-color: #dc2626; color: #dc2626; }
+.sp-toggle-pre.sp-toggle-on   { background: #dbeafe; border-color: #2563eb; color: #2563eb; }
+.sp-toggle-done.sp-toggle-on  { background: var(--paper3); border-color: var(--ink3); color: var(--ink); }
+.sp-toggle-cnt {
+  background: currentColor; color: var(--paper); border-radius: 8px;
+  padding: .05rem .35rem; font-size: .65rem; font-weight: 700;
+  opacity: .85;
+}
+
 /* Body — contains the three sections */
 .sp-body { display: flex; flex-direction: column; gap: .8rem; }
 

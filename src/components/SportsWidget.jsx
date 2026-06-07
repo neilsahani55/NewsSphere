@@ -132,7 +132,11 @@ function Section({ title, icon, matches, showSport, max = 12 }) {
 // ── Main widget ───────────────────────────────────────────────────────────
 export default memo(function SportsWidget() {
   const { live, upcoming, completed, counts, loading } = useSports();
-  const [sport, setSport] = useState('all');
+  const [sport,   setSport]   = useState('all');
+  // Section toggles — all on by default
+  const [showLive,     setShowLive]     = useState(true);
+  const [showUpcoming, setShowUpcoming] = useState(true);
+  const [showResults,  setShowResults]  = useState(true);
 
   // Sports that actually have data
   const all = useMemo(() => [...live, ...upcoming, ...completed], [live, upcoming, completed]);
@@ -141,7 +145,7 @@ export default memo(function SportsWidget() {
     return SPORT_CONFIG.filter(s => keys.has(s.key));
   }, [all]);
 
-  // Filter helper
+  // Sport filter
   const filter = (arr) => sport === 'all' ? arr : arr.filter(m => m.sport === sport);
 
   const fLive     = filter(live);
@@ -154,7 +158,7 @@ export default memo(function SportsWidget() {
   return (
     <section className="sp-wrap" aria-label="Sports scores">
 
-      {/* Header row */}
+      {/* Header */}
       <div className="sp-head">
         <span className="sp-title">🏆 Sports</span>
         <div className="sp-head-right">
@@ -167,45 +171,77 @@ export default memo(function SportsWidget() {
         </div>
       </div>
 
-      {/* Sport filter strip: All | Cricket | Football | … */}
+      {/* ── Row 1: Sport filter ── */}
       {activeSports.length > 0 && (
         <div className="sp-filter" role="tablist" aria-label="Filter by sport">
           <button
-            role="tab"
-            aria-selected={sport === 'all'}
+            role="tab" aria-selected={sport === 'all'}
             className={`sp-filter-btn${sport === 'all' ? ' sp-fbtn-on' : ''}`}
             onClick={() => setSport('all')}
-          >
-            All
-          </button>
+          >All</button>
           {activeSports.map(s => (
             <button
-              key={s.key}
-              role="tab"
-              aria-selected={sport === s.key}
+              key={s.key} role="tab" aria-selected={sport === s.key}
               className={`sp-filter-btn${sport === s.key ? ' sp-fbtn-on' : ''}`}
               onClick={() => setSport(s.key)}
-            >
-              {s.emoji} {s.name}
-            </button>
+            >{s.emoji} {s.name}</button>
           ))}
+        </div>
+      )}
+
+      {/* ── Row 2: Section toggles ── */}
+      {total > 0 && (
+        <div className="sp-toggles" role="group" aria-label="Show sections">
+          <button
+            aria-pressed={showLive}
+            className={`sp-toggle sp-toggle-live${showLive ? ' sp-toggle-on' : ''}`}
+            onClick={() => setShowLive(v => !v)}
+            disabled={fLive.length === 0}
+          >
+            🔴 Live
+            {fLive.length > 0 && <span className="sp-toggle-cnt">{fLive.length}</span>}
+          </button>
+          <button
+            aria-pressed={showUpcoming}
+            className={`sp-toggle sp-toggle-pre${showUpcoming ? ' sp-toggle-on' : ''}`}
+            onClick={() => setShowUpcoming(v => !v)}
+            disabled={fUpcoming.length === 0}
+          >
+            📅 Upcoming
+            {fUpcoming.length > 0 && <span className="sp-toggle-cnt">{fUpcoming.length}</span>}
+          </button>
+          <button
+            aria-pressed={showResults}
+            className={`sp-toggle sp-toggle-done${showResults ? ' sp-toggle-on' : ''}`}
+            onClick={() => setShowResults(v => !v)}
+            disabled={fResults.length === 0}
+          >
+            ✓ Results
+            {fResults.length > 0 && <span className="sp-toggle-cnt">{fResults.length}</span>}
+          </button>
         </div>
       )}
 
       {/* Loading skeleton */}
       {loading && all.length === 0 && <div className="sp-skeleton" aria-hidden />}
 
-      {/* No data for selected sport */}
+      {/* No data state */}
       {!loading && total === 0 && all.length > 0 && (
         <p className="sp-empty">No {sport === 'all' ? '' : sport + ' '}matches in the last 48 hours.</p>
       )}
 
-      {/* Three sections — all visible at once */}
+      {/* ── Sections — shown/hidden by toggles ── */}
       {total > 0 && (
         <div className="sp-body">
-          <Section title="Live"           icon="🔴" matches={fLive}     showSport={sport === 'all'} />
-          <Section title="Upcoming"       icon="📅" matches={fUpcoming} showSport={sport === 'all'} max={8} />
-          <Section title="Recent Results" icon="✓"  matches={fResults}  showSport={sport === 'all'} max={6} />
+          {showLive && (
+            <Section title="Live" icon="🔴" matches={fLive} showSport={sport === 'all'} />
+          )}
+          {showUpcoming && (
+            <Section title="Upcoming" icon="📅" matches={fUpcoming} showSport={sport === 'all'} max={8} />
+          )}
+          {showResults && (
+            <Section title="Recent Results" icon="✓" matches={fResults} showSport={sport === 'all'} max={6} />
+          )}
         </div>
       )}
     </section>
