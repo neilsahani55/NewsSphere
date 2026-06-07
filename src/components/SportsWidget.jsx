@@ -17,26 +17,45 @@ const SPORT_CONFIG = [
 
 const RACING = new Set(['f1', 'nascar', 'indycar']);
 
-// ── Time helpers ──────────────────────────────────────────────────────────
+// ── IST date/time helpers ─────────────────────────────────────────────────
+// Always use Asia/Kolkata for comparisons — toDateString() uses local/server TZ
+// which is UTC on Vercel, causing off-by-one errors around midnight IST.
+
+const IST_OPTS = { timeZone: 'Asia/Kolkata' };
+
+function istDateStr(date) {
+  // Returns "YYYY-MM-DD" in IST — used for day comparisons
+  return date.toLocaleDateString('sv-SE', IST_OPTS); // sv-SE gives ISO format
+}
+
 function fmtTime(dateStr) {
   if (!dateStr) return '';
   const d   = new Date(dateStr);
-  const now  = new Date();
-  const t    = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
-  const day  = d.toDateString();
-  if (day === now.toDateString())  return `Today · ${t} IST`;
-  if (day === new Date(Date.now() + 86400000).toDateString()) return `Tomorrow · ${t} IST`;
-  if (day === new Date(Date.now() - 86400000).toDateString()) return `Yesterday · ${t} IST`;
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }) + ` · ${t} IST`;
+  const now = new Date();
+  const t   = d.toLocaleTimeString('en-IN', {
+    hour: '2-digit', minute: '2-digit', hour12: true, ...IST_OPTS,
+  });
+
+  const dDay   = istDateStr(d);
+  const today  = istDateStr(now);
+  const tmrw   = istDateStr(new Date(Date.now() + 86400000));
+  const yest   = istDateStr(new Date(Date.now() - 86400000));
+
+  if (dDay === today) return `Today · ${t} IST`;
+  if (dDay === tmrw)  return `Tomorrow · ${t} IST`;
+  if (dDay === yest)  return `Yesterday · ${t} IST`;
+  return d.toLocaleDateString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short', ...IST_OPTS,
+  }) + ` · ${t} IST`;
 }
 
 function fmtDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d   = new Date(dateStr);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Today';
-  if (d.toDateString() === new Date(Date.now() - 86400000).toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  if (istDateStr(d) === istDateStr(now))                           return 'Today';
+  if (istDateStr(d) === istDateStr(new Date(Date.now() - 86400000))) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...IST_OPTS });
 }
 
 // ── Match card ────────────────────────────────────────────────────────────

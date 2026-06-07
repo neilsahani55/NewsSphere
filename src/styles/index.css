@@ -1987,14 +1987,20 @@ button { font-family: inherit; }
   background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600;
 }
 /* Sport button with no data in current tab */
-.sp-fbtn-dim { opacity: .45; }
-/* Count badge inside filter button */
+.sp-fbtn-dim { opacity: .4; }
+/* Count badge inside filter button — always readable */
 .sp-fbtn-cnt {
-  display: inline-block; background: currentColor; border-radius: 8px;
+  display: inline-block; border-radius: 8px;
   padding: .02rem .32rem; font-size: .6rem; font-weight: 700;
-  color: var(--paper); opacity: .85; margin-left: .1rem;
+  margin-left: .15rem; vertical-align: middle;
+  /* Inactive: dark text on muted background */
+  background: var(--border2); color: var(--ink);
 }
-.sp-fbtn-on .sp-fbtn-cnt { color: var(--ink); background: rgba(255,255,255,.3); opacity: 1; }
+/* Active button has dark (ink) background — use white badge */
+.sp-fbtn-on .sp-fbtn-cnt {
+  background: rgba(255,255,255,.25);
+  color: #fff;
+}
 
 /* Section tabs: Live | Upcoming | Results */
 .sp-tabs {
@@ -2013,10 +2019,15 @@ button { font-family: inherit; }
 .sp-tab-upcoming.sp-tab-on { color: #2563eb; border-bottom-color: #2563eb; }
 .sp-tab-results.sp-tab-on  { color: var(--ink); border-bottom-color: var(--ink); }
 .sp-tab-cnt {
-  font-size: .65rem; font-weight: 700; border-radius: 8px;
-  padding: .05rem .35rem; background: var(--border2); color: var(--ink3);
+  font-size: .62rem; font-weight: 700; border-radius: 8px;
+  padding: .04rem .32rem; margin-left: .15rem; vertical-align: middle;
+  /* Inactive: neutral pill */
+  background: var(--border2); color: var(--ink3);
 }
-.sp-tab-on .sp-tab-cnt { background: currentColor; color: #fff; opacity: .9; }
+/* Active tab: match the underline colour, use tinted bg so text is readable */
+.sp-tab-live.sp-tab-on     .sp-tab-cnt { background: #fee2e2; color: #dc2626; }
+.sp-tab-upcoming.sp-tab-on .sp-tab-cnt { background: #dbeafe; color: #1d4ed8; }
+.sp-tab-results.sp-tab-on  .sp-tab-cnt { background: var(--paper3); color: var(--ink); border: 1px solid var(--border); }
 
 /* Body — contains the three sections */
 .sp-body { display: flex; flex-direction: column; gap: .8rem; }
