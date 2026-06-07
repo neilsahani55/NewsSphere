@@ -1,29 +1,38 @@
 /**
  * /api/sports — India-first multi-source sports data
  *
- * Cricket (cascading — all run in parallel, merged with dedup):
- *  A. ESPNCricinfo HTML page → parse __NEXT_DATA__ (Next.js embed)
- *     Most reliable — not an "API", just reading the same HTML the browser gets
- *  B. ESPNCricinfo consumer API — 5 slugs (live / upcoming / results / ipl / india)
- *  C. ESPN cricket scoreboard — India region + general + all league discovery
- *  D. Cricbuzz HTML  — live + upcoming + recent (may be blocked from DC IPs)
- *  E. Sports DB cricket today ±1 day
- *  F. Sports DB India cricket team — next/last 5 matches
+ * ── CRICKET ──────────────────────────────────────────────────────────────
+ *  HOW TO GET CRICKET DATA (Cricbuzz + ESPNCricinfo block Vercel IPs):
+ *  1. Go to https://cricapi.com → Sign Up FREE (email only, no credit card)
+ *  2. Copy your API key from the dashboard
+ *  3. Vercel Dashboard → Project → Settings → Environment Variables
+ *     → Add  CRICAPI_KEY = your_key_here  → Save → Redeploy
+ *  Free plan: 100 requests/day (plenty — Vercel CDN caches 3 min)
  *
- * Other sports:
+ *  Cricket sources (all run in parallel, merged with dedup):
+ *  1. CricAPI          — PRIMARY when CRICAPI_KEY env var is set
+ *                        Returns all live/recent international + IPL matches
+ *  2. ESPNCricinfo HTML → parse __NEXT_DATA__ from Next.js HTML page
+ *  3. ESPNCricinfo API → consumer API with 6 slugs
+ *  4. ESPN cricket API → India region + all discovered leagues
+ *  5. Cricbuzz HTML    → may be blocked from Vercel datacenter IPs
+ *  6. Sports DB        → today ±1 day + India cricket team events
+ *
+ * ── OTHER SPORTS ──────────────────────────────────────────────────────────
  *  G. Sports DB India team search — all sports where India plays
- *  H. Sports DB today ±1 day for 10 non-cricket sports
- *  I. ESPN F1 + Golf (10-day window)
+ *  H. Sports DB today ±1 day for 10 sports
+ *  I. ESPN F1 + Golf (10-day window — races are infrequent)
  *
- * Time windows:
- *  Cricket: 7 days upcoming + 72 h completed
- *  F1/Golf: 10 days both ways
- *  All other: 48 h both ways
- *
- * State fix: SportsDB events with no strStatus but past date → 'post'
- * Name fix:  Individual sports (tennis/badminton) with empty strHomeTeam
- *            → parse player names from strEvent ("X vs Y")
+ * Time windows:  Cricket 7d upcoming / 72h results  |  F1/Golf 10d  |  Rest 48h
+ * State fix:     SportsDB past events with empty status → 'post'
+ * Name fix:      Tennis/Badminton empty strHomeTeam → parsed from strEvent
  */
+
+// ── CricAPI ─────────────────────────────────────────────────────────────────
+// Free cricket API — https://cricapi.com — 100 req/day, no credit card needed
+// Set CRICAPI_KEY in Vercel env vars to enable. Without it all other sources run.
+const CRICAPI_KEY = process.env.CRICAPI_KEY ?? '';
+const CRICAPI     = 'https://api.cricapi.com/v1';
 
 const ESPNCI = 'https://hs-consumer-api.espncricinfo.com/v1/pages';
 const ESPN   = 'https://site.api.espn.com/apis/site/v2/sports';
@@ -164,6 +173,79 @@ function ciToMatch(m, seriesName = '') {
     isIndia: isIndia(searchT),
     source: 'espncricinfo',
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CRICKET 0 — CricAPI (https://cricapi.com — free 100 req/day, no card)
+// Set CRICAPI_KEY in Vercel env vars. Returns live + recent matches.
+// ─────────────────────────────────────────────────────────────────────────
+async function fetchCricAPI() {
+  if (!CRICAPI_KEY) return [];
+
+  const [current, upcoming] = await Promise.all([
+    safeJson(`${CRICAPI}/currentMatches?apikey=${CRICAPI_KEY}&offset=0`),
+    safeJson(`${CRICAPI}/matches?apikey=${CRICAPI_KEY}&offset=0`),
+  ]);
+
+  const rawList = [
+    ...(current?.data ?? []),
+    ...(upcoming?.data ?? []),
+  ];
+
+  console.log(`CricAPI: ${rawList.length} matches (hits: ${current?.info?.hitsToday ?? '?'}/${current?.info?.hitsLimit ?? 100})`);
+
+  const seen = new Set();
+  const out  = [];
+
+  for (const m of rawList) {
+    if (!m?.id || seen.has(m.id)) continue;
+    seen.add(m.id);
+
+    const started = m.matchStarted === true;
+    const ended   = m.matchEnded   === true;
+    const state   = started && !ended ? 'in' : ended ? 'post' : 'pre';
+
+    // Parse date — CricAPI sends dateTimeGMT without 'Z' suffix
+    const rawDate = m.dateTimeGMT ?? m.date ?? null;
+    const date    = rawDate ? new Date(rawDate.endsWith('Z') ? rawDate : rawDate + 'Z').toISOString() : null;
+    if (!inWindow(date, state, H7D, H72)) continue;
+
+    const teams  = m.teams ?? [];
+    const scores = m.score ?? [];
+
+    const competitors = teams.map(teamName => {
+      // Find the latest innings for this team (team name prefix-matches inning string)
+      const inns   = scores.filter(s => (s.inning ?? '').toLowerCase().startsWith(teamName.toLowerCase()));
+      const latest = inns.at(-1);
+      const score  = latest
+        ? `${latest.r ?? ''}/${latest.w ?? ''}${latest.o != null ? ` (${latest.o} ov)` : ''}`
+        : '';
+      return { name: teamName, score, winner: false };
+    });
+
+    const searchT = [m.name, m.series, ...teams].join(' ');
+
+    out.push({
+      id:        `cricapi_${m.id}`,
+      sport:     'cricket',
+      sportName: 'Cricket',
+      emoji:     '🏏',
+      match:     m.name || teams.join(' vs '),
+      league:    m.series || m.matchType?.toUpperCase() || '',
+      state,
+      date,
+      summary:   m.status || '',
+      detail:    m.status || '',
+      clock:     state === 'in' ? '🔴 Live' : '',
+      period:    null,
+      venue:     m.venue || '',
+      competitors,
+      isIndia:   isIndia(searchT),
+      source:    'cricapi',
+    });
+  }
+
+  return out;
 }
 
 async function fetchCricketHTMLPage() {
@@ -638,6 +720,7 @@ export default async function handler(req, res) {
 
   // All sources in parallel
   const [
+    cricApiEvents,  // 0: CricAPI (primary — set CRICAPI_KEY env var)
     ciHtmlEvents,   // A: ESPNCricinfo HTML page
     ciApiEvents,    // B: ESPNCricinfo consumer API
     espnCricket,    // C: ESPN cricket API
@@ -647,6 +730,7 @@ export default async function handler(req, res) {
     todaySDB,       // H: SportsDB today broad
     espnEvents,     // I: ESPN F1 + Golf
   ] = await Promise.all([
+    fetchCricAPI(),
     fetchCricketHTMLPage(),
     fetchESPNCricinfoAPI(),
     fetchESPNCricketAPI(),
@@ -661,7 +745,8 @@ export default async function handler(req, res) {
   const all  = [];
   const add  = (evs) => { for (const ev of evs) { if (!ev?.id || seen.has(ev.id)) continue; seen.add(ev.id); all.push(ev); } };
 
-  // Cricket first — best source wins, dedup prevents duplicates
+  // Cricket first — CricAPI is best quality, rest fill gaps
+  add(cricApiEvents);
   add(ciHtmlEvents);
   add(ciApiEvents);
   add(espnCricket);
