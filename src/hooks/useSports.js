@@ -24,9 +24,11 @@ function writeCache(data) {
   } catch {}
 }
 
+const EMPTY = { matches: [], live: [], upcoming: [], completed: [], counts: {} };
+
 export function useSports() {
   const [matches, setMatches] = useState(null);
-  const [counts, setCounts]   = useState({ live: 0, upcoming: 0, completed: 0 });
+  const [counts, setCounts]   = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,15 +36,21 @@ export function useSports() {
 
     async function load() {
       const cached = readCache();
-      if (cached) { setMatches(cached.matches); setCounts(cached.counts); setLoading(false); return; }
+      if (cached) { setMatches(cached); setCounts(cached.counts ?? {}); setLoading(false); return; }
 
       try {
         const res = await fetch('/api/sports', { signal: AbortSignal.timeout(12000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const data = { matches: json.matches ?? [], counts: json.counts ?? {} };
+        const data = {
+          matches:   json.matches   ?? [],
+          live:      json.live      ?? [],
+          upcoming:  json.upcoming  ?? [],
+          completed: json.completed ?? [],
+          counts:    json.counts    ?? {},
+        };
         writeCache(data);
-        if (live) { setMatches(data.matches); setCounts(data.counts); setLoading(false); }
+        if (live) { setMatches(data); setCounts(data.counts); setLoading(false); }
       } catch {
         if (live) { setMatches([]); setLoading(false); }
       }
@@ -53,8 +61,14 @@ export function useSports() {
     return () => { live = false; clearInterval(timer); };
   }, []);
 
-  const liveMatches     = (matches ?? []).filter(m => m.state === 'in');
-  const upcomingMatches = (matches ?? []).filter(m => m.state === 'pre');
+  const data = matches ?? EMPTY;
 
-  return { matches: matches ?? [], liveMatches, upcomingMatches, counts, loading };
+  return {
+    matches:   data.matches,
+    live:      data.live,
+    upcoming:  data.upcoming,
+    completed: data.completed,
+    counts,
+    loading,
+  };
 }

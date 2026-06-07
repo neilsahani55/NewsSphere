@@ -1,33 +1,28 @@
 /**
  * /api/sports  — Vercel serverless function
- *
- * Fetches live/upcoming scores for multiple sports from ESPN's public API.
- * Server-side fetch (no CORS). Returns unified JSON grouped by sport.
- *
- * CDN cache: 3 minutes (live scores change frequently)
+ * Live/upcoming/recent scores for 11 sports from ESPN's public API.
+ * Server-side fetch bypasses browser CORS restrictions.
+ * CDN cache: 3 minutes.
  */
 
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
+const HDR  = { 'User-Agent': 'Mozilla/5.0 (compatible; NewsSphere/1.0)', Accept: 'application/json' };
 
-const HDR = {
-  'User-Agent': 'Mozilla/5.0 (compatible; NewsSphere/1.0)',
-  'Accept': 'application/json',
-};
-
-// Sports to fetch — path is the ESPN API sub-path
 const SPORTS = [
-  { key: 'cricket',    path: 'cricket',            name: 'Cricket',      emoji: '🏏' },
-  { key: 'football',   path: 'soccer',              name: 'Football',     emoji: '⚽' },
-  { key: 'f1',         path: 'racing/f1',           name: 'Formula 1',    emoji: '🏎️' },
-  { key: 'basketball', path: 'basketball/nba',      name: 'Basketball',   emoji: '🏀' },
-  { key: 'tennis',     path: 'tennis',              name: 'Tennis',       emoji: '🎾' },
-  { key: 'hockey',     path: 'hockey',              name: 'Hockey',       emoji: '🏒' },
-  { key: 'baseball',   path: 'baseball/mlb',        name: 'Baseball',     emoji: '⚾' },
-  { key: 'nfl',        path: 'football/nfl',        name: 'NFL',          emoji: '🏈' },
-  { key: 'golf',       path: 'golf',                name: 'Golf',         emoji: '⛳' },
-  { key: 'mma',        path: 'mma',                 name: 'UFC / MMA',    emoji: '🥊' },
-  { key: 'rugby',      path: 'rugby',               name: 'Rugby',        emoji: '🏉' },
+  { key: 'cricket',    path: 'cricket',         name: 'Cricket',    emoji: '🏏' },
+  { key: 'football',   path: 'soccer',           name: 'Football',   emoji: '⚽' },
+  { key: 'f1',         path: 'racing/f1',        name: 'Formula 1',  emoji: '🏎️' },
+  { key: 'basketball', path: 'basketball/nba',   name: 'Basketball', emoji: '🏀' },
+  { key: 'tennis',     path: 'tennis',           name: 'Tennis',     emoji: '🎾' },
+  { key: 'hockey',     path: 'hockey',           name: 'Hockey',     emoji: '🏒' },
+  { key: 'baseball',   path: 'baseball/mlb',     name: 'Baseball',   emoji: '⚾' },
+  { key: 'nfl',        path: 'football/nfl',     name: 'NFL',        emoji: '🏈' },
+  { key: 'golf',       path: 'golf',             name: 'Golf',       emoji: '⛳' },
+  { key: 'mma',        path: 'mma',              name: 'UFC / MMA',  emoji: '🥊' },
+  { key: 'rugby',      path: 'rugby',            name: 'Rugby',      emoji: '🏉' },
 ];
+
+const RACING_KEYS = new Set(['f1', 'nascar', 'indycar']);
 
 async function safeJson(url) {
   try {
@@ -37,63 +32,85 @@ async function safeJson(url) {
   } catch { return null; }
 }
 
-// Try general scoreboard; if empty, discover leagues and fetch those
 async function fetchSportEvents(sport) {
   const base = `${ESPN}/${sport.path}`;
   let events = [];
 
-  // 1. General scoreboard (works for some sports like F1, NBA)
   const general = await safeJson(`${base}/scoreboard`);
-  if (general?.events?.length) {
-    events = general.events;
-  }
+  if (general?.events?.length) events = general.events;
 
-  // 2. If no events, discover leagues and fetch per-league scoreboards
-  if (events.length === 0) {
-    const leaguesJson = await safeJson(`${base}/leagues`);
-    const ids = (leaguesJson?.leagues ?? []).map(l => String(l.id)).slice(0, 6);
+  if (!events.length) {
+    const leagues = await safeJson(`${base}/leagues`);
+    const ids = (leagues?.leagues ?? []).map(l => String(l.id)).slice(0, 6);
     if (ids.length) {
-      const results = await Promise.all(ids.map(id => safeJson(`${base}/${id}/scoreboard`)));
-      events = results.flatMap(r => r?.events ?? []);
+      const res = await Promise.all(ids.map(id => safeJson(`${base}/${id}/scoreboard`)));
+      events = res.flatMap(r => r?.events ?? []);
     }
   }
 
   return events;
 }
 
-function parseCompetitor(c) {
+// Parse a single competitor — handles both team sports AND racing (F1 uses athletes)
+function parseCompetitor(c, sportKey) {
+  const isRacing = RACING_KEYS.has(sportKey);
+
+  let name = '?';
+  if (isRacing) {
+    // F1/racing: driver name is in athlete, team is the constructor
+    name = c.athlete?.shortName || c.athlete?.displayName
+        || c.team?.shortDisplayName || c.team?.abbreviation || '?';
+  } else {
+    name = c.team?.shortDisplayName || c.team?.abbreviation
+        || c.team?.displayName || c.athlete?.shortName
+        || c.athlete?.displayName || '?';
+  }
+
   return {
-    name:   c.team?.shortDisplayName || c.team?.abbreviation || c.team?.displayName || '?',
-    score:  c.score ?? '',
-    winner: c.winner === 'true' || c.winner === true,
+    name,
+    score:    c.score ?? '',
+    winner:   c.winner === 'true' || c.winner === true,
+    order:    Number(c.order ?? c.homeAway === 'home' ? 0 : 1),
   };
 }
+
+const NOW = Date.now();
+const H24 = 24 * 60 * 60 * 1000;
+const H48 = 48 * 60 * 60 * 1000;
 
 function parseEvent(ev, sport) {
   const comp = ev?.competitions?.[0];
   if (!comp) return null;
 
-  const state      = comp.status?.type?.state ?? 'post';        // 'in' | 'pre' | 'post'
-  const detail     = comp.status?.type?.detail ?? '';
-  const clock      = comp.status?.displayClock ?? '';
-  const period     = comp.status?.period ?? null;
-  const summary    = comp.status?.summary ?? detail;
-  const venue      = comp.venue?.fullName ?? '';
-  const competitors = (comp.competitors ?? []).map(parseCompetitor);
-  const name       = ev.shortName || ev.name || '';
+  const state  = comp.status?.type?.state ?? 'post';
+  const date   = comp.date ?? ev.date ?? null;
+  const evTime = date ? new Date(date).getTime() : null;
+
+  // Drop completed events older than 24 hours
+  if (state === 'post' && evTime && NOW - evTime > H24) return null;
+  // Drop upcoming events more than 48 hours away
+  if (state === 'pre' && evTime && evTime - NOW > H48) return null;
+
+  let competitors = (comp.competitors ?? []).map(c => parseCompetitor(c, sport.key));
+
+  // Racing: sort by finishing position (order field), show top 5 only
+  if (RACING_KEYS.has(sport.key)) {
+    competitors = competitors.sort((a, b) => a.order - b.order).slice(0, 5);
+  }
 
   return {
-    id:    ev.id,
-    sport: sport.key,
-    name:  sport.name,
-    emoji: sport.emoji,
-    match: name,
+    id:          ev.id,
+    sport:       sport.key,
+    sportName:   sport.name,
+    emoji:       sport.emoji,
+    match:       ev.shortName || ev.name || '',
     state,
-    summary,
-    detail,
-    clock,
-    period,
-    venue,
+    date,
+    summary:     comp.status?.summary ?? '',
+    detail:      comp.status?.type?.detail ?? '',
+    clock:       comp.status?.displayClock ?? '',
+    period:      comp.status?.period ?? null,
+    venue:       comp.venue?.fullName ?? '',
     competitors,
   };
 }
@@ -103,39 +120,45 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=360');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // Fetch all sports in parallel
   const sportResults = await Promise.allSettled(
-    SPORTS.map(sport => fetchSportEvents(sport).then(events => ({ sport, events })))
+    SPORTS.map(s => fetchSportEvents(s).then(events => ({ sport: s, events })))
   );
 
-  const allMatches = [];
-
-  for (const result of sportResults) {
-    if (result.status !== 'fulfilled') continue;
-    const { sport, events } = result.value;
-
-    // Deduplicate by event id within sport
+  const all = [];
+  for (const r of sportResults) {
+    if (r.status !== 'fulfilled') continue;
+    const { sport, events } = r.value;
     const seen = new Set();
     for (const ev of events) {
       if (!ev?.id || seen.has(ev.id)) continue;
       seen.add(ev.id);
       const parsed = parseEvent(ev, sport);
-      if (parsed) allMatches.push(parsed);
+      if (parsed) all.push(parsed);
     }
   }
 
-  // Sort: live → upcoming → completed; within each group keep original order
-  const order = { in: 0, pre: 1, post: 2 };
-  allMatches.sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9));
+  // Sort: live → upcoming (soonest first) → completed (most recent first)
+  all.sort((a, b) => {
+    const order = { in: 0, pre: 1, post: 2 };
+    const od = (order[a.state] ?? 9) - (order[b.state] ?? 9);
+    if (od !== 0) return od;
+    if (a.state === 'pre') {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();  // soonest first
+    }
+    return new Date(b.date).getTime() - new Date(a.date).getTime();    // most recent first
+  });
 
-  const live    = allMatches.filter(m => m.state === 'in');
-  const pre     = allMatches.filter(m => m.state === 'pre');
-  const post    = allMatches.filter(m => m.state === 'post');
+  const live      = all.filter(m => m.state === 'in');
+  const upcoming  = all.filter(m => m.state === 'pre');
+  const completed = all.filter(m => m.state === 'post');
 
-  console.log(`/api/sports: ${allMatches.length} total (${live.length} live, ${pre.length} upcoming)`);
+  console.log(`/api/sports: ${live.length} live, ${upcoming.length} upcoming, ${completed.length} completed`);
 
   return res.status(200).json({
-    matches: allMatches,
-    counts: { live: live.length, upcoming: pre.length, completed: post.length },
+    matches: all,
+    live,
+    upcoming,
+    completed,
+    counts: { live: live.length, upcoming: upcoming.length, completed: completed.length },
   });
 }

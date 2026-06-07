@@ -1,104 +1,175 @@
 import { memo, useState } from 'react';
 import { useSports } from '../hooks/useSports.js';
 
-const STATE_BADGE = {
-  in:   { label: '🔴 LIVE',    cls: 'sw-live'    },
-  pre:  { label: 'Upcoming',   cls: 'sw-upcoming' },
-  post: { label: 'Finished',   cls: 'sw-finished' },
-};
+// Format event date/time relative to now
+function formatEventTime(dateStr) {
+  if (!dateStr) return '';
+  const d   = new Date(dateStr);
+  const now  = new Date();
+  const diff = d - now;
 
-function ScoreRow({ competitor, highlight }) {
+  const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+
+  const today    = now.toDateString();
+  const tomorrow = new Date(now.getTime() + 86400000).toDateString();
+
+  if (d.toDateString() === today)    return `Today ${timeStr} IST`;
+  if (d.toDateString() === tomorrow) return `Tomorrow ${timeStr} IST`;
+
+  return d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
+       + ` · ${timeStr} IST`;
+}
+
+function CompetitorRow({ c, isRacing, idx, state }) {
+  const showScore = state !== 'pre' && c.score !== '' && c.score !== '0';
   return (
-    <div className={`sw-team${highlight ? ' sw-winner' : ''}`}>
-      <span className="sw-team-name">{competitor.name}</span>
-      {competitor.score !== '' && (
-        <span className="sw-team-score">{competitor.score}</span>
-      )}
+    <div className={`sp-team${c.winner ? ' sp-winner' : ''}`}>
+      {isRacing && <span className="sp-pos">P{idx + 1}</span>}
+      <span className="sp-team-name">{c.name}</span>
+      {showScore && <span className="sp-score">{c.score}</span>}
     </div>
   );
 }
 
-function MatchCard({ match }) {
-  const badge = STATE_BADGE[match.state] ?? STATE_BADGE.post;
+function MatchCard({ m }) {
+  const isRacing = ['f1', 'nascar', 'indycar'].includes(m.sport);
+  const isLive   = m.state === 'in';
+  const isPre    = m.state === 'pre';
+  const isPost   = m.state === 'post';
 
   return (
-    <div className={`sw-card ${badge.cls}`}>
-      {/* Sport label + status */}
-      <div className="sw-card-head">
-        <span className="sw-sport">{match.emoji} {match.name}</span>
-        <span className={`sw-badge ${badge.cls}-badge`}>{badge.label}</span>
+    <div className={`sp-card${isLive ? ' sp-card-live' : isPre ? ' sp-card-pre' : ' sp-card-done'}`}>
+      {/* Sport + status row */}
+      <div className="sp-card-top">
+        <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>
+        {isLive && (
+          <span className="sp-live-badge">
+            <span className="sp-live-dot" />LIVE
+            {m.clock ? ` · ${m.clock}` : ''}
+            {m.period ? ` · ${m.detail || 'P' + m.period}` : ''}
+          </span>
+        )}
+        {isPre  && <span className="sp-pre-badge">Upcoming</span>}
+        {isPost && <span className="sp-done-badge">✓ Final</span>}
       </div>
 
-      {/* Match name (event title) */}
-      <p className="sw-match-name">{match.match}</p>
+      {/* Match title */}
+      <p className="sp-match">{m.match}</p>
 
-      {/* Competitors + scores */}
-      {match.competitors.length > 0 && (
-        <div className="sw-scores">
-          {match.competitors.map((c, i) => (
-            <ScoreRow key={i} competitor={c} highlight={c.winner && match.state === 'post'} />
+      {/* Competitors / results */}
+      {m.competitors.length > 0 ? (
+        <div className="sp-teams">
+          {m.competitors.map((c, i) => (
+            <CompetitorRow key={i} c={c} isRacing={isRacing} idx={i} state={m.state} />
           ))}
         </div>
-      )}
+      ) : null}
 
-      {/* Status detail (e.g. "Q3 · 4:32", "Day 2 · Stumps", "Lap 42/57") */}
-      {(match.detail || match.summary) && (
-        <p className="sw-status">{match.detail || match.summary}</p>
-      )}
+      {/* Time for upcoming, status for live/finished */}
+      <div className="sp-meta">
+        {isPre  && <span className="sp-time">🕐 {formatEventTime(m.date)}</span>}
+        {isLive && m.summary && <span className="sp-detail">{m.summary}</span>}
+        {isPost && m.summary && <span className="sp-detail">{m.summary}</span>}
+        {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
+      </div>
     </div>
   );
 }
 
-const ALL_SPORTS = [
-  { key: 'all',        label: 'All'        },
+const TABS = [
+  { key: 'live',     label: 'Live',      icon: '🔴' },
+  { key: 'upcoming', label: 'Upcoming',  icon: '📅' },
+  { key: 'results',  label: 'Results',   icon: '✓'  },
+];
+
+const SPORT_FILTERS = [
+  { key: 'all',        label: 'All'         },
   { key: 'cricket',    label: '🏏 Cricket'  },
   { key: 'football',   label: '⚽ Football' },
-  { key: 'f1',         label: '🏎️ F1'       },
+  { key: 'f1',         label: '🏎️ F1'      },
   { key: 'basketball', label: '🏀 NBA'      },
   { key: 'tennis',     label: '🎾 Tennis'   },
   { key: 'hockey',     label: '🏒 Hockey'   },
   { key: 'nfl',        label: '🏈 NFL'      },
-  { key: 'baseball',   label: '⚾ Baseball' },
+  { key: 'baseball',   label: '⚾ MLB'      },
   { key: 'golf',       label: '⛳ Golf'     },
   { key: 'mma',        label: '🥊 MMA'      },
   { key: 'rugby',      label: '🏉 Rugby'    },
 ];
 
 export default memo(function SportsWidget() {
-  const { matches, liveMatches, upcomingMatches, counts, loading } = useSports();
-  const [filter, setFilter] = useState('all');
+  const { live, upcoming, completed, counts, loading } = useSports();
+  const [tab,    setTab]    = useState('live');
+  const [sport,  setSport]  = useState('all');
 
-  // Which sports actually have data?
-  const activeSports = new Set(matches.map(m => m.sport));
-  const visibleTabs  = ALL_SPORTS.filter(s => s.key === 'all' || activeSports.has(s.key));
+  // Decide default tab: show live if any, else upcoming, else results
+  const defaultTab = counts.live > 0 ? 'live' : counts.upcoming > 0 ? 'upcoming' : 'results';
+  const activeTab  = tab === 'live' && counts.live === 0 ? defaultTab : tab;
 
-  // Apply filter
-  const shown = (filter === 'all' ? matches : matches.filter(m => m.sport === filter))
-    .slice(0, 20);
+  // Matches for the active section
+  const sectionMap = { live, upcoming, results: completed };
+  const sectionMatches = sectionMap[activeTab] ?? [];
 
-  // Don't render if nothing to show and not loading
-  if (!loading && matches.length === 0) return null;
+  // Sport filter — only show sport buttons that have data in this section
+  const sports = new Set(sectionMatches.map(m => m.sport));
+  const visibleSports = SPORT_FILTERS.filter(s => s.key === 'all' || sports.has(s.key));
+  const filtered = sport === 'all'
+    ? sectionMatches
+    : sectionMatches.filter(m => m.sport === sport);
+
+  // Don't render if truly nothing to show
+  const totalMatches = live.length + upcoming.length + completed.length;
+  if (!loading && totalMatches === 0) return null;
+
+  const emptyMsg = {
+    live:     'No live matches right now.',
+    upcoming: 'No upcoming matches in the next 48 hours.',
+    results:  'No recent results in the last 24 hours.',
+  };
 
   return (
-    <section className="sw-wrap" aria-label="Live sports scores">
+    <section className="sp-wrap" aria-label="Sports scores">
       {/* Header */}
-      <div className="sw-head">
-        <span className="sw-title">🏆 Sports</span>
+      <div className="sp-head">
+        <span className="sp-title">🏆 Sports</span>
         {counts.live > 0 && (
-          <span className="sw-live-count">🔴 {counts.live} live</span>
+          <span className="sp-live-count">
+            <span className="sp-live-dot" />{counts.live} live
+          </span>
         )}
       </div>
 
-      {/* Sport filter tabs — only show tabs for sports with data */}
-      {visibleTabs.length > 1 && (
-        <div className="sw-tabs" role="tablist">
-          {visibleTabs.map(s => (
+      {/* Section tabs: Live | Upcoming | Results */}
+      <div className="sp-section-tabs" role="tablist">
+        {TABS.map(t => {
+          const count = t.key === 'results'
+            ? counts.completed
+            : t.key === 'live' ? counts.live : counts.upcoming;
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={activeTab === t.key}
+              className={`sp-section-tab${activeTab === t.key ? ' sp-stab-on' : ''}${count === 0 ? ' sp-stab-empty' : ''}`}
+              onClick={() => { setTab(t.key); setSport('all'); }}
+            >
+              {t.icon} {t.label}
+              {count > 0 && <span className="sp-stab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sport filter strip — only when multiple sports have data */}
+      {visibleSports.length > 2 && (
+        <div className="sp-sport-strip" role="tablist" aria-label="Filter by sport">
+          {visibleSports.map(s => (
             <button
               key={s.key}
               role="tab"
-              aria-selected={filter === s.key}
-              className={`sw-tab${filter === s.key ? ' sw-tab-on' : ''}`}
-              onClick={() => setFilter(s.key)}
+              aria-selected={sport === s.key}
+              className={`sp-sport-btn${sport === s.key ? ' sp-sbtn-on' : ''}`}
+              onClick={() => setSport(s.key)}
             >
               {s.label}
             </button>
@@ -107,13 +178,15 @@ export default memo(function SportsWidget() {
       )}
 
       {/* Match cards */}
-      {loading && matches.length === 0 ? (
-        <div className="sw-skeleton" aria-hidden />
-      ) : shown.length === 0 ? (
-        <p className="sw-empty">No {filter === 'all' ? '' : filter + ' '}matches right now.</p>
+      {loading && totalMatches === 0 ? (
+        <div className="sp-skeleton" aria-hidden />
+      ) : filtered.length === 0 ? (
+        <p className="sp-empty">{emptyMsg[activeTab]}</p>
       ) : (
-        <div className="sw-grid">
-          {shown.map(m => <MatchCard key={`${m.sport}-${m.id}`} match={m} />)}
+        <div className="sp-grid">
+          {filtered.slice(0, 20).map(m => (
+            <MatchCard key={`${m.sport}-${m.id}`} m={m} />
+          ))}
         </div>
       )}
     </section>
