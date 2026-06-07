@@ -1,7 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { useSports } from '../hooks/useSports.js';
 
-// Sport display config (order matters — determines display order)
 const SPORT_CONFIG = [
   { key: 'cricket',    name: 'Cricket',    emoji: '🏏' },
   { key: 'football',   name: 'Football',   emoji: '⚽' },
@@ -18,141 +17,113 @@ const SPORT_CONFIG = [
 
 const RACING = new Set(['f1', 'nascar', 'indycar']);
 
-// Format event time relative to now in IST
-function fmtTime(dateStr) {
-  if (!dateStr) return '';
-  const d   = new Date(dateStr);
+// ── Date/time helpers ─────────────────────────────────────────────────────
+function toIST(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr);
+}
+
+function fmtMatchTime(dateStr) {
+  const d = toIST(dateStr);
+  if (!d) return '';
   const now = new Date();
   const opts = { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' };
-  const t   = d.toLocaleTimeString('en-IN', opts);
-  const day = d.toDateString();
-  if (day === now.toDateString())
-    return `Today · ${t} IST`;
-  if (day === new Date(Date.now() + 86400000).toDateString())
-    return `Tomorrow · ${t} IST`;
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) + ` · ${t} IST`;
+  const timeStr = d.toLocaleTimeString('en-IN', opts) + ' IST';
+  if (d.toDateString() === now.toDateString()) return `Today · ${timeStr}`;
+  if (d.toDateString() === new Date(Date.now() + 86400000).toDateString()) return `Tomorrow · ${timeStr}`;
+  const dateStr2 = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+  return `${dateStr2} · ${timeStr}`;
 }
 
-// ── Single competitor row ─────────────────────────────────────────────────
-function CompRow({ c, idx, isRacing, showScore }) {
-  return (
-    <div className={`sp-team${c.winner ? ' sp-winner' : ''}`}>
-      {isRacing && <span className="sp-pos">P{idx + 1}</span>}
-      <span className="sp-team-name">{c.name}</span>
-      {showScore && c.score !== '' && (
-        <span className="sp-score">{c.score}</span>
-      )}
-    </div>
-  );
+function fmtResultDate(dateStr) {
+  const d = toIST(dateStr);
+  if (!d) return '';
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 }
 
-// ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ m }) {
-  const isRacing = RACING.has(m.sport);
+// ── Match card ─────────────────────────────────────────────────────────────
+function MatchCard({ m, showSport }) {
   const isLive   = m.state === 'in';
   const isPre    = m.state === 'pre';
+  const isPost   = m.state === 'post';
+  const isRacing = RACING.has(m.sport);
 
   return (
-    <div className={`sp-card${isLive ? ' sp-card-live' : isPre ? ' sp-card-pre' : ' sp-card-done'}`}>
-      {/* Match name */}
+    <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
+
+      {/* Sport badge — shown only in "All" view */}
+      {showSport && (
+        <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>
+      )}
+
+      {/* Match title */}
       <p className="sp-match">{m.match}</p>
 
-      {/* Competitors */}
+      {/* Live: clock + period */}
+      {isLive && (m.clock || m.period || m.detail) && (
+        <p className="sp-live-clock">
+          {[
+            m.period  ? `Period ${m.period}` : null,
+            m.clock   || null,
+            m.detail  || null,
+          ].filter(Boolean).join(' · ')}
+        </p>
+      )}
+
+      {/* Competitors / scores */}
       {m.competitors.length > 0 && (
         <div className="sp-teams">
           {m.competitors.map((c, i) => (
-            <CompRow key={i} c={c} idx={i} isRacing={isRacing} showScore={!isPre} />
+            <div key={i} className={`sp-team${c.winner ? ' sp-winner' : ''}`}>
+              {isRacing && <span className="sp-pos">P{i + 1}</span>}
+              <span className="sp-team-name">{c.name}</span>
+              {/* Score shown for live + results, not pre */}
+              {!isPre && c.score !== '' && c.score !== undefined && (
+                <span className="sp-score">{c.score}</span>
+              )}
+            </div>
           ))}
         </div>
       )}
 
-      {/* Status / time */}
+      {/* Footer info */}
       <div className="sp-meta">
-        {isPre && m.date && <span className="sp-time">🕐 {fmtTime(m.date)}</span>}
-        {isLive && (m.detail || m.clock) && (
-          <span className="sp-detail">
-            {[m.clock, m.detail].filter(Boolean).join(' · ')}
-          </span>
+        {/* Upcoming: show start time */}
+        {isPre && m.date && (
+          <span className="sp-time">🕐 {fmtMatchTime(m.date)}</span>
         )}
-        {!isLive && !isPre && m.summary && (
-          <span className="sp-detail">{m.summary}</span>
+        {/* Results: show date + summary */}
+        {isPost && (
+          <>
+            {m.date && <span className="sp-meta-date">📅 {fmtResultDate(m.date)}</span>}
+            {m.summary && <span className="sp-summary">{m.summary}</span>}
+          </>
         )}
+        {/* Live: show summary (e.g. "2nd Innings", "Q3") */}
+        {isLive && m.summary && !m.clock && (
+          <span className="sp-summary">{m.summary}</span>
+        )}
+        {/* Venue */}
         {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
       </div>
     </div>
   );
 }
 
-// ── One sport's section with its own Live/Upcoming/Results mini-tabs ───────
-function SportSection({ cfg, matches }) {
-  const live     = useMemo(() => matches.filter(m => m.state === 'in'),   [matches]);
-  const upcoming = useMemo(() => matches.filter(m => m.state === 'pre'),  [matches]);
-  const results  = useMemo(() => matches.filter(m => m.state === 'post'), [matches]);
-
-  // Start on the most relevant tab
-  const [tab, setTab] = useState(() =>
-    live.length > 0 ? 'live' : upcoming.length > 0 ? 'upcoming' : 'results'
-  );
-
-  // If selected tab has no data, fall back
-  const activeTab = (() => {
-    if (tab === 'live'     && live.length)     return 'live';
-    if (tab === 'upcoming' && upcoming.length) return 'upcoming';
-    if (tab === 'results'  && results.length)  return 'results';
-    return live.length ? 'live' : upcoming.length ? 'upcoming' : 'results';
-  })();
-
-  const shown = activeTab === 'live' ? live : activeTab === 'upcoming' ? upcoming : results;
-
+// ── Section block (Live / Upcoming / Results) ─────────────────────────────
+function Section({ title, icon, matches, showSport, max = 12 }) {
+  if (matches.length === 0) return null;
+  const shown = matches.slice(0, max);
   return (
     <div className="sp-section">
-      {/* Sport header */}
-      <div className="sp-section-head">
-        <span className="sp-section-name">{cfg.emoji} {cfg.name}</span>
-        <div className="sp-section-badges">
-          {live.length > 0 && (
-            <span className="sp-live-badge">
-              <span className="sp-live-dot" />LIVE {live.length}
-            </span>
-          )}
-        </div>
+      <div className="sp-section-hdr">
+        <span className="sp-section-title">{icon} {title}</span>
+        <span className="sp-section-count">{matches.length} {matches.length === 1 ? 'match' : 'matches'}</span>
       </div>
-
-      {/* Mini tabs — only show tabs that have data */}
-      {(live.length + upcoming.length + results.length) > 0 && (
-        <div className="sp-mini-tabs">
-          {live.length > 0 && (
-            <button
-              className={`sp-mini-tab${activeTab === 'live' ? ' sp-mtab-on sp-mtab-live' : ''}`}
-              onClick={() => setTab('live')}
-            >
-              🔴 Live <span className="sp-mtab-cnt">{live.length}</span>
-            </button>
-          )}
-          {upcoming.length > 0 && (
-            <button
-              className={`sp-mini-tab${activeTab === 'upcoming' ? ' sp-mtab-on sp-mtab-pre' : ''}`}
-              onClick={() => setTab('upcoming')}
-            >
-              📅 Upcoming <span className="sp-mtab-cnt">{upcoming.length}</span>
-            </button>
-          )}
-          {results.length > 0 && (
-            <button
-              className={`sp-mini-tab${activeTab === 'results' ? ' sp-mtab-on sp-mtab-done' : ''}`}
-              onClick={() => setTab('results')}
-            >
-              ✓ Results <span className="sp-mtab-cnt">{results.length}</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Match cards — 2-col grid if 2+ matches, single col otherwise */}
       <div className={`sp-cards${shown.length >= 2 ? ' sp-cards-grid' : ''}`}>
-        {shown.slice(0, 10).map(m => (
-          <MatchCard key={m.id} m={m} />
-        ))}
+        {shown.map(m => <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={showSport} />)}
       </div>
     </div>
   );
@@ -160,45 +131,81 @@ function SportSection({ cfg, matches }) {
 
 // ── Main widget ───────────────────────────────────────────────────────────
 export default memo(function SportsWidget() {
-  const { matches, counts, loading } = useSports();
+  const { live, upcoming, completed, counts, loading } = useSports();
+  const [sport, setSport] = useState('all');
 
-  // Group matches by sport key
-  const bySport = useMemo(() => {
-    const map = {};
-    for (const m of matches) {
-      (map[m.sport] ??= []).push(m);
-    }
-    return map;
-  }, [matches]);
+  // Sports that actually have data
+  const all = useMemo(() => [...live, ...upcoming, ...completed], [live, upcoming, completed]);
+  const activeSports = useMemo(() => {
+    const keys = new Set(all.map(m => m.sport));
+    return SPORT_CONFIG.filter(s => keys.has(s.key));
+  }, [all]);
 
-  // Sports that have at least one match, in display order
-  const activeSports = SPORT_CONFIG.filter(s => bySport[s.key]?.length > 0);
+  // Filter helper
+  const filter = (arr) => sport === 'all' ? arr : arr.filter(m => m.sport === sport);
 
-  if (!loading && activeSports.length === 0) return null;
+  const fLive     = filter(live);
+  const fUpcoming = filter(upcoming);
+  const fResults  = filter(completed);
+  const total     = fLive.length + fUpcoming.length + fResults.length;
+
+  if (!loading && all.length === 0) return null;
 
   return (
     <section className="sp-wrap" aria-label="Sports scores">
-      {/* Header */}
+
+      {/* Header row */}
       <div className="sp-head">
         <span className="sp-title">🏆 Sports</span>
-        {counts.live > 0 && (
-          <span className="sp-live-count">
-            <span className="sp-live-dot" />{counts.live} live
-          </span>
-        )}
+        <div className="sp-head-right">
+          {counts.live > 0 && (
+            <span className="sp-live-pill">
+              <span className="sp-live-dot" />{counts.live} live
+            </span>
+          )}
+          <span className="sp-refresh-note">· refreshes every 3 min</span>
+        </div>
       </div>
 
-      {loading && activeSports.length === 0 ? (
-        <div className="sp-skeleton" aria-hidden />
-      ) : (
-        <div className="sp-sections">
-          {activeSports.map(cfg => (
-            <SportSection
-              key={cfg.key}
-              cfg={cfg}
-              matches={bySport[cfg.key]}
-            />
+      {/* Sport filter strip: All | Cricket | Football | … */}
+      {activeSports.length > 0 && (
+        <div className="sp-filter" role="tablist" aria-label="Filter by sport">
+          <button
+            role="tab"
+            aria-selected={sport === 'all'}
+            className={`sp-filter-btn${sport === 'all' ? ' sp-fbtn-on' : ''}`}
+            onClick={() => setSport('all')}
+          >
+            All
+          </button>
+          {activeSports.map(s => (
+            <button
+              key={s.key}
+              role="tab"
+              aria-selected={sport === s.key}
+              className={`sp-filter-btn${sport === s.key ? ' sp-fbtn-on' : ''}`}
+              onClick={() => setSport(s.key)}
+            >
+              {s.emoji} {s.name}
+            </button>
           ))}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && all.length === 0 && <div className="sp-skeleton" aria-hidden />}
+
+      {/* No data for selected sport */}
+      {!loading && total === 0 && all.length > 0 && (
+        <p className="sp-empty">No {sport === 'all' ? '' : sport + ' '}matches in the last 48 hours.</p>
+      )}
+
+      {/* Three sections — all visible at once */}
+      {total > 0 && (
+        <div className="sp-body">
+          <Section title="Live"           icon="🔴" matches={fLive}     showSport={sport === 'all'} />
+          <Section title="Upcoming"       icon="📅" matches={fUpcoming} showSport={sport === 'all'} max={8} />
+          <Section title="Recent Results" icon="✓"  matches={fResults}  showSport={sport === 'all'} max={6} />
         </div>
       )}
     </section>
