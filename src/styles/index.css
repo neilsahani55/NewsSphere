@@ -2049,24 +2049,25 @@ button { font-family: inherit; }
 .sp-section-title { font-size: .78rem; font-weight: 700; color: var(--ink); }
 .sp-section-count { font-size: .68rem; color: var(--ink3); }
 
-/* Cards — 4-column grid; fewer cards keep same 1/4 width */
+/* Cards — 4-column grid; minmax(0,1fr) forces truly equal columns */
 .sp-grid4 {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .4rem;
 }
-@media (max-width: 1024px) { .sp-grid4 { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 720px)  { .sp-grid4 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 480px)  { .sp-grid4 { grid-template-columns: 1fr; } }
+@media (max-width: 1024px) { .sp-grid4 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px)  { .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px)  { .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Keep for legacy use in other widgets */
 .sp-cards      { display: flex; flex-direction: column; gap: .4rem; }
 .sp-cards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .4rem; }
 
-/* Match card — compact for 3-col grid */
+/* Match card — min-width:0 prevents content from expanding the grid column */
 .sp-card {
   border: 1px solid var(--border); border-radius: var(--rsm);
   padding: .5rem .6rem; background: var(--paper3);
   display: flex; flex-direction: column; gap: .22rem;
+  min-width: 0; overflow: hidden;
 }
 .sp-card-live { border-left: 3px solid #dc2626; }
 .sp-card-pre  { border-left: 3px solid #3b82f6; }
@@ -2721,7 +2722,7 @@ mark.tts-hl {
 
 @media (max-width: 540px) {
   .sp-profile-card { padding: 1rem; }
-  .sp-topic-grid { grid-template-columns: repeat(2, 1fr); }
+  .sp-topic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-tab-label { display: none; }
   .sp-saved-img { width: 64px; height: 50px; }
 }
@@ -3457,7 +3458,7 @@ mark.tts-hl {
   .fuel-grid { gap: .45rem; }
 
   /* Sports */
-  .sp-grid4 { grid-template-columns: repeat(3, 1fr); }
+  .sp-grid4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sp-match { font-size: .82rem; }
 }
 
@@ -3588,7 +3589,7 @@ mark.tts-hl {
   .mkt-value { font-size: .76rem; }
 
   /* Sports: 2 columns on mobile (never collapse to 1) */
-  .sp-grid4 { grid-template-columns: repeat(2, 1fr); }
+  .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-tab { padding: .3rem .58rem; font-size: .74rem; }
 
   /* Cards smaller */
@@ -3625,7 +3626,7 @@ mark.tts-hl {
   .mkt-tile { flex: 0 0 68px; }
   .mkt-value { font-size: .72rem; }
   /* Sports: keep 2 columns even on smallest phones */
-  .sp-grid4 { grid-template-columns: repeat(2, 1fr); }
+  .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .th-year { font-size: 1.65rem; }
   .hcard-title { font-size: .8rem; }
   .hcard-feat .hcard-title { font-size: .88rem; }
