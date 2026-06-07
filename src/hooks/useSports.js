@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 
-const CACHE_KEY = 'ns_sports_v3';
+const CACHE_KEY = 'ns_sports_v4';
 const CACHE_TTL = 3 * 60 * 1000;
 
 function readCache() {

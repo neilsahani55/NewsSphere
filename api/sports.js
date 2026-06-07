@@ -103,22 +103,52 @@ const SDB_META = {
   'Swimming':     { key: 'swimming',    name: 'Swimming',     emoji: '🏊' },
 };
 
+// Strip HTML tags from SportsDB text fields (strResult/strProgress contain <br> etc.)
+function stripTags(str) {
+  return (str ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Parse winner name from strResult text e.g. "Middlesex t20 won by 45 runs"
+// Returns { homeWin: bool, awayWin: bool }
+function parseWinner(strResult, homeName, awayName) {
+  if (!strResult || !homeName || !awayName) return { homeWin: false, awayWin: false };
+  const r = strResult.toLowerCase();
+  const h = homeName.toLowerCase();
+  const a = awayName.toLowerCase();
+  // "X won" or "X win"
+  const homeWin = r.includes(h + ' won') || r.includes(h + ' win') || r.startsWith(h + ' ');
+  const awayWin = r.includes(a + ' won') || r.includes(a + ' win') || r.startsWith(a + ' ');
+  return { homeWin, awayWin };
+}
+
 function sdbToMatch(ev, overrideSport) {
   const sport = overrideSport ?? ev.strSport ?? 'Unknown';
   const meta  = SDB_META[sport] ?? { key: sport.toLowerCase().replace(/\s+/g, ''), name: sport, emoji: '🏅' };
 
-  const stTxt = ((ev.strStatus ?? '') + ' ' + (ev.strProgress ?? '')).toLowerCase();
+  const rawStatus   = (ev.strStatus ?? '').trim();
+  const stTxt       = (rawStatus + ' ' + (ev.strProgress ?? '')).toLowerCase();
+
+  // Explicit "not started" signals from SportsDB — trust these over time inference
+  // NS = Not Started; these appear even after scheduled time if SDB hasn't updated yet
+  const isExplicitlyNotStarted =
+    rawStatus === 'NS' || rawStatus === '' ||
+    stTxt.includes('not started') || stTxt.includes('fixture') ||
+    stTxt.includes('scheduled') || stTxt.includes('postponed');
+
   const isLive     = stTxt.includes('live') || stTxt.includes('inning') || stTxt.includes('progress') || stTxt.includes('quarter') || stTxt.includes('half') || stTxt.includes('set ');
-  const isDoneText = !isLive && (stTxt.includes('finish') || stTxt.includes('complet') || stTxt.includes('result') || stTxt.includes('final') || stTxt.includes('won'));
+  const isDoneText = !isLive && !isExplicitlyNotStarted && (stTxt.includes('finish') || stTxt.includes('complet') || stTxt.includes('result') || stTxt.includes('final') || stTxt.includes('won') || stTxt.includes(' win'));
   const hasBothScores = ev.intHomeScore != null && ev.intAwayScore != null;
 
   const dateStr = ev.strTimestamp
     ?? (ev.dateEvent && ev.strTime ? `${ev.dateEvent}T${ev.strTime}+00:00` : null)
     ?? (ev.dateEvent ? `${ev.dateEvent}T00:00:00Z` : null);
   const evTime = dateStr ? new Date(dateStr).getTime() : null;
-  const isPast = evTime != null && evTime < NOW - H1;
 
-  // Key fix: past events with no status text → completed, not upcoming
+  // isPast: only override to 'post' if NOT explicitly "not started" by SportsDB
+  // This prevents NS/empty-status events from landing in Results just because
+  // their scheduled time has passed and SportsDB hasn't updated yet.
+  const isPast = evTime != null && evTime < NOW - H1 && !isExplicitlyNotStarted;
+
   const state = isLive ? 'in'
     : (isDoneText || hasBothScores || isPast) ? 'post'
     : 'pre';
@@ -130,11 +160,25 @@ function sdbToMatch(ev, overrideSport) {
 
   const hs = ev.intHomeScore != null ? String(ev.intHomeScore) : '';
   const as = ev.intAwayScore != null ? String(ev.intAwayScore) : '';
-  const hw = state === 'post' && Number(ev.intHomeScore) > Number(ev.intAwayScore);
-  const aw = state === 'post' && Number(ev.intAwayScore) > Number(ev.intHomeScore);
 
   const [homeName, awayName] = parseVsNames(ev.strEvent, ev.strHomeTeam, ev.strAwayTeam);
   const searchT = [homeName, awayName, ev.strLeague, ev.strSport].join(' ');
+
+  // Winner: score-based first, fall back to strResult text parsing
+  let hw = state === 'post' && hasBothScores && Number(ev.intHomeScore) > Number(ev.intAwayScore);
+  let aw = state === 'post' && hasBothScores && Number(ev.intAwayScore) > Number(ev.intHomeScore);
+  if (state === 'post' && !hw && !aw && ev.strResult) {
+    const { homeWin, awayWin } = parseWinner(ev.strResult, homeName, awayName);
+    hw = homeWin;
+    aw = awayWin;
+  }
+
+  // Strip HTML from SportsDB text fields (<br>, <b> etc. appear in strResult/strProgress)
+  const cleanResult   = stripTags(ev.strResult);
+  const cleanProgress = stripTags(ev.strProgress);
+  const cleanStatus   = rawStatus === 'NS' ? '' : rawStatus; // hide bare "NS" from UI
+
+  const summary = cleanResult || (isLive ? cleanProgress || 'Live' : cleanStatus);
 
   return {
     id:        `sdb_${ev.idEvent}`,
@@ -145,8 +189,8 @@ function sdbToMatch(ev, overrideSport) {
     league:    ev.strLeague || ev.strSeason || '',
     state,
     date:      dateStr,
-    summary:   ev.strResult || (isLive ? ev.strProgress || 'Live' : ev.strStatus || ''),
-    detail:    ev.strProgress || '',
+    summary,
+    detail:    cleanProgress,
     clock:     isLive ? '🔴 Live' : '',
     period:    null,
     venue:     ev.strVenue || ev.strCountry || '',
