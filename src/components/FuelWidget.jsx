@@ -1,25 +1,10 @@
 import { memo } from 'react';
 import { useFuel } from '../hooks/useFuel.js';
 
-function formatIST(ts) {
-  if (!ts) return null;
-  const d = new Date(ts);
-  const sameDay = d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) ===
-                  new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-  const time = new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true,
-  }).format(d);
-  return sameDay ? `${time} IST` : new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  }).format(d);
-}
-
 export default memo(function FuelWidget() {
   const { data, loading } = useFuel();
   const hasCNG = data?.cng != null;
 
-  // While pipeline hasn't run yet, show a neutral "no data" state
   if (!loading && !data) {
     return (
       <section className="fuel-wrap" aria-label="Fuel prices">
@@ -37,12 +22,7 @@ export default memo(function FuelWidget() {
     <section className="fuel-wrap" aria-label="Today's fuel prices">
       <div className="fuel-head">
         <span className="fuel-title">⛽ Fuel Prices</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginLeft: 'auto' }}>
-          {data?.city && <span className="fuel-city">{data.city}</span>}
-          {data?.updatedAt && (
-            <span className="fuel-note">{formatIST(data.updatedAt)}</span>
-          )}
-        </div>
+        {data?.city && <span className="fuel-city" style={{ marginLeft: 'auto' }}>{data.city}</span>}
       </div>
 
       {loading && !data ? (
