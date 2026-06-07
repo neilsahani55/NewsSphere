@@ -1953,117 +1953,105 @@ button { font-family: inherit; }
 /* ── Sports Widget (sp-*) ───────────────────────────────────────── */
 .sp-wrap {
   background: var(--paper2); border: 1px solid var(--border);
-  border-radius: var(--rmd); padding: .75rem 1rem;
+  border-radius: var(--rmd); padding: .8rem 1rem 1rem;
 }
-/* Header */
-.sp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .6rem; }
-.sp-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink3); }
+
+/* Top header */
+.sp-head   { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+.sp-title  { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink3); }
 .sp-live-count {
-  display: flex; align-items: center; gap: .3rem;
-  font-size: .65rem; font-weight: 700; color: #dc2626;
-  background: #fee2e2; border-radius: 10px; padding: .15rem .5rem;
+  display: flex; align-items: center; gap: .3rem; font-size: .65rem; font-weight: 700;
+  color: #dc2626; background: #fee2e2; border-radius: 10px; padding: .15rem .55rem;
 }
 .sp-live-dot {
   width: 6px; height: 6px; border-radius: 50%; background: #dc2626;
-  animation: mkt-pulse 1.5s ease-in-out infinite;
+  animation: mkt-pulse 1.5s ease-in-out infinite; flex-shrink: 0;
+}
+/* Shared live badge */
+.sp-live-badge {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-size: .6rem; font-weight: 700; background: #dc2626; color: #fff;
+  border-radius: 10px; padding: .1rem .5rem; white-space: nowrap;
 }
 
-/* Section tabs: Live | Upcoming | Results */
-.sp-section-tabs {
-  display: flex; gap: .4rem; margin-bottom: .6rem; border-bottom: 1px solid var(--border);
-  padding-bottom: .5rem;
-}
-.sp-section-tab {
-  display: inline-flex; align-items: center; gap: .3rem;
-  padding: .3rem .7rem; border-radius: 6px; border: none; background: none;
-  font-size: .8rem; font-weight: 600; color: var(--ink3); cursor: pointer;
-  transition: background .15s, color .15s; white-space: nowrap;
-}
-.sp-section-tab:hover:not(.sp-stab-empty) { background: var(--paper3); color: var(--ink2); }
-.sp-stab-on   { background: var(--accent); color: #fff !important; border-radius: 6px; }
-.sp-stab-empty { opacity: .4; cursor: default; }
-.sp-stab-count {
-  background: rgba(255,255,255,.25); border-radius: 10px;
-  padding: .05rem .4rem; font-size: .68rem; font-weight: 700;
-}
-.sp-stab-on .sp-stab-count { background: rgba(255,255,255,.3); }
+/* Sports sections container */
+.sp-sections { display: flex; flex-direction: column; gap: 0; }
 
-/* Sport filter strip */
-.sp-sport-strip {
-  display: flex; gap: .3rem; overflow-x: auto; scrollbar-width: none;
-  -ms-overflow-style: none; margin-bottom: .6rem; padding-bottom: 2px;
+/* ── Per-sport section ── */
+.sp-section {
+  padding: .65rem 0;
+  border-bottom: 1px solid var(--border);
 }
-.sp-sport-strip::-webkit-scrollbar { display: none; }
-.sp-sport-btn {
-  flex-shrink: 0; border: 1px solid var(--border); border-radius: 20px;
-  background: none; padding: .18rem .6rem; font-size: .7rem; font-weight: 500;
-  color: var(--ink3); cursor: pointer; white-space: nowrap; transition: all .15s;
-}
-.sp-sport-btn:hover { background: var(--paper3); color: var(--ink2); }
-.sp-sbtn-on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.sp-section:last-child { border-bottom: none; padding-bottom: 0; }
 
-/* Match grid — 2 col desktop / 1 col mobile */
-.sp-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem;
+/* Sport section header */
+.sp-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-bottom: .45rem;
 }
-@media (max-width: 720px) { .sp-grid { grid-template-columns: 1fr; } }
+.sp-section-name {
+  font-size: .88rem; font-weight: 700; color: var(--ink);
+}
+.sp-section-badges { display: flex; align-items: center; gap: .3rem; }
+
+/* Mini tabs: Live | Upcoming | Results within each sport */
+.sp-mini-tabs {
+  display: flex; gap: .3rem; margin-bottom: .5rem; flex-wrap: wrap;
+}
+.sp-mini-tab {
+  display: inline-flex; align-items: center; gap: .25rem;
+  border: 1px solid var(--border); border-radius: 20px; background: none;
+  padding: .2rem .6rem; font-size: .72rem; font-weight: 600;
+  color: var(--ink3); cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sp-mini-tab:hover    { background: var(--paper3); color: var(--ink2); }
+.sp-mtab-on           { color: #fff; border-color: transparent; }
+.sp-mtab-live.sp-mtab-on { background: #dc2626; }
+.sp-mtab-pre.sp-mtab-on  { background: #2563eb; }
+.sp-mtab-done.sp-mtab-on { background: var(--ink3); }
+.sp-mtab-cnt {
+  font-size: .65rem; background: rgba(255,255,255,.2);
+  border-radius: 8px; padding: .05rem .35rem; font-weight: 700;
+}
+
+/* Cards — 1 col or 2-col grid */
+.sp-cards { display: flex; flex-direction: column; gap: .4rem; }
+.sp-cards-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: .4rem;
+}
+@media (max-width: 720px) { .sp-cards-grid { grid-template-columns: 1fr; } }
 
 /* Match card */
 .sp-card {
   border: 1px solid var(--border); border-radius: var(--rsm);
-  padding: .65rem .8rem; background: var(--paper3);
-  display: flex; flex-direction: column; gap: .3rem;
+  padding: .6rem .75rem; background: var(--paper3);
+  display: flex; flex-direction: column; gap: .28rem;
 }
 .sp-card-live { border-left: 3px solid #dc2626; }
 .sp-card-pre  { border-left: 3px solid #3b82f6; }
 .sp-card-done { border-left: 3px solid var(--border2); }
 
-/* Card top: sport label + status badge */
-.sp-card-top {
-  display: flex; align-items: center; justify-content: space-between; gap: .4rem;
-}
-.sp-sport-tag { font-size: .68rem; font-weight: 600; color: var(--ink3); }
-
-/* Status badges */
-.sp-live-badge {
-  display: inline-flex; align-items: center; gap: .25rem;
-  font-size: .62rem; font-weight: 700; background: #dc2626; color: #fff;
-  border-radius: 10px; padding: .1rem .5rem; white-space: nowrap;
-}
-.sp-pre-badge {
-  font-size: .62rem; font-weight: 700; background: #2563eb; color: #fff;
-  border-radius: 10px; padding: .1rem .45rem; white-space: nowrap;
-}
-.sp-done-badge {
-  font-size: .62rem; font-weight: 700; background: var(--border2); color: var(--ink3);
-  border-radius: 10px; padding: .1rem .45rem; white-space: nowrap;
-}
-
 /* Match title */
-.sp-match { font-size: .85rem; font-weight: 700; color: var(--ink); margin: 0; line-height: 1.3; }
+.sp-match { font-size: .83rem; font-weight: 700; color: var(--ink); margin: 0; line-height: 1.3; }
 
-/* Teams / competitors */
-.sp-teams { display: flex; flex-direction: column; gap: .22rem; margin-top: .1rem; }
-.sp-team {
-  display: flex; align-items: center; gap: .45rem; font-size: .8rem;
-}
+/* Competitors */
+.sp-teams { display: flex; flex-direction: column; gap: .2rem; margin-top: .05rem; }
+.sp-team  { display: flex; align-items: center; gap: .4rem; font-size: .79rem; }
 .sp-winner .sp-team-name { font-weight: 700; color: #16a34a; }
-.sp-pos        { font-size: .65rem; font-weight: 700; color: var(--hl); min-width: 1.5rem; }
-.sp-team-name  { flex: 1; color: var(--ink2); font-weight: 500; }
-.sp-score      { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 1.5rem; text-align: right; }
+.sp-pos       { font-size: .63rem; font-weight: 700; color: var(--hl); min-width: 1.5rem; }
+.sp-team-name { flex: 1; color: var(--ink2); font-weight: 500; }
+.sp-score     { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-/* Meta row: time / venue / status */
-.sp-meta {
-  display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .1rem;
-}
-.sp-time   { font-size: .7rem; color: #3b82f6; font-weight: 500; }
-.sp-detail { font-size: .68rem; color: var(--ink3); }
-.sp-venue  { font-size: .65rem; color: var(--ink3); }
+/* Meta row */
+.sp-meta   { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .05rem; }
+.sp-time   { font-size: .68rem; color: #3b82f6; font-weight: 600; }
+.sp-detail { font-size: .67rem; color: var(--ink3); }
+.sp-venue  { font-size: .63rem; color: var(--ink3); }
 
-/* Empty / skeleton */
-.sp-empty   { font-size: .78rem; color: var(--ink3); margin: .5rem 0 0; text-align: center; padding: .5rem; }
+/* Skeleton */
 .sp-skeleton {
-  height: 100px; border-radius: var(--rsm);
+  height: 90px; border-radius: var(--rsm); margin-top: .25rem;
   background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
   background-size: 200% 100%; animation: mkt-shimmer 1.4s ease-in-out infinite;
 }
