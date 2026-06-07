@@ -1986,6 +1986,15 @@ button { font-family: inherit; }
 .sp-fbtn-on {
   background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600;
 }
+/* Sport button with no data in current tab */
+.sp-fbtn-dim { opacity: .45; }
+/* Count badge inside filter button */
+.sp-fbtn-cnt {
+  display: inline-block; background: currentColor; border-radius: 8px;
+  padding: .02rem .32rem; font-size: .6rem; font-weight: 700;
+  color: var(--paper); opacity: .85; margin-left: .1rem;
+}
+.sp-fbtn-on .sp-fbtn-cnt { color: var(--ink); background: rgba(255,255,255,.3); opacity: 1; }
 
 /* Section tabs: Live | Upcoming | Results */
 .sp-tabs {
@@ -2021,14 +2030,15 @@ button { font-family: inherit; }
 .sp-section-title { font-size: .78rem; font-weight: 700; color: var(--ink); }
 .sp-section-count { font-size: .68rem; color: var(--ink3); }
 
-/* Cards — always 3-column grid; 1/2-card rows keep same card width */
-.sp-grid3 {
+/* Cards — 4-column grid; fewer cards keep same 1/4 width */
+.sp-grid4 {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: .45rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .4rem;
 }
-@media (max-width: 900px) { .sp-grid3 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .sp-grid3 { grid-template-columns: 1fr; } }
+@media (max-width: 1024px) { .sp-grid4 { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 720px)  { .sp-grid4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .sp-grid4 { grid-template-columns: 1fr; } }
 /* Keep for legacy use in other widgets */
 .sp-cards      { display: flex; flex-direction: column; gap: .4rem; }
 .sp-cards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .4rem; }

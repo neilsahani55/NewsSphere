@@ -108,13 +108,21 @@ export default memo(function SportsWidget() {
   }, [all]);
 
   // Filter by selected sport
-  const f = (arr) => sport === 'all' ? arr : arr.filter(m => m.sport === sport);
+  const f  = (arr) => sport === 'all' ? arr : arr.filter(m => m.sport === sport);
   const fLive     = f(live);
   const fUpcoming = f(upcoming);
   const fResults  = f(completed);
 
   // Active tab's matches
   const shown = tab === 'live' ? fLive : tab === 'upcoming' ? fUpcoming : fResults;
+
+  // Count per sport per tab (used to badge filter buttons)
+  const tabData = tab === 'live' ? live : tab === 'upcoming' ? upcoming : completed;
+  const sportCount = useMemo(() => {
+    const m = {};
+    for (const ev of tabData) m[ev.sport] = (m[ev.sport] ?? 0) + 1;
+    return m;
+  }, [tabData]);
 
   if (!loading && all.length === 0) return null;
 
@@ -131,21 +139,30 @@ export default memo(function SportsWidget() {
         )}
       </div>
 
-      {/* Row 1: Sport filter — All | Cricket | Football | … */}
+      {/* Row 1: Sport filter with per-tab count badges */}
       {activeSports.length > 0 && (
         <div className="sp-filter" role="tablist" aria-label="Sport">
           <button
             role="tab" aria-selected={sport === 'all'}
             className={`sp-filter-btn${sport === 'all' ? ' sp-fbtn-on' : ''}`}
             onClick={() => setSport('all')}
-          >All</button>
-          {activeSports.map(s => (
-            <button
-              key={s.key} role="tab" aria-selected={sport === s.key}
-              className={`sp-filter-btn${sport === s.key ? ' sp-fbtn-on' : ''}`}
-              onClick={() => setSport(s.key)}
-            >{s.emoji} {s.name}</button>
-          ))}
+          >
+            All
+            {tabData.length > 0 && <span className="sp-fbtn-cnt">{tabData.length}</span>}
+          </button>
+          {activeSports.map(s => {
+            const cnt = sportCount[s.key] ?? 0;
+            return (
+              <button
+                key={s.key} role="tab" aria-selected={sport === s.key}
+                className={`sp-filter-btn${sport === s.key ? ' sp-fbtn-on' : ''}${cnt === 0 ? ' sp-fbtn-dim' : ''}`}
+                onClick={() => setSport(s.key)}
+              >
+                {s.emoji} {s.name}
+                {cnt > 0 && <span className="sp-fbtn-cnt">{cnt}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -172,13 +189,16 @@ export default memo(function SportsWidget() {
         <div className="sp-skeleton" aria-hidden />
       ) : shown.length === 0 ? (
         <p className="sp-empty">
-          {tab === 'live'     && 'No live matches right now.'}
-          {tab === 'upcoming' && 'No upcoming matches in the next 2 days.'}
-          {tab === 'results'  && 'No results from the last 2 days.'}
+          {sport !== 'all'
+            ? `No ${tab} matches for this sport right now — try another tab or sport.`
+            : tab === 'live'     ? 'No live matches right now.'
+            : tab === 'upcoming' ? 'No upcoming matches in the next 2 days.'
+            :                      'No results from the last 2 days.'
+          }
         </p>
       ) : (
-        <div className="sp-grid3">
-          {shown.slice(0, 12).map(m => (
+        <div className="sp-grid4">
+          {shown.slice(0, 16).map(m => (
             <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={sport === 'all'} />
           ))}
         </div>
