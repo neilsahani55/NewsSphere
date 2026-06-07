@@ -9,7 +9,7 @@ import MarketsWidget from '../components/MarketsWidget.jsx';
 import QuoteWidget from '../components/QuoteWidget.jsx';
 import AQIBadge from '../components/AQIBadge.jsx';
 import HolidayWidget from '../components/HolidayWidget.jsx';
-import CricketWidget from '../components/CricketWidget.jsx';
+import SportsWidget from '../components/SportsWidget.jsx';
 import FuelWidget from '../components/FuelWidget.jsx';
 
 const WeatherBadge = memo(function WeatherBadge() {
@@ -157,7 +157,7 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
         <FuelWidget />
       </div>
 
-      <CricketWidget />
+      <SportsWidget />
 
       <TodayHistory target={target} />
 

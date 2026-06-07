@@ -1950,7 +1950,83 @@ button { font-family: inherit; }
 }
 .fuel-unavail { font-size: .75rem; color: var(--ink3); margin: 0; }
 
-/* ── Cricket Widget ─────────────────────────────────────────────── */
+/* ── Sports Widget ──────────────────────────────────────────────── */
+.sw-wrap {
+  background: var(--paper2);
+  border: 1px solid var(--border);
+  border-radius: var(--rmd);
+  padding: .75rem 1rem;
+}
+.sw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .5rem;
+}
+.sw-title {
+  font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink3);
+}
+.sw-live-count {
+  font-size: .65rem; font-weight: 700; color: #dc2626;
+  background: #fee2e2; border-radius: 10px; padding: .15rem .5rem;
+}
+/* Tab filter strip */
+.sw-tabs {
+  display: flex; gap: .3rem; overflow-x: auto; scrollbar-width: none;
+  -ms-overflow-style: none; padding-bottom: .4rem; margin-bottom: .5rem;
+}
+.sw-tabs::-webkit-scrollbar { display: none; }
+.sw-tab {
+  flex-shrink: 0; border: 1px solid var(--border); border-radius: 20px;
+  background: none; padding: .2rem .65rem; font-size: .72rem; font-weight: 500;
+  color: var(--ink3); cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sw-tab:hover  { background: var(--paper3); color: var(--ink2); }
+.sw-tab-on     { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Match grid — 2 columns on desktop, 1 on mobile */
+.sw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .5rem;
+}
+@media (max-width: 720px) { .sw-grid { grid-template-columns: 1fr; } }
+/* Match card */
+.sw-card {
+  border: 1px solid var(--border); border-radius: var(--rsm);
+  padding: .6rem .75rem; background: var(--paper3);
+  display: flex; flex-direction: column; gap: .25rem;
+}
+.sw-live     { border-color: #fca5a5; background: color-mix(in srgb, #fee2e2 20%, var(--paper3)); }
+.sw-upcoming { border-color: #93c5fd; background: color-mix(in srgb, #dbeafe 15%, var(--paper3)); }
+.sw-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+.sw-sport { font-size: .7rem; font-weight: 600; color: var(--ink3); }
+.sw-badge {
+  font-size: .6rem; font-weight: 700; border-radius: 10px;
+  padding: .1rem .4rem; white-space: nowrap; flex-shrink: 0;
+}
+.sw-live-badge     { background: #dc2626; color: #fff; }
+.sw-upcoming-badge { background: #2563eb; color: #fff; }
+.sw-finished-badge { background: var(--border2); color: var(--ink3); }
+.sw-match-name { font-size: .82rem; font-weight: 600; color: var(--ink); margin: 0; line-height: 1.3; }
+.sw-scores { display: flex; flex-direction: column; gap: .2rem; }
+.sw-team {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; font-size: .78rem;
+}
+.sw-winner .sw-team-name { font-weight: 700; color: #16a34a; }
+.sw-team-name  { color: var(--ink2); font-weight: 500; flex: 1; }
+.sw-team-score { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sw-status  { font-size: .7rem; color: var(--ink3); margin: 0; }
+.sw-empty   { font-size: .78rem; color: var(--ink3); margin: .25rem 0 0; }
+.sw-skeleton {
+  height: 80px; border-radius: var(--rsm);
+  background: linear-gradient(90deg, var(--border) 25%, var(--border2) 50%, var(--border) 75%);
+  background-size: 200% 100%; animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+
+/* ── Cricket Widget (legacy — kept for reference) ────────────────── */
 .ckt-wrap {
   background: var(--paper2);
   border: 1px solid var(--border);
