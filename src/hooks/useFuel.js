@@ -1,30 +1,37 @@
 /**
- * Live Indian fuel prices — calls our Vercel function /api/fuel which
- * scrapes goodreturns.in (petrol/diesel/cng state tables) server-side.
+ * Live city-specific fuel prices.
+ * Reads from Supabase `fuel` table (populated every 6 h by the pipeline).
  *
- * Flow:
- *  1. Show reference prices immediately (no blank state)
- *  2. Call /api/fuel (same-origin, 1-hour CDN cache on Vercel)
- *  3. Vercel function scrapes goodreturns.in and returns all states as JSON
- *  4. Pick the detected state's prices and update display
+ * Lookup order:
+ *   1. Exact city match  (e.g. city_key = "mumbai")
+ *   2. Any city in the same state (e.g. state_key = "maharashtra")
+ *   3. Show nothing — no fake reference prices
  */
 
 import { useEffect, useState } from 'react';
-import { useLocation } from './useLocation.js';
 import { supabase } from '../lib/supabase.js';
+import { useLocation } from './useLocation.js';
 
-// Map ipapi.co region → state key
-const REGION_KEY = {
+// Normalise a name to a DB key (same logic as pipeline)
+function toKey(s) {
+  const k = String(s ?? '').toLowerCase()
+    .replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  return ({ pondicherry: 'puducherry', bombay: 'mumbai', bangalore: 'bengaluru' })[k] ?? k;
+}
+
+function toDbKey(k) { return k.replace(/\s+/g, '_'); }
+
+// Map ipapi.co `region` → state_key used in the fuel table
+const REGION_STATE = {
   'Andhra Pradesh':'andhra_pradesh','Arunachal Pradesh':'arunachal_pradesh',
   'Assam':'assam','Bihar':'bihar','Chhattisgarh':'chhattisgarh','Goa':'goa',
   'Gujarat':'gujarat','Haryana':'haryana','Himachal Pradesh':'himachal_pradesh',
   'Jharkhand':'jharkhand','Karnataka':'karnataka','Kerala':'kerala',
   'Madhya Pradesh':'madhya_pradesh','Maharashtra':'maharashtra','Manipur':'manipur',
-  'Meghalaya':'meghalaya','Mizoram':'mizoram','Nagaland':'nagaland',
-  'Odisha':'odisha','Orissa':'odisha','Punjab':'punjab','Rajasthan':'rajasthan',
-  'Sikkim':'sikkim','Tamil Nadu':'tamil_nadu','Telangana':'telangana',
-  'Tripura':'tripura','Uttar Pradesh':'uttar_pradesh','Uttarakhand':'uttarakhand',
-  'Uttaranchal':'uttarakhand','West Bengal':'west_bengal',
+  'Meghalaya':'meghalaya','Mizoram':'mizoram','Nagaland':'nagaland','Odisha':'odisha',
+  'Punjab':'punjab','Rajasthan':'rajasthan','Sikkim':'sikkim',
+  'Tamil Nadu':'tamil_nadu','Telangana':'telangana','Tripura':'tripura',
+  'Uttar Pradesh':'uttar_pradesh','Uttarakhand':'uttarakhand','West Bengal':'west_bengal',
   'Delhi':'delhi','NCT of Delhi':'delhi','Chandigarh':'chandigarh',
   'Puducherry':'puducherry','Pondicherry':'puducherry',
   'Jammu and Kashmir':'jammu_and_kashmir','Jammu & Kashmir':'jammu_and_kashmir',
@@ -32,36 +39,13 @@ const REGION_KEY = {
   'Andaman and Nicobar Islands':'andaman_and_nicobar_islands',
 };
 
-// Inline reference prices (shown while /api/fuel loads)
-const REF = {
-  delhi:{p:94.72,d:87.62},maharashtra:{p:111.18,d:97.83},
-  karnataka:{p:104.45,d:90.30},tamil_nadu:{p:100.75,d:92.34},
-  telangana:{p:109.18,d:97.42},andhra_pradesh:{p:111.19,d:97.21},
-  kerala:{p:102.05,d:90.55},gujarat:{p:96.63,d:92.38},
-  rajasthan:{p:106.55,d:91.98},madhya_pradesh:{p:110.48,d:95.46},
-  uttar_pradesh:{p:96.57,d:89.76},bihar:{p:107.24,d:94.04},
-  west_bengal:{p:104.25,d:91.19},punjab:{p:98.20,d:84.44},
-  haryana:{p:95.61,d:88.45},odisha:{p:103.19,d:94.76},
-  assam:{p:96.45,d:84.10},jharkhand:{p:99.09,d:96.77},
-  chandigarh:{p:94.24,d:82.40},goa:{p:96.81,d:90.08},
-  chhattisgarh:{p:105.36,d:96.57},uttarakhand:{p:95.42,d:88.11},
-  himachal_pradesh:{p:97.50,d:85.60},jammu_and_kashmir:{p:97.77,d:88.70},
-  puducherry:{p:98.30,d:90.50},manipur:{p:99.49,d:90.71},
-  meghalaya:{p:97.53,d:88.14},tripura:{p:97.13,d:88.07},
-  mizoram:{p:101.18,d:91.47},nagaland:{p:99.00,d:88.60},
-  arunachal_pradesh:{p:97.43,d:84.12},sikkim:{p:102.50,d:89.60},
-  ladakh:{p:100.30,d:88.70},
-};
-
-const DEFAULT = {p:94.72,d:87.62};
-
-function regionToKey(region='') {
-  if (REGION_KEY[region]) return REGION_KEY[region];
-  const lower = region.toLowerCase();
-  const match = Object.entries(REGION_KEY).find(([k]) =>
-    k.toLowerCase()===lower || lower.includes(k.toLowerCase()) || k.toLowerCase().includes(lower)
-  );
-  return match?.[1] ?? 'delhi';
+function regionToState(region = '') {
+  return REGION_STATE[region]
+    ?? Object.entries(REGION_STATE).find(([k]) =>
+        k.toLowerCase() === region.toLowerCase() ||
+        region.toLowerCase().includes(k.toLowerCase())
+       )?.[1]
+    ?? toDbKey(toKey(region));
 }
 
 export function useFuel() {
@@ -70,61 +54,51 @@ export function useFuel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!region && !city) return;
+    if (!city && !region) return;
     let mounted = true;
 
     async function load() {
-      const stateKey  = regionToKey(region);
-      const ref       = REF[stateKey] ?? DEFAULT;
-      const displayCity = city || stateKey.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+      const cityKey  = toDbKey(toKey(city || ''));
+      const stateKey = regionToState(region || '');
 
-      // Step 1: Show reference prices immediately (no blank state)
-      if (mounted) {
-        setData({ petrol: ref.p, diesel: ref.d, cng: null, city: displayCity, source: 'reference' });
-        setLoading(false);
+      // 1. Exact city match
+      if (cityKey) {
+        const { data: row } = await supabase
+          .from('fuel')
+          .select('petrol, diesel, cng, city, state, updated_at')
+          .eq('city_key', cityKey)
+          .maybeSingle();
+
+        if (row?.petrol && mounted) {
+          setData({ petrol: row.petrol, diesel: row.diesel, cng: row.cng,
+                    city: row.city, state: row.state,
+                    updatedAt: row.updated_at, source: 'live' });
+          setLoading(false);
+          return;
+        }
       }
 
-      // Step 2: Read from Supabase market_data (fast — populated by /api/fuel)
-      try {
+      // 2. Any city in the same state (ordered alphabetically → most likely capital)
+      if (stateKey) {
         const { data: rows } = await supabase
-          .from('market_data')
-          .select('key, price, updated_at')
-          .in('key', [`petrol_${stateKey}`, `diesel_${stateKey}`, `cng_${stateKey}`]);
+          .from('fuel')
+          .select('petrol, diesel, cng, city, state, updated_at')
+          .eq('state_key', stateKey)
+          .order('city_key')
+          .limit(1);
 
-        if (rows?.length) {
-          const p   = rows.find(r => r.key === `petrol_${stateKey}`);
-          const d   = rows.find(r => r.key === `diesel_${stateKey}`);
-          const cng = rows.find(r => r.key === `cng_${stateKey}`);
-          if (p?.price && mounted) {
-            setData({
-              petrol: p.price, diesel: d?.price ?? null, cng: cng?.price ?? null,
-              city: displayCity, source: 'live', updatedAt: p.updated_at,
-            });
-            // Data from Supabase is good — still call /api/fuel in background
-            // to keep Supabase fresh (non-blocking, fire-and-forget)
-            fetch('/api/fuel').catch(() => {});
-            return;
-          }
+        const row = rows?.[0];
+        if (row?.petrol && mounted) {
+          setData({ petrol: row.petrol, diesel: row.diesel, cng: row.cng,
+                    city: row.city, state: row.state,
+                    updatedAt: row.updated_at, source: 'live' });
+          setLoading(false);
+          return;
         }
-      } catch {}
-
-      // Step 3: Supabase empty → call /api/fuel directly (also populates Supabase)
-      try {
-        const res = await fetch('/api/fuel', { signal: AbortSignal.timeout(15000) });
-        if (!res.ok) return;
-        const json = await res.json();
-        const stateData = json[stateKey];
-        if (stateData?.petrol && mounted) {
-          setData({
-            petrol: Number(stateData.petrol),
-            diesel: stateData.diesel ? Number(stateData.diesel) : null,
-            cng:    stateData.cng    ? Number(stateData.cng)    : null,
-            city: displayCity, source: json._source || 'live',
-          });
-        }
-      } catch (e) {
-        console.warn('[useFuel] API error:', e.message);
       }
+
+      // 3. No data yet (pipeline hasn't run) — show nothing, not a fake value
+      if (mounted) setLoading(false);
     }
 
     load();

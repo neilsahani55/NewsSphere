@@ -1,14 +1,14 @@
 /**
- * Fuel price pipeline — IndiaToday (primary) + HindustanTimes (fallback)
- * + Pricekeeda (CNG fallback). Uses cheerio for HTML parsing.
+ * Fuel price pipeline — city/district-level prices for India.
+ * Stores into Supabase `fuel` table (NOT market_data).
  *
- * Fixes vs previous version:
- *  - Retry with exponential backoff (3 attempts per state)
- *  - 200 ms delay between each request to avoid rate limiting
- *  - Concurrency reduced from 6 → 4
- *  - Maharashtra: tries #render_today_price first, then broader selectors
- *    (some state pages render the price in a different element)
- *  - Verbose per-state logging so the job log shows every failure reason
+ * Sources:
+ *   Primary: indiatoday.in per-city pages (#render_today_price selector)
+ *   Fallback: hindustantimes.com state table (fills missing cities)
+ *   CNG:     pricekeeda.com (state-level CNG only — not all cities have CNG)
+ *
+ * City list: ~130 major cities / state capitals across all 36 states+UTs.
+ * The pipeline tests each URL — cities with no IndiaToday page are skipped.
  */
 
 import 'dotenv/config';
@@ -23,314 +23,360 @@ const supabase = createClient(
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ── HTTP ──────────────────────────────────────────────────────────────────
-
-async function fetchText(url, timeoutMs = 15_000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: 'GET', redirect: 'follow', signal: ctrl.signal,
-      headers: {
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'accept-language': 'en-IN,en-US;q=0.9,en;q=0.8',
-        'accept-encoding': 'gzip, deflate, br',
-        'cache-control': 'no-cache',
-      },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// Retry with exponential backoff
-async function fetchWithRetry(url, maxAttempts = 3, timeoutMs = 15_000) {
-  let lastErr;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fetchText(url, timeoutMs);
-    } catch (e) {
-      lastErr = e;
-      if (attempt < maxAttempts) await sleep(500 * attempt);
-    }
-  }
-  throw lastErr;
-}
+// ── City master list ───────────────────────────────────────────────────────
+// All major Indian cities with their state. The pipeline validates each
+// against IndiaToday's URL; only successful cities are stored.
+const CITIES = [
+  // Andaman & Nicobar
+  { city: 'Port Blair', state: 'Andaman and Nicobar Islands', cng: false },
+  // Andhra Pradesh
+  { city: 'Vijayawada', state: 'Andhra Pradesh', cng: true },
+  { city: 'Visakhapatnam', state: 'Andhra Pradesh', cng: true },
+  { city: 'Tirupati', state: 'Andhra Pradesh', cng: false },
+  { city: 'Guntur', state: 'Andhra Pradesh', cng: false },
+  { city: 'Nellore', state: 'Andhra Pradesh', cng: false },
+  { city: 'Kurnool', state: 'Andhra Pradesh', cng: false },
+  // Arunachal Pradesh
+  { city: 'Itanagar', state: 'Arunachal Pradesh', cng: false },
+  // Assam
+  { city: 'Guwahati', state: 'Assam', cng: true },
+  { city: 'Dibrugarh', state: 'Assam', cng: false },
+  { city: 'Silchar', state: 'Assam', cng: false },
+  // Bihar
+  { city: 'Patna', state: 'Bihar', cng: true },
+  { city: 'Gaya', state: 'Bihar', cng: false },
+  { city: 'Muzaffarpur', state: 'Bihar', cng: false },
+  { city: 'Bhagalpur', state: 'Bihar', cng: false },
+  // Chandigarh
+  { city: 'Chandigarh', state: 'Chandigarh', cng: true },
+  // Chhattisgarh
+  { city: 'Raipur', state: 'Chhattisgarh', cng: true },
+  { city: 'Bhilai', state: 'Chhattisgarh', cng: false },
+  { city: 'Bilaspur', state: 'Chhattisgarh', cng: false },
+  { city: 'Durg', state: 'Chhattisgarh', cng: false },
+  // Dadra & NH
+  { city: 'Silvassa', state: 'Dadra and Nagar Haveli and Daman and Diu', cng: false },
+  // Delhi
+  { city: 'New Delhi', state: 'Delhi', cng: true },
+  { city: 'Delhi', state: 'Delhi', cng: true },
+  // Goa
+  { city: 'Panaji', state: 'Goa', cng: false },
+  { city: 'Margao', state: 'Goa', cng: false },
+  // Gujarat
+  { city: 'Ahmedabad', state: 'Gujarat', cng: true },
+  { city: 'Surat', state: 'Gujarat', cng: true },
+  { city: 'Vadodara', state: 'Gujarat', cng: true },
+  { city: 'Rajkot', state: 'Gujarat', cng: true },
+  { city: 'Gandhinagar', state: 'Gujarat', cng: true },
+  { city: 'Bhavnagar', state: 'Gujarat', cng: false },
+  { city: 'Jamnagar', state: 'Gujarat', cng: false },
+  { city: 'Anand', state: 'Gujarat', cng: false },
+  // Haryana
+  { city: 'Gurugram', state: 'Haryana', cng: true },
+  { city: 'Faridabad', state: 'Haryana', cng: true },
+  { city: 'Ambala', state: 'Haryana', cng: false },
+  { city: 'Hisar', state: 'Haryana', cng: false },
+  { city: 'Rohtak', state: 'Haryana', cng: false },
+  { city: 'Panipat', state: 'Haryana', cng: false },
+  // Himachal Pradesh
+  { city: 'Shimla', state: 'Himachal Pradesh', cng: false },
+  { city: 'Dharamshala', state: 'Himachal Pradesh', cng: false },
+  { city: 'Manali', state: 'Himachal Pradesh', cng: false },
+  // Jammu & Kashmir
+  { city: 'Jammu', state: 'Jammu and Kashmir', cng: false },
+  { city: 'Srinagar', state: 'Jammu and Kashmir', cng: false },
+  // Jharkhand
+  { city: 'Ranchi', state: 'Jharkhand', cng: false },
+  { city: 'Jamshedpur', state: 'Jharkhand', cng: false },
+  { city: 'Dhanbad', state: 'Jharkhand', cng: false },
+  // Karnataka
+  { city: 'Bengaluru', state: 'Karnataka', cng: true },
+  { city: 'Mysuru', state: 'Karnataka', cng: true },
+  { city: 'Mangaluru', state: 'Karnataka', cng: false },
+  { city: 'Hubli', state: 'Karnataka', cng: false },
+  { city: 'Belagavi', state: 'Karnataka', cng: false },
+  { city: 'Kalaburagi', state: 'Karnataka', cng: false },
+  { city: 'Ballari', state: 'Karnataka', cng: false },
+  // Kerala
+  { city: 'Thiruvananthapuram', state: 'Kerala', cng: false },
+  { city: 'Kochi', state: 'Kerala', cng: true },
+  { city: 'Kozhikode', state: 'Kerala', cng: false },
+  { city: 'Thrissur', state: 'Kerala', cng: false },
+  { city: 'Kollam', state: 'Kerala', cng: false },
+  { city: 'Kannur', state: 'Kerala', cng: false },
+  // Ladakh
+  { city: 'Leh', state: 'Ladakh', cng: false },
+  // Madhya Pradesh
+  { city: 'Bhopal', state: 'Madhya Pradesh', cng: true },
+  { city: 'Indore', state: 'Madhya Pradesh', cng: true },
+  { city: 'Gwalior', state: 'Madhya Pradesh', cng: false },
+  { city: 'Jabalpur', state: 'Madhya Pradesh', cng: false },
+  { city: 'Ujjain', state: 'Madhya Pradesh', cng: false },
+  { city: 'Sagar', state: 'Madhya Pradesh', cng: false },
+  // Maharashtra
+  { city: 'Mumbai', state: 'Maharashtra', cng: true },
+  { city: 'Pune', state: 'Maharashtra', cng: true },
+  { city: 'Nagpur', state: 'Maharashtra', cng: true },
+  { city: 'Nashik', state: 'Maharashtra', cng: true },
+  { city: 'Aurangabad', state: 'Maharashtra', cng: false },
+  { city: 'Thane', state: 'Maharashtra', cng: true },
+  { city: 'Navi Mumbai', state: 'Maharashtra', cng: true },
+  { city: 'Solapur', state: 'Maharashtra', cng: false },
+  { city: 'Kolhapur', state: 'Maharashtra', cng: false },
+  { city: 'Amravati', state: 'Maharashtra', cng: false },
+  // Manipur
+  { city: 'Imphal', state: 'Manipur', cng: false },
+  // Meghalaya
+  { city: 'Shillong', state: 'Meghalaya', cng: false },
+  // Mizoram
+  { city: 'Aizawl', state: 'Mizoram', cng: false },
+  // Nagaland
+  { city: 'Kohima', state: 'Nagaland', cng: false },
+  { city: 'Dimapur', state: 'Nagaland', cng: false },
+  // Odisha
+  { city: 'Bhubaneswar', state: 'Odisha', cng: true },
+  { city: 'Cuttack', state: 'Odisha', cng: false },
+  { city: 'Rourkela', state: 'Odisha', cng: false },
+  // Puducherry
+  { city: 'Puducherry', state: 'Puducherry', cng: false },
+  // Punjab
+  { city: 'Amritsar', state: 'Punjab', cng: true },
+  { city: 'Ludhiana', state: 'Punjab', cng: true },
+  { city: 'Jalandhar', state: 'Punjab', cng: false },
+  { city: 'Patiala', state: 'Punjab', cng: false },
+  { city: 'Mohali', state: 'Punjab', cng: false },
+  // Rajasthan
+  { city: 'Jaipur', state: 'Rajasthan', cng: true },
+  { city: 'Jodhpur', state: 'Rajasthan', cng: false },
+  { city: 'Udaipur', state: 'Rajasthan', cng: false },
+  { city: 'Kota', state: 'Rajasthan', cng: false },
+  { city: 'Ajmer', state: 'Rajasthan', cng: false },
+  { city: 'Bikaner', state: 'Rajasthan', cng: false },
+  // Sikkim
+  { city: 'Gangtok', state: 'Sikkim', cng: false },
+  // Tamil Nadu
+  { city: 'Chennai', state: 'Tamil Nadu', cng: true },
+  { city: 'Coimbatore', state: 'Tamil Nadu', cng: false },
+  { city: 'Madurai', state: 'Tamil Nadu', cng: false },
+  { city: 'Trichy', state: 'Tamil Nadu', cng: false },
+  { city: 'Salem', state: 'Tamil Nadu', cng: false },
+  { city: 'Tirunelveli', state: 'Tamil Nadu', cng: false },
+  { city: 'Erode', state: 'Tamil Nadu', cng: false },
+  { city: 'Vellore', state: 'Tamil Nadu', cng: false },
+  // Telangana
+  { city: 'Hyderabad', state: 'Telangana', cng: true },
+  { city: 'Warangal', state: 'Telangana', cng: false },
+  { city: 'Karimnagar', state: 'Telangana', cng: false },
+  { city: 'Nizamabad', state: 'Telangana', cng: false },
+  // Tripura
+  { city: 'Agartala', state: 'Tripura', cng: false },
+  // Uttar Pradesh
+  { city: 'Lucknow', state: 'Uttar Pradesh', cng: true },
+  { city: 'Kanpur', state: 'Uttar Pradesh', cng: true },
+  { city: 'Agra', state: 'Uttar Pradesh', cng: true },
+  { city: 'Varanasi', state: 'Uttar Pradesh', cng: true },
+  { city: 'Noida', state: 'Uttar Pradesh', cng: true },
+  { city: 'Ghaziabad', state: 'Uttar Pradesh', cng: true },
+  { city: 'Meerut', state: 'Uttar Pradesh', cng: false },
+  { city: 'Allahabad', state: 'Uttar Pradesh', cng: false },
+  { city: 'Prayagraj', state: 'Uttar Pradesh', cng: true },
+  { city: 'Bareilly', state: 'Uttar Pradesh', cng: false },
+  { city: 'Gorakhpur', state: 'Uttar Pradesh', cng: false },
+  { city: 'Aligarh', state: 'Uttar Pradesh', cng: false },
+  { city: 'Moradabad', state: 'Uttar Pradesh', cng: false },
+  { city: 'Mathura', state: 'Uttar Pradesh', cng: true },
+  { city: 'Vrindavan', state: 'Uttar Pradesh', cng: false },
+  // Uttarakhand
+  { city: 'Dehradun', state: 'Uttarakhand', cng: true },
+  { city: 'Haridwar', state: 'Uttarakhand', cng: false },
+  { city: 'Rishikesh', state: 'Uttarakhand', cng: false },
+  { city: 'Roorkee', state: 'Uttarakhand', cng: false },
+  // West Bengal
+  { city: 'Kolkata', state: 'West Bengal', cng: true },
+  { city: 'Howrah', state: 'West Bengal', cng: false },
+  { city: 'Siliguri', state: 'West Bengal', cng: false },
+  { city: 'Asansol', state: 'West Bengal', cng: false },
+  { city: 'Durgapur', state: 'West Bengal', cng: false },
+];
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
 function normalizeKey(input) {
   const key = String(input ?? '').toLowerCase()
     .replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
-  return ({ pondicherry: 'puducherry' })[key] ?? key;
+  return ({ pondicherry: 'puducherry', bombay: 'mumbai', bangalore: 'bengaluru' })[key] ?? key;
 }
 
-function toSupabaseKey(k) { return k.replace(/\s+/g, '_'); }
+function toDbKey(s) { return s.replace(/\s+/g, '_'); }
 
-function parseInr(text) {
-  const n = parseFloat(String(text ?? '').replace(/[^0-9.]+/g, ''));
-  return isFinite(n) && n > 10 && n < 300 ? n : null;
+async function fetchText(url, timeoutMs = 12_000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      method: 'GET', redirect: 'follow', signal: ctrl.signal,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+        'accept-language': 'en-IN,en-US;q=0.9,en;q=0.8',
+      },
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.text();
+  } finally { clearTimeout(t); }
 }
 
+// Retry wrapper
+async function fetchSafe(url, attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try { return await fetchText(url); }
+    catch (e) {
+      if (i === attempts) throw e;
+      await sleep(400 * i);
+    }
+  }
+}
+
+// Extract price with multiple fallback selectors
+function extractPrice(html) {
+  if (!html) return null;
+  const doc = $load(html);
+  for (const sel of ['#render_today_price', '[id*="today_price"]', '.fuel-price-today', '.today-price']) {
+    const txt = doc(sel).first().text().trim();
+    const n = parseFloat(txt.replace(/[^0-9.]/g, ''));
+    if (isFinite(n) && n > 10 && n < 300) return n;
+  }
+  // Last resort: first ₹XX.XX in body
+  const m = doc('body').text().match(/₹\s*(\d{2,3}\.\d{2})/);
+  if (m) { const n = parseFloat(m[1]); if (n > 10 && n < 300) return n; }
+  return null;
+}
+
+const IT_BASE = 'https://www.indiatoday.in/fuel-price';
+
+async function fetchITPrice(citySlug, fuel) {
+  const url = `${IT_BASE}/${fuel}-price-in-${citySlug}-today`;
+  try {
+    const html = await fetchSafe(url, 2);
+    return extractPrice(html);
+  } catch { return null; }
+}
+
+// Concurrency limiter
 async function mapLimit(items, limit, fn) {
-  const results = new Array(items.length);
+  const out = new Array(items.length);
   let i = 0;
   async function worker() {
     while (true) {
       const idx = i++;
       if (idx >= items.length) return;
-      results[idx] = await fn(items[idx], idx);
-      await sleep(200);          // polite delay between every request
+      out[idx] = await fn(items[idx], idx);
+      await sleep(180);
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
-// ── Provider: indiatoday.in ────────────────────────────────────────────────
-
-const IT_BASE = 'https://www.indiatoday.in/fuel-price';
-let _states = null;
-
-function toTitleCase(s) {
-  return String(s ?? '').trim().toLowerCase().split(/\s+/g).filter(Boolean)
-    .map(w => (w === 'and' ? 'and' : w[0].toUpperCase() + w.slice(1))).join(' ');
-}
-
-async function getStateList() {
-  if (_states) return _states;
-  const html = await fetchWithRetry(`${IT_BASE}/petrol-price-in-andhra-pradesh-today`);
-  const doc  = $load(html);
-  const best = doc('select').toArray()
-    .map(s => {
-      const opts = doc(s).find('option').toArray().map(o => doc(o).text().trim()).filter(Boolean);
-      const keys = opts.map(normalizeKey);
-      const score = opts.length +
-        (keys.includes('andhra pradesh') && keys.includes('delhi') ? 1000 : 0);
-      return { opts, score };
-    })
-    .sort((a, b) => b.score - a.score)[0];
-
-  if (!best || best.opts.length < 10) throw new Error('Could not extract state list from indiatoday.in');
-
-  const uniq = []; const seen = new Set();
-  for (const s of best.opts.filter(o => !/^select\s+/i.test(o)).map(toTitleCase)) {
-    const k = normalizeKey(s);
-    if (!seen.has(k)) { seen.add(k); uniq.push(s); }
-  }
-  _states = uniq;
-  console.log(`  State list: ${uniq.length} states (${uniq.slice(0,5).join(', ')} ...)`);
-  return uniq;
-}
-
-/**
- * Extract price from an IndiaToday state fuel-price page.
- * Tries multiple selectors because some state pages render the price
- * in different elements (#render_today_price, .fuel-price, data attrs, etc.).
- */
-function extractITPrice(html, label) {
-  const doc = $load(html);
-
-  // Selector 1: primary (used by most states)
-  const el1 = doc('#render_today_price').first().text().trim();
-  const v1  = parseInr(el1);
-  if (v1) return v1;
-
-  // Selector 2: common alternative
-  const el2 = doc('[id*="today_price"]').first().text().trim();
-  const v2  = parseInr(el2);
-  if (v2) return v2;
-
-  // Selector 3: any element with class containing "price" near a ₹ sign
-  for (const el of doc('[class*="price"], [class*="rate"]').toArray()) {
-    const txt = doc(el).text().trim();
-    if (txt.includes('₹') || /^\d{2,3}\.\d{2}$/.test(txt)) {
-      const v = parseInr(txt);
-      if (v) return v;
-    }
-  }
-
-  // Selector 4: find ₹XX.XX pattern anywhere in the page body text
-  const bodyText = doc('body').text();
-  const m = bodyText.match(/₹\s*(\d{2,3}\.\d{2})/);
-  const v4 = m ? parseInr(m[1]) : null;
-
-  if (label === 'maharashtra') {
-    console.log(`    Maharashtra debug:`);
-    console.log(`      #render_today_price text: "${el1}"`);
-    console.log(`      [id*=today_price] text: "${el2}"`);
-    console.log(`      body ₹ match: ${m ? m[0] : 'none'}`);
-    console.log(`      Parsed: ${v4 ?? 'null'}`);
-  }
-
-  return v4;
-}
-
-async function getIndiaToday(fuel, unit) {
-  const states = await getStateList();
-  const concurrency = Math.min(4, Number(process.env.UPSTREAM_CONCURRENCY ?? 4));
-  console.log(`  IndiaToday ${fuel}: ${states.length} states, concurrency=${concurrency}`);
-
-  const rows = await mapLimit(states, concurrency, async state => {
-    const stateKey = normalizeKey(state);
-    const slug     = stateKey.replace(/\s+/g, '-');
-    const url      = `${IT_BASE}/${fuel}-price-in-${slug}-today`;
-    try {
-      const html = await fetchWithRetry(url, 3, 12_000);
-      const rate = extractITPrice(html, stateKey);
-      if (!rate) {
-        console.log(`    ✗ ${state} (${stateKey}): no price found`);
-        return null;
-      }
-      return { state, stateKey, rate, unit };
-    } catch (e) {
-      console.log(`    ✗ ${state}: ${e.message}`);
-      return null;
-    }
-  });
-
-  const out = rows.filter(Boolean);
-  const missing = states.filter((s, i) => !rows[i]);
-  console.log(`  IndiaToday ${fuel}: ${out.length}/${states.length} fetched`);
-  if (missing.length) console.log(`  Missing: ${missing.join(', ')}`);
   return out;
 }
 
-// ── Provider: hindustantimes.com (fallback petrol/diesel) ─────────────────
+// ── HindustanTimes fallback ────────────────────────────────────────────────
 
-async function getHindustanTimes(fuel, unit) {
-  const url  = `https://www.hindustantimes.com/fuel-prices/${fuel}-rates-state-wise`;
-  const html = await fetchWithRetry(url);
+async function getHTStatePrice(fuel) {
+  const url = `https://www.hindustantimes.com/fuel-prices/${fuel}-rates-state-wise`;
+  const html = await fetchSafe(url);
   const doc  = $load(html);
+  const out  = new Map();
 
   const target = doc('table').toArray().find(t => {
-    const headers = doc(t).find('tr').first().find('th,td').toArray()
+    const hdrs = doc(t).find('tr').first().find('th,td').toArray()
       .map(c => doc(c).text().trim().toLowerCase());
-    return headers.includes('state') && headers.some(h => h.includes(fuel));
+    return hdrs.includes('state') && hdrs.some(h => h.includes(fuel));
   });
 
-  if (!target) throw new Error('HindustanTimes: state table not found');
+  if (!target) return out;
 
-  const rows = doc(target).find('tr').slice(1).toArray().map(r => {
+  doc(target).find('tr').slice(1).toArray().forEach(r => {
     const cols = doc(r).find('td').toArray().map(c => doc(c).text().trim());
-    if (cols.length < 2) return null;
-    const rate = parseInr(cols[1]);
-    if (!cols[0] || !rate) return null;
-    return { state: cols[0], stateKey: normalizeKey(cols[0]), rate, unit };
-  }).filter(Boolean);
+    if (cols.length < 2) return;
+    const n = parseFloat(cols[1].replace(/[^0-9.]/g, ''));
+    if (cols[0] && isFinite(n) && n > 10) out.set(normalizeKey(cols[0]), n);
+  });
 
-  console.log(`  HindustanTimes ${fuel}: ${rows.length} states`);
-  return rows;
-}
-
-// ── Provider: pricekeeda.com (CNG fallback) ───────────────────────────────
-
-async function getPricekeeda() {
-  const url  = 'https://www.pricekeeda.com/fuel/cng-price-in-india/';
-  const html = await fetchWithRetry(url);
-  const doc  = $load(html);
-
-  const candidates = doc('table').toArray().map(t => {
-    const headers = doc(t).find('tr').first().find('th,td').toArray()
-      .map(c => doc(c).text().trim().toLowerCase()).join(' | ');
-    if (!headers.includes('cng') || !headers.includes('kg')) return null;
-    const rows = doc(t).find('tr').slice(1).toArray().map(r => {
-      const cols = doc(r).find('td').toArray().map(c => doc(c).text().trim());
-      const rate = cols.length >= 2 ? parseInr(cols[1]) : null;
-      return cols[0] && rate ? { state: cols[0], stateKey: normalizeKey(cols[0]), rate, unit: 'INR/kg' } : null;
-    }).filter(Boolean);
-    if (rows.length < 5) return null;
-    const score = rows.length + (rows.some(r => r.stateKey.includes('pradesh')) ? 1000 : 0);
-    return { rows, score };
-  }).filter(Boolean).sort((a, b) => b.score - a.score);
-
-  const out = candidates[0]?.rows ?? [];
-  console.log(`  Pricekeeda CNG: ${out.length} states`);
   return out;
-}
-
-// ── Merge: primary fills first, fallback fills gaps ────────────────────────
-
-async function merged(primaryFn, fallbackFn, minRows = 30) {
-  let primary = [];
-  try { primary = await primaryFn(); } catch (e) { console.warn(`  Primary error: ${e.message}`); }
-
-  const byKey = new Map(primary.map(r => [r.stateKey, r]));
-
-  if (primary.length < minRows) {
-    console.log(`  Primary returned ${primary.length} < ${minRows}, running fallback...`);
-    try {
-      const fallback = await fallbackFn();
-      for (const r of fallback) {
-        if (!byKey.has(r.stateKey)) byKey.set(r.stateKey, r);
-      }
-    } catch (e) { console.warn(`  Fallback error: ${e.message}`); }
-  }
-
-  return Array.from(byKey.values());
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
   const now = new Date().toISOString();
-  console.log(`=== Fuel pipeline: ${now} ===\n`);
+  console.log(`=== Fuel pipeline (city-level): ${now} ===`);
+  console.log(`Cities to process: ${CITIES.length}\n`);
 
-  // Fetch state list once (shared across all fuels)
-  console.log('Getting state list...');
-  await getStateList();
+  // Fetch petrol + diesel for all cities via IndiaToday
+  const concurrency = Number(process.env.UPSTREAM_CONCURRENCY ?? 5);
 
-  // Fetch fuels sequentially to reduce total concurrent load on IndiaToday
-  console.log('\n── Petrol ──');
-  const petrolRows = await merged(
-    () => getIndiaToday('petrol', 'INR/L'),
-    () => getHindustanTimes('petrol', 'INR/L'),
-  );
+  console.log(`── Petrol + Diesel (IndiaToday, concurrency=${concurrency}) ──`);
+  const results = await mapLimit(CITIES, concurrency, async ({ city, state, cng: hasCng }) => {
+    const slug = normalizeKey(city).replace(/\s+/g, '-');
+    const sk   = normalizeKey(state);
 
-  console.log('\n── Diesel ──');
-  const dieselRows = await merged(
-    () => getIndiaToday('diesel', 'INR/L'),
-    () => getHindustanTimes('diesel', 'INR/L'),
-  );
+    const [petrol, diesel, cngVal] = await Promise.all([
+      fetchITPrice(slug, 'petrol'),
+      fetchITPrice(slug, 'diesel'),
+      hasCng ? fetchITPrice(slug, 'cng') : Promise.resolve(null),
+    ]);
 
-  console.log('\n── CNG ──');
-  const cngRows = await merged(
-    () => getIndiaToday('cng', 'INR/kg'),
-    () => getPricekeeda(),
-    20,
-  );
+    if (petrol) {
+      console.log(`  ✓ ${city} (${state}): ₹${petrol}p / ₹${diesel ?? '—'}d${cngVal ? ` / ₹${cngVal}cng` : ''}`);
+      return { city_key: toDbKey(normalizeKey(city)), city, state, state_key: toDbKey(sk), petrol, diesel, cng: cngVal };
+    } else {
+      console.log(`  ✗ ${city}: no petrol price found`);
+      return null;
+    }
+  });
 
-  console.log(`\n── Summary ──`);
-  console.log(`Petrol: ${petrolRows.length} | Diesel: ${dieselRows.length} | CNG: ${cngRows.length}`);
+  const successful = results.filter(Boolean);
+  console.log(`\n✓ ${successful.length}/${CITIES.length} cities fetched from IndiaToday`);
 
-  if (petrolRows.length === 0 && dieselRows.length === 0) {
-    console.error('Nothing fetched — aborting Supabase write.');
-    process.exit(1);
+  // Fill state-level gaps from HindustanTimes for cities IndiaToday missed
+  const coveredStates = new Set(successful.map(r => r.state_key));
+  const missingStates = [...new Set(CITIES.map(c => toDbKey(normalizeKey(c.state))))]
+    .filter(s => !coveredStates.has(s));
+
+  if (missingStates.length > 0) {
+    console.log(`\n── HindustanTimes fallback for ${missingStates.length} uncovered states ──`);
+    const [htPetrol, htDiesel] = await Promise.all([
+      getHTStatePrice('petrol'),
+      getHTStatePrice('diesel'),
+    ]);
+    console.log(`  HT petrol: ${htPetrol.size} states | diesel: ${htDiesel.size} states`);
+
+    for (const stateKey of missingStates) {
+      const p = htPetrol.get(stateKey.replace(/_/g, ' '));
+      const d = htDiesel.get(stateKey.replace(/_/g, ' '));
+      if (p) {
+        // Use state name as city name for fallback rows
+        const cityKey = `${stateKey}_state`;
+        successful.push({ city_key: cityKey, city: stateKey.replace(/_/g, ' '), state: stateKey.replace(/_/g, ' '), state_key: stateKey, petrol: p, diesel: d ?? null, cng: null });
+        console.log(`  ✓ ${stateKey} (HT state-level): ₹${p}p / ₹${d ?? '—'}d`);
+      }
+    }
   }
 
-  // Build rows — only real scraped data
-  const rows = [];
-  for (const r of petrolRows) rows.push({ key: `petrol_${toSupabaseKey(r.stateKey)}`, price: r.rate, change_pct: null, updated_at: now });
-  for (const r of dieselRows) rows.push({ key: `diesel_${toSupabaseKey(r.stateKey)}`, price: r.rate, change_pct: null, updated_at: now });
-  for (const r of cngRows)    rows.push({ key: `cng_${toSupabaseKey(r.stateKey)}`,    price: r.rate, change_pct: null, updated_at: now });
+  if (successful.length === 0) {
+    console.error('No data — aborting.'); process.exit(1);
+  }
 
+  // Upsert into `fuel` table (NOT market_data)
+  const rows = successful.map(r => ({ ...r, updated_at: now }));
   for (let i = 0; i < rows.length; i += 100) {
-    const { error } = await supabase.from('market_data').upsert(rows.slice(i, i + 100), { onConflict: 'key' });
+    const { error } = await supabase.from('fuel').upsert(rows.slice(i, i + 100), { onConflict: 'city_key' });
     if (error) throw new Error(`Supabase: ${error.message}`);
   }
 
-  console.log(`\nUpserted ${rows.length} rows`);
-
-  // Spot-check important states
-  const check = ['maharashtra', 'delhi', 'andhra pradesh', 'karnataka', 'gujarat'];
-  for (const key of check) {
-    const p = petrolRows.find(r => r.stateKey === key);
-    const d = dieselRows.find(r => r.stateKey === key);
-    console.log(`  ${key.padEnd(20)} petrol=₹${p?.rate ?? '—'}  diesel=₹${d?.rate ?? '—'}`);
-  }
+  console.log(`\nUpserted ${rows.length} rows into \`fuel\` table`);
+  const mh = successful.find(r => r.city === 'Mumbai');
+  const dl = successful.find(r => r.city_key === 'new_delhi' || r.city_key === 'delhi');
+  console.log(`Mumbai: ₹${mh?.petrol ?? '—'} | Delhi: ₹${dl?.petrol ?? '—'}`);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
