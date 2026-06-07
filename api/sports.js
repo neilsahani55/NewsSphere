@@ -1,32 +1,29 @@
 /**
- * /api/sports  — Vercel serverless function
+ * /api/sports — India-first sports data
  *
- * Multi-source strategy:
- *  1. ESPNCricinfo consumer API  → best live cricket scores (all international)
- *  2. The Sports DB              → broad coverage: soccer, cricket, badminton,
- *                                   kabaddi, hockey, basketball, etc. — today ± 1 day
- *  3. ESPN                       → F1, tennis majors, NBA, known leagues
+ * Strategy:
+ *  1. ESPNCricinfo series list → all active cricket series (IPL + international)
+ *     → fetch matches from EVERY active series
+ *  2. Sports DB team search "India" → all India national/franchise teams
+ *     → fetch next 5 + last 5 events per team (cricket, hockey, football,
+ *        badminton, kabaddi, wrestling, etc.)
+ *  3. Sports DB live scores → any sport that has live data today
+ *  4. ESPN F1 + Golf → only these two (ESPN excels at them)
  *
- * India-match detection: any match where a team name / league contains
- * "India", "IND", IPL team names, ISL, Pro Kabaddi, etc. gets a priority
- * boost so they appear first in Live/Upcoming/Results sections.
- *
- * Sort order within each state:
- *   India matches → other international → rest
- *
- * CDN cache: 3 minutes.
+ * India matches are automatically detected and sorted first within each
+ * Live/Upcoming/Results tab.
  */
 
-const ESPN   = 'https://site.api.espn.com/apis/site/v2/sports';
 const ESPNCI = 'https://hs-consumer-api.espncricinfo.com/v1/pages';
+const ESPN   = 'https://site.api.espn.com/apis/site/v2/sports';
 const SDB    = 'https://www.thesportsdb.com/api/v1/json/3';
 
 const HDR = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   Accept: 'application/json',
 };
 
-async function safeJson(url, ms = 9000) {
+async function safeJson(url, ms = 10000) {
   try {
     const r = await fetch(url, { headers: HDR, signal: AbortSignal.timeout(ms) });
     if (!r.ok) return null;
@@ -34,67 +31,58 @@ async function safeJson(url, ms = 9000) {
   } catch { return null; }
 }
 
-// ── India match detection ─────────────────────────────────────────────────
-const INDIA_KEYWORDS = [
-  'india', 'indian', ' ind ', 'ipl ', 'ipl2', 'bcci',
-  // IPL teams
-  'chennai super kings', 'csk', 'mumbai indians', 'kolkata knight', 'kkr',
-  'royal challengers', 'rcb', 'delhi capitals', ' dc ', 'punjab kings', 'pbks',
-  'gujarat titans', 'gt ', 'sunrisers', 'srh', 'lucknow super giants', 'lsg',
-  'rajasthan royals', 'rr ',
-  // Football
-  'isl', 'i-league', 'india national',
-  // Hockey
-  'hockey india', 'fih india',
-  // Other Indian leagues
+// ── India detection ───────────────────────────────────────────────────────
+const INDIA_KW = [
+  'india', ' ind ', 'indian', 'ipl ', 'bcci',
+  'csk', 'mumbai indians', 'kkr', 'kolkata knight', 'rcb', 'royal challengers',
+  'delhi capitals', 'pbks', 'punjab kings', 'gujarat titans', 'srh', 'sunrisers',
+  'lucknow super', 'lsg', 'rajasthan royals', 'rr ',
+  'isl', 'i-league', 'hockeyindia', 'fih india',
   'pro kabaddi', 'pkl', 'premier badminton',
-  // India women teams
-  'india women', 'india w',
-  // India A / U19
-  'india a', 'india u19', 'india u23',
+  'india women', 'india a', 'india u19', 'india u23',
 ];
 
-function isIndiaMatch(text = '') {
-  const t = text.toLowerCase();
-  return INDIA_KEYWORDS.some(kw => t.includes(kw));
+function isIndia(text = '') {
+  const t = (' ' + text + ' ').toLowerCase();
+  return INDIA_KW.some(k => t.includes(k));
 }
 
-// ── Sport mapping from Sports DB sport name ───────────────────────────────
-const SDB_SPORT_MAP = {
-  'Cricket':       { key: 'cricket',    name: 'Cricket',    emoji: '🏏' },
-  'Soccer':        { key: 'football',   name: 'Football',   emoji: '⚽' },
-  'Field Hockey':  { key: 'fieldhockey',name: 'Field Hockey',emoji: '🏑' },
-  'Hockey':        { key: 'fieldhockey',name: 'Field Hockey',emoji: '🏑' },
-  'Badminton':     { key: 'badminton',  name: 'Badminton',  emoji: '🏸' },
-  'Kabaddi':       { key: 'kabaddi',    name: 'Kabaddi',    emoji: '🤸' },
-  'Basketball':    { key: 'basketball', name: 'Basketball', emoji: '🏀' },
-  'Tennis':        { key: 'tennis',     name: 'Tennis',     emoji: '🎾' },
-  'Rugby':         { key: 'rugby',      name: 'Rugby',      emoji: '🏉' },
-  'Volleyball':    { key: 'volleyball', name: 'Volleyball', emoji: '🏐' },
-  'Table Tennis':  { key: 'tabletennis',name: 'Table Tennis',emoji: '🏓' },
-  'Squash':        { key: 'squash',     name: 'Squash',     emoji: '🎱' },
-  'Athletics':     { key: 'athletics',  name: 'Athletics',  emoji: '🏃' },
-  'Swimming':      { key: 'swimming',   name: 'Swimming',   emoji: '🏊' },
-  'Boxing':        { key: 'boxing',     name: 'Boxing',     emoji: '🥊' },
-  'MMA':           { key: 'mma',        name: 'MMA',        emoji: '🥊' },
-  'Motorsport':    { key: 'f1',         name: 'Motorsport', emoji: '🏎️' },
-  'Golf':          { key: 'golf',       name: 'Golf',       emoji: '⛳' },
-  'Cycling':       { key: 'cycling',    name: 'Cycling',    emoji: '🚴' },
-  'Wrestling':     { key: 'wrestling',  name: 'Wrestling',  emoji: '🤼' },
+// ── SportsDB sport → our internal key ────────────────────────────────────
+const SDB_SPORT_KEY = {
+  'Cricket':      { key: 'cricket',     name: 'Cricket',      emoji: '🏏' },
+  'Soccer':       { key: 'football',    name: 'Football',     emoji: '⚽' },
+  'Football':     { key: 'football',    name: 'Football',     emoji: '⚽' },
+  'Field Hockey': { key: 'fieldhockey', name: 'Field Hockey', emoji: '🏑' },
+  'Hockey':       { key: 'fieldhockey', name: 'Hockey',       emoji: '🏒' },
+  'Badminton':    { key: 'badminton',   name: 'Badminton',    emoji: '🏸' },
+  'Kabaddi':      { key: 'kabaddi',     name: 'Kabaddi',      emoji: '🤸' },
+  'Basketball':   { key: 'basketball',  name: 'Basketball',   emoji: '🏀' },
+  'Tennis':       { key: 'tennis',      name: 'Tennis',       emoji: '🎾' },
+  'Rugby':        { key: 'rugby',       name: 'Rugby',        emoji: '🏉' },
+  'Volleyball':   { key: 'volleyball',  name: 'Volleyball',   emoji: '🏐' },
+  'Athletics':    { key: 'athletics',   name: 'Athletics',    emoji: '🏃' },
+  'Boxing':       { key: 'boxing',      name: 'Boxing',       emoji: '🥊' },
+  'MMA':          { key: 'mma',         name: 'MMA',          emoji: '🥊' },
+  'Wrestling':    { key: 'wrestling',   name: 'Wrestling',    emoji: '🤼' },
+  'Table Tennis': { key: 'tabletennis', name: 'Table Tennis', emoji: '🏓' },
+  'Squash':       { key: 'squash',      name: 'Squash',       emoji: '🎱' },
+  'Golf':         { key: 'golf',        name: 'Golf',         emoji: '⛳' },
+  'Swimming':     { key: 'swimming',    name: 'Swimming',     emoji: '🏊' },
+  'Motorsport':   { key: 'f1',          name: 'Motorsport',   emoji: '🏎️' },
 };
 
 const NOW = Date.now();
 const H48 = 48 * 60 * 60 * 1000;
 
-// ── Convert SportsDB event → internal format ──────────────────────────────
-function convertSDB(ev, sport) {
-  const sportMeta = SDB_SPORT_MAP[sport] ?? { key: sport.toLowerCase(), name: sport, emoji: '🏅' };
-  const s = (ev.strStatus ?? ev.strProgress ?? '').toLowerCase();
-  const state = (s.includes('live') || s.includes('inning') || s.includes(' ov') || s.includes('in progress') || s.includes('quarter') || s.includes('half'))
-    ? 'in'
-    : (s.includes('finish') || s.includes('complet') || s.includes('result') || s.includes('final') || ev.intHomeScore != null)
-    ? 'post'
-    : 'pre';
+// ── Convert SportsDB event ────────────────────────────────────────────────
+function sdbToMatch(ev, overrideSport) {
+  const sport = overrideSport ?? ev.strSport ?? 'Unknown';
+  const meta  = SDB_SPORT_KEY[sport] ?? { key: sport.toLowerCase().replace(/\s/g,''), name: sport, emoji: '🏅' };
+
+  const s = ((ev.strStatus ?? '') + ' ' + (ev.strProgress ?? '')).toLowerCase();
+  const isLive   = s.includes('live') || s.includes('inning') || s.includes(' ov') || s.includes('progress') || s.includes('quarter') || s.includes('half') || s.includes('set ');
+  const isDone   = !isLive && (s.includes('finish') || s.includes('complet') || s.includes('result') || s.includes('final') || (ev.intHomeScore != null && ev.intAwayScore != null && (ev.strStatus || '').length > 2));
+  const state    = isLive ? 'in' : isDone ? 'post' : 'pre';
 
   const dateStr = ev.strTimestamp
     ?? (ev.dateEvent && ev.strTime ? `${ev.dateEvent}T${ev.strTime}+00:00` : null)
@@ -106,184 +94,224 @@ function convertSDB(ev, sport) {
 
   const homeScore = ev.intHomeScore != null ? String(ev.intHomeScore) : '';
   const awayScore = ev.intAwayScore != null ? String(ev.intAwayScore) : '';
-  const homeWins  = state === 'post' && Number(ev.intHomeScore) > Number(ev.intAwayScore);
-  const awayWins  = state === 'post' && Number(ev.intAwayScore) > Number(ev.intHomeScore);
-
-  const searchText = [ev.strHomeTeam, ev.strAwayTeam, ev.strLeague, ev.strSport].join(' ');
+  const homeWin   = state === 'post' && Number(ev.intHomeScore) > Number(ev.intAwayScore);
+  const awayWin   = state === 'post' && Number(ev.intAwayScore) > Number(ev.intHomeScore);
+  const searchTxt = [ev.strHomeTeam, ev.strAwayTeam, ev.strLeague, ev.strSport].join(' ');
 
   return {
     id:          `sdb_${ev.idEvent}`,
-    sport:       sportMeta.key,
-    sportName:   sportMeta.name,
-    emoji:       sportMeta.emoji,
+    sport:       meta.key,
+    sportName:   meta.name,
+    emoji:       meta.emoji,
     match:       ev.strEvent || `${ev.strHomeTeam || '?'} vs ${ev.strAwayTeam || '?'}`,
     league:      ev.strLeague || ev.strSeason || '',
     state,
     date:        dateStr,
-    summary:     ev.strResult || (state === 'in' ? ev.strProgress || 'Live' : ev.strStatus || ''),
+    summary:     ev.strResult || (isLive ? (ev.strProgress || 'Live') : ev.strStatus || ''),
     detail:      ev.strProgress || '',
     clock:       '',
     period:      null,
     venue:       ev.strVenue || ev.strCountry || '',
     competitors: [
-      { name: ev.strHomeTeam || '?', score: homeScore, winner: homeWins },
-      { name: ev.strAwayTeam || '?', score: awayScore, winner: awayWins },
+      { name: ev.strHomeTeam || '?', score: homeScore, winner: homeWin },
+      { name: ev.strAwayTeam || '?', score: awayScore, winner: awayWin },
     ],
-    isIndia: isIndiaMatch(searchText),
-    source: 'sdb',
+    isIndia: isIndia(searchTxt),
+    source:  'sdb',
   };
 }
 
-// ── The Sports DB: fetch all sports for 3 days ────────────────────────────
-const SDB_SPORTS_TO_FETCH = [
-  'Cricket', 'Soccer', 'Badminton', 'Field Hockey', 'Kabaddi',
-  'Basketball', 'Tennis', 'Rugby', 'Volleyball', 'Table Tennis',
-  'Athletics', 'Boxing', 'MMA', 'Wrestling', 'Golf', 'Cycling',
-];
-
-async function fetchSportsDB() {
-  const today    = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const tomorrow  = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const dates = [yesterday, today, tomorrow];
-
-  // All sport × date combinations in parallel
-  const fetches = SDB_SPORTS_TO_FETCH.flatMap(sport =>
-    dates.map(d => safeJson(`${SDB}/eventsday.php?d=${d}&s=${encodeURIComponent(sport)}`).then(r => ({ sport, events: r?.events ?? [] })))
-  );
-
-  const results = await Promise.allSettled(fetches);
-  const all = [];
-  const seen = new Set();
-
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    const { sport, events } = r.value;
-    for (const ev of events) {
-      if (!ev?.idEvent || seen.has(ev.idEvent)) continue;
-      seen.add(ev.idEvent);
-      const converted = convertSDB(ev, sport);
-      if (converted) all.push(converted);
-    }
-  }
-
-  console.log(`SportsDB: ${all.length} events across ${SDB_SPORTS_TO_FETCH.length} sports`);
-  return all;
-}
-
-// ── ESPNCricinfo: live cricket ─────────────────────────────────────────────
-function ciToInternal(m) {
+// ── ESPNCricinfo converter ────────────────────────────────────────────────
+function ciToMatch(m, seriesName = '') {
   const state = m.status?.type?.id === 'InProgress' ? 'in'
     : m.status?.type?.id === 'Finished' ? 'post' : 'pre';
+  const date  = m.startTime ?? null;
+  const evTime = date ? new Date(date).getTime() : null;
+  if (state === 'post' && evTime && NOW - evTime > H48) return null;
+  if (state === 'pre'  && evTime && evTime - NOW > H48) return null;
+
   const competitors = (m.teams ?? []).map(t => ({
-    name:    t.team?.longName ?? t.team?.name ?? '?',
-    score:   t.score ? `${t.score.runs ?? ''}/${t.score.wickets ?? ''}` : '',
-    winner:  state === 'post' && !!t.isWinner,
-    order:   99,
+    name:   t.team?.longName ?? t.team?.name ?? '?',
+    score:  t.score ? `${t.score.runs ?? ''}/${t.score.wickets ?? ''}${t.score.overs ? ` (${t.score.overs} ov)` : ''}` : '',
+    winner: state === 'post' && !!t.isWinner,
   }));
-  const searchText = competitors.map(c => c.name).join(' ') + ' ' + (m.description ?? '');
+
+  const searchTxt = competitors.map(c => c.name).join(' ') + ' ' + seriesName;
+
   return {
     id:          `ci_${m.objectId ?? m.id ?? Math.random()}`,
     sport:       'cricket',
     sportName:   'Cricket',
     emoji:       '🏏',
-    match:       m.description ?? m.title ?? 'Cricket',
-    league:      m.series?.name ?? m.tournament?.name ?? '',
+    match:       m.description ?? m.title ?? seriesName ?? 'Cricket',
+    league:      seriesName || m.series?.name || '',
     state,
-    date:        m.startTime ?? null,
+    date,
     summary:     m.status?.displayText ?? '',
     detail:      m.status?.displayText ?? '',
     clock:       '',
     period:      null,
     venue:       m.venue?.name ?? m.ground?.longName ?? '',
     competitors,
-    isIndia:     isIndiaMatch(searchText),
+    isIndia:     isIndia(searchTxt),
     source:      'espncricinfo',
   };
 }
 
-async function fetchCricket() {
-  const events = [];
+// ── SOURCE 1: ESPNCricinfo — all active cricket series ────────────────────
+async function fetchCricketSeriesList() {
+  const allMatches = [];
 
-  // Source 1: ESPNCricinfo live page
-  const ci = await safeJson(`${ESPNCI}/matches/home?slug=live-cricket-score`);
-  const ciMatches = ci?.content?.matches ?? ci?.matches ?? [];
-  if (ciMatches.length) {
-    events.push(...ciMatches.map(ciToInternal).filter(Boolean));
-    console.log(`Cricket ESPNCricinfo: ${ciMatches.length} matches`);
+  // Get all active cricket series
+  const seriesData = await safeJson(`${ESPNCI}/series/list?lang=en&hasFixtures=true`);
+  const seriesList = seriesData?.content?.series ?? seriesData?.series ?? [];
+  console.log(`Cricket series list: ${seriesList.length} active series`);
+
+  // Also try the live page as a quick first pass
+  const livePage = await safeJson(`${ESPNCI}/matches/home?slug=live-cricket-score`);
+  const liveMatches = livePage?.content?.matches ?? livePage?.matches ?? [];
+  for (const m of liveMatches) {
+    const match = ciToMatch(m, '');
+    if (match) allMatches.push(match);
   }
+  console.log(`Cricket live page: ${liveMatches.length} matches`);
 
-  // Source 2: ESPN with Indian region
-  if (events.length === 0) {
-    const espnIn = await safeJson(`${ESPN}/cricket/scoreboard?region=in&lang=en-in`);
-    if (espnIn?.events?.length) {
-      console.log(`Cricket ESPN-IN: ${espnIn.events.length}`);
-      // Use ESPNCricinfo converter format
-    }
-  }
-
-  // Source 3: ESPN cricket leagues
-  if (events.length === 0) {
-    const lg = await safeJson(`${ESPN}/cricket/leagues`);
-    const ids = (lg?.leagues ?? []).map(l => String(l.id)).filter(Boolean);
-    if (ids.length) {
-      const res = await Promise.allSettled(ids.slice(0, 10).map(id => safeJson(`${ESPN}/cricket/${id}/scoreboard`)));
-      for (const r of res) {
-        if (r.status !== 'fulfilled' || !r.value?.events) continue;
-        // events already handled by sportsdb for cricket; just log
+  // Fetch matches from all active series in parallel (up to 15)
+  if (seriesList.length > 0) {
+    const seriesFetches = seriesList.slice(0, 15).map(s =>
+      safeJson(`${ESPNCI}/series/matches?lang=en&seriesId=${s.objectId}`)
+        .then(r => ({ name: s.description || s.name || '', matches: r?.content?.matches ?? r?.matches ?? [] }))
+    );
+    const seriesResults = await Promise.allSettled(seriesFetches);
+    for (const r of seriesResults) {
+      if (r.status !== 'fulfilled') continue;
+      const { name, matches } = r.value;
+      for (const m of matches) {
+        const match = ciToMatch(m, name);
+        if (match) allMatches.push(match);
       }
-      console.log(`Cricket ESPN leagues: ${ids.length} leagues tried`);
+    }
+    console.log(`Cricket series matches fetched from ${seriesList.length} series`);
+  }
+
+  return allMatches;
+}
+
+// ── SOURCE 2: Sports DB — all "India" teams → their events ────────────────
+async function fetchIndiaSportsDB() {
+  // Search for all India-named teams
+  const data = await safeJson(`${SDB}/searchteams.php?t=India`);
+  const allTeams = data?.teams ?? [];
+
+  // Filter to national teams + major Indian franchises
+  const indiaTeams = allTeams.filter(t => {
+    const name = (t.strTeam ?? '').toLowerCase();
+    // Include: national teams (India, India Women, India A, India U19)
+    // Exclude: random clubs that happen to have "India" in name
+    return name === 'india' || name.startsWith('india ') ||
+           name.endsWith(' india') || name.includes(' india ');
+  }).slice(0, 25);
+
+  console.log(`Sports DB India teams: ${indiaTeams.length} found`);
+
+  // For each team, fetch next 5 and last 5 events
+  const eventFetches = indiaTeams.flatMap(team => [
+    safeJson(`${SDB}/eventsnext.php?id=${team.idTeam}`).then(r => ({ team, data: r })),
+    safeJson(`${SDB}/eventslast.php?id=${team.idTeam}`).then(r => ({ team, data: r })),
+  ]);
+
+  const results = await Promise.allSettled(eventFetches);
+  const events  = [];
+  const seen    = new Set();
+
+  for (const r of results) {
+    if (r.status !== 'fulfilled' || !r.value?.data?.events) continue;
+    for (const ev of r.value.data.events) {
+      if (!ev?.idEvent || seen.has(ev.idEvent)) continue;
+      seen.add(ev.idEvent);
+      const m = sdbToMatch(ev, ev.strSport);
+      if (m) events.push(m);
     }
   }
 
+  console.log(`Sports DB India events: ${events.length} from ${indiaTeams.length} teams`);
   return events;
 }
 
-// ── ESPN: specific sports not well-covered by SportsDB ────────────────────
-const ESPN_SPORTS = [
-  { key: 'f1',    path: 'racing/f1',  name: 'Formula 1',  emoji: '🏎️' },
-  { key: 'golf',  path: 'golf',       name: 'Golf',        emoji: '⛳' },
-];
+// ── SOURCE 3: Sports DB today's events for key sports ────────────────────
+async function fetchSportsDBToday() {
+  const today    = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const yest     = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 
-async function fetchESPN() {
+  // Key sports that ESPN/SDB cover for international events involving India
+  const sports = ['Cricket', 'Soccer', 'Field Hockey', 'Badminton', 'Kabaddi', 'Tennis', 'Rugby', 'Basketball', 'Wrestling', 'Boxing', 'Table Tennis', 'Volleyball'];
+  const dates  = [yest, today, tomorrow];
+
+  const fetches = sports.flatMap(sport =>
+    dates.map(d => safeJson(`${SDB}/eventsday.php?d=${d}&s=${encodeURIComponent(sport)}`).then(r => ({ sport, events: r?.events ?? [] })))
+  );
+
+  const results = await Promise.allSettled(fetches);
+  const events  = [];
+  const seen    = new Set();
+
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    const { sport, events: evs } = r.value;
+    for (const ev of evs) {
+      if (!ev?.idEvent || seen.has(ev.idEvent)) continue;
+      seen.add(ev.idEvent);
+      const m = sdbToMatch(ev, sport);
+      if (m) events.push(m);
+    }
+  }
+
+  console.log(`Sports DB today: ${events.length} events across ${sports.length} sports`);
+  return events;
+}
+
+// ── SOURCE 4: ESPN for F1 and Golf only ──────────────────────────────────
+async function fetchESPNSpecific() {
+  const DIRECT = [
+    { key: 'f1', path: 'racing/f1', name: 'Formula 1', emoji: '🏎️' },
+    { key: 'golf', path: 'golf', name: 'Golf', emoji: '⛳' },
+  ];
   const events = [];
-  for (const sport of ESPN_SPORTS) {
-    const base = `${ESPN}/${sport.path}`;
+
+  for (const s of DIRECT) {
+    const base = `${ESPN}/${s.path}`;
     let raw = await safeJson(`${base}/scoreboard`);
     if (!raw?.events?.length) {
       const lg = await safeJson(`${base}/leagues`);
-      const ids = (lg?.leagues ?? []).map(l => l.id).filter(Boolean).slice(0, 5);
+      const ids = (lg?.leagues ?? []).map(l => l.id).filter(Boolean).slice(0, 4);
       if (ids.length) {
         const res = await Promise.allSettled(ids.map(id => safeJson(`${base}/${id}/scoreboard`)));
         raw = { events: res.flatMap(r => r.status === 'fulfilled' ? r.value?.events ?? [] : []) };
       }
     }
     for (const ev of raw?.events ?? []) {
-      const comp = ev?.competitions?.[0];
+      const comp   = ev?.competitions?.[0];
       if (!comp) continue;
       const state  = comp.status?.type?.state ?? 'post';
       const date   = comp.date ?? ev.date ?? null;
       const evTime = date ? new Date(date).getTime() : null;
       if (state === 'post' && evTime && NOW - evTime > H48) continue;
       if (state === 'pre'  && evTime && evTime - NOW > H48) continue;
-      const competitors = (comp.competitors ?? []).map(c => ({
-        name:   c.team?.shortDisplayName || c.athlete?.shortName || '?',
-        score:  c.score ?? '',
-        winner: c.winner === 'true' || c.winner === true,
-        order:  Number(c.order ?? 99),
-      }));
-      if (sport.key === 'f1') competitors.sort((a, b) => a.order - b.order).splice(5);
+      const competitors = (comp.competitors ?? [])
+        .map(c => ({ name: c.athlete?.shortName || c.team?.shortDisplayName || c.team?.abbreviation || '?', score: c.score ?? '', winner: c.winner === 'true' || c.winner === true, order: Number(c.order ?? 99) }))
+        .sort((a, b) => a.order - b.order).slice(0, 5);
       events.push({
-        id: `espn_${ev.id}`, sport: sport.key, sportName: sport.name, emoji: sport.emoji,
+        id: `espn_${ev.id}`, sport: s.key, sportName: s.name, emoji: s.emoji,
         match: ev.shortName || ev.name || '', league: ev.season?.displayName || '',
         state, date, summary: comp.status?.summary ?? '', detail: comp.status?.type?.detail ?? '',
         clock: comp.status?.displayClock ?? '', period: comp.status?.period ?? null,
-        venue: comp.venue?.fullName ?? '', competitors,
-        isIndia: false, source: 'espn',
+        venue: comp.venue?.fullName ?? '', competitors, isIndia: false, source: 'espn',
       });
     }
   }
-  console.log(`ESPN direct: ${events.length} events`);
+
+  console.log(`ESPN F1+Golf: ${events.length} events`);
   return events;
 }
 
@@ -293,18 +321,19 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=360');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // Fetch all sources in parallel
-  const [sdbEvents, cricketEvents, espnEvents] = await Promise.all([
-    fetchSportsDB(),
-    fetchCricket(),
-    fetchESPN(),
+  // All four sources in parallel
+  const [cricketMatches, indiaSDB, todaySDB, espnDirect] = await Promise.all([
+    fetchCricketSeriesList(),
+    fetchIndiaSportsDB(),
+    fetchSportsDBToday(),
+    fetchESPNSpecific(),
   ]);
 
-  // Merge, deduplicate by id
+  // Merge — cricket first, then India SDB, then today SDB, then ESPN
   const seen = new Set();
   const all  = [];
 
-  const addAll = (events) => {
+  const add = (events) => {
     for (const ev of events) {
       if (!ev?.id || seen.has(ev.id)) continue;
       seen.add(ev.id);
@@ -312,37 +341,34 @@ export default async function handler(req, res) {
     }
   };
 
-  // Priority: cricket (ESPNCricinfo best) → SportsDB → ESPN
-  addAll(cricketEvents);
-  addAll(sdbEvents);
-  addAll(espnEvents);
+  add(cricketMatches);  // Cricket with full scores (ESPNCricinfo)
+  add(indiaSDB);        // All India team events across all sports
+  add(todaySDB);        // Today's events from Sports DB (catches everything else)
+  add(espnDirect);      // F1 + Golf
 
-  // Sort:
-  // 1. state: live(0) > upcoming(1) > completed(2)
-  // 2. within state: India(0) > international(1) > other(2)
-  // 3. within India+state: upcoming=soonest first, completed=most-recent first
-  const stateOrder = { in: 0, pre: 1, post: 2 };
+  // Sort: live → upcoming soonest → completed most-recent
+  //       within each state: India first
   all.sort((a, b) => {
-    const sd = (stateOrder[a.state] ?? 9) - (stateOrder[b.state] ?? 9);
+    const so = { in: 0, pre: 1, post: 2 };
+    const sd = (so[a.state] ?? 9) - (so[b.state] ?? 9);
     if (sd !== 0) return sd;
     const id = (a.isIndia ? 0 : 1) - (b.isIndia ? 0 : 1);
     if (id !== 0) return id;
     if (!a.date || !b.date) return 0;
-    if (a.state === 'pre') return new Date(a.date).getTime() - new Date(b.date).getTime();
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    return a.state === 'pre'
+      ? new Date(a.date).getTime() - new Date(b.date).getTime()
+      : new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   const live      = all.filter(m => m.state === 'in');
   const upcoming  = all.filter(m => m.state === 'pre');
   const completed = all.filter(m => m.state === 'post');
+  const indiaTotal = all.filter(m => m.isIndia).length;
 
-  // Per-sport breakdown for debugging
   const sportCounts = {};
   all.forEach(m => { sportCounts[m.sport] = (sportCounts[m.sport] ?? 0) + 1; });
-  const indiaCount = all.filter(m => m.isIndia).length;
-
-  console.log(`/api/sports: ${all.length} total | India: ${indiaCount} | live:${live.length} upcoming:${upcoming.length} completed:${completed.length}`);
-  console.log(`Breakdown: ${Object.entries(sportCounts).map(([k,v]) => `${k}:${v}`).join(' ')}`);
+  console.log(`TOTAL: ${all.length} | India: ${indiaTotal} | live:${live.length} upcoming:${upcoming.length} completed:${completed.length}`);
+  console.log(`Sports: ${Object.entries(sportCounts).map(([k,v])=>`${k}:${v}`).join(' ')}`);
 
   return res.status(200).json({
     matches: all, live, upcoming, completed,

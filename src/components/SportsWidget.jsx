@@ -2,17 +2,26 @@ import { memo, useMemo, useState } from 'react';
 import { useSports } from '../hooks/useSports.js';
 
 const SPORT_CONFIG = [
-  { key: 'cricket',    name: 'Cricket',    emoji: '🏏' },
-  { key: 'football',   name: 'Football',   emoji: '⚽' },
-  { key: 'f1',         name: 'Formula 1',  emoji: '🏎️' },
-  { key: 'basketball', name: 'Basketball', emoji: '🏀' },
-  { key: 'tennis',     name: 'Tennis',     emoji: '🎾' },
-  { key: 'hockey',     name: 'Hockey',     emoji: '🏒' },
-  { key: 'nfl',        name: 'NFL',        emoji: '🏈' },
-  { key: 'baseball',   name: 'Baseball',   emoji: '⚾' },
-  { key: 'golf',       name: 'Golf',       emoji: '⛳' },
-  { key: 'mma',        name: 'UFC / MMA',  emoji: '🥊' },
-  { key: 'rugby',      name: 'Rugby',      emoji: '🏉' },
+  // Indian sports first
+  { key: 'cricket',     name: 'Cricket',      emoji: '🏏' },
+  { key: 'kabaddi',     name: 'Kabaddi',      emoji: '🤸' },
+  { key: 'fieldhockey', name: 'Field Hockey', emoji: '🏑' },
+  { key: 'badminton',   name: 'Badminton',    emoji: '🏸' },
+  // International
+  { key: 'football',    name: 'Football',     emoji: '⚽' },
+  { key: 'tennis',      name: 'Tennis',       emoji: '🎾' },
+  { key: 'f1',          name: 'Formula 1',    emoji: '🏎️' },
+  { key: 'basketball',  name: 'Basketball',   emoji: '🏀' },
+  { key: 'rugby',       name: 'Rugby',        emoji: '🏉' },
+  { key: 'golf',        name: 'Golf',         emoji: '⛳' },
+  { key: 'tabletennis', name: 'Table Tennis', emoji: '🏓' },
+  { key: 'volleyball',  name: 'Volleyball',   emoji: '🏐' },
+  { key: 'athletics',   name: 'Athletics',    emoji: '🏃' },
+  { key: 'boxing',      name: 'Boxing',       emoji: '🥊' },
+  { key: 'mma',         name: 'MMA',          emoji: '🥊' },
+  { key: 'wrestling',   name: 'Wrestling',    emoji: '🤼' },
+  { key: 'squash',      name: 'Squash',       emoji: '🎱' },
+  { key: 'swimming',    name: 'Swimming',     emoji: '🏊' },
 ];
 
 const RACING = new Set(['f1', 'nascar', 'indycar']);
