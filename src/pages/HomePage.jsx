@@ -140,13 +140,13 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
   return (
     <div className="home-pg">
       <div className="home-briefing">
-        <div className="home-briefing-left">
-          <h2 className="home-briefing-title">{t.briefing}</h2>
+        <h2 className="home-briefing-title">{t.briefing}</h2>
+        <div className="home-briefing-meta">
           <span className="home-briefing-date">{today}</span>
-        </div>
-        <div className="home-briefing-right">
-          <WeatherBadge />
-          <AQIBadge />
+          <div className="home-briefing-right">
+            <WeatherBadge />
+            <AQIBadge />
+          </div>
         </div>
       </div>
 

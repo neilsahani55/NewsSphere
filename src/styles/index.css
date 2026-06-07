@@ -1749,12 +1749,20 @@ button { font-family: inherit; }
 }
 .home-briefing {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  gap: .25rem;
   padding-bottom: .5rem;
   border-bottom: 1px solid var(--border);
 }
+/* Row below the title: date on left, weather+AQI on right */
+.home-briefing-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+/* Legacy — kept in case any other code references it */
 .home-briefing-left { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
 .home-briefing-title {
   font-family: var(--ffd);
@@ -1878,8 +1886,8 @@ button { font-family: inherit; }
   grid-template-columns: 1fr 1fr;
   gap: .5rem;
 }
+/* Always 3 columns — user wants all fuel types in one row */
 .fuel-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-@media (max-width: 480px) { .fuel-grid-3 { grid-template-columns: 1fr 1fr; } }
 .fuel-card {
   display: flex;
   align-items: center;
@@ -3478,8 +3486,8 @@ mark.tts-hl {
 
   /* Home page */
   .home-pg { gap: 1.25rem; padding-bottom: 1.25rem; }
-  .home-briefing { flex-direction: column; align-items: flex-start; gap: .35rem; padding-bottom: .4rem; }
-  .home-briefing-left { gap: .3rem; }
+  .home-briefing { gap: .2rem; padding-bottom: .4rem; }
+  .home-briefing-meta { gap: .25rem; }
   .home-briefing-right { flex-wrap: wrap; gap: .3rem; }
   .home-briefing-title { font-size: 1.1rem; }
   .home-briefing-date { font-size: .8rem; }
@@ -3579,8 +3587,8 @@ mark.tts-hl {
   .mkt-tile { flex: 0 0 75px; padding: .32rem .42rem; }
   .mkt-value { font-size: .76rem; }
 
-  /* Sports: single column */
-  .sp-grid4 { grid-template-columns: 1fr; }
+  /* Sports: 2 columns on mobile (never collapse to 1) */
+  .sp-grid4 { grid-template-columns: repeat(2, 1fr); }
   .sp-tab { padding: .3rem .58rem; font-size: .74rem; }
 
   /* Cards smaller */
@@ -3594,9 +3602,15 @@ mark.tts-hl {
   .th-year { font-size: 1.8rem; }
   .th-title { font-size: .88rem; }
 
-  /* Fuel: stack grid if 3 fuels */
-  .fuel-grid-3 { grid-template-columns: repeat(2, 1fr); }
-  .fuel-price { font-size: .88rem; }
+  /* Fuel: 3 columns always — compact card for narrow width */
+  .fuel-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .fuel-price { font-size: .85rem; }
+  /* Stack card vertically and center for narrow 3-col layout */
+  .fuel-card { flex-direction: column; align-items: center; text-align: center; padding: .55rem .3rem; gap: .15rem; }
+  .fuel-icon { font-size: 1.1rem; }
+  .fuel-body { align-items: center; gap: .02rem; }
+  .fuel-type { font-size: .58rem; }
+  .fuel-unit { font-size: .55rem; }
 
   /* Modals full screen */
   .th-overlay { padding: 0; }
@@ -3610,11 +3624,15 @@ mark.tts-hl {
   .layout, .filters, .foot { padding-left: .72rem; padding-right: .72rem; }
   .mkt-tile { flex: 0 0 68px; }
   .mkt-value { font-size: .72rem; }
-  .sp-grid4 { grid-template-columns: 1fr; }
+  /* Sports: keep 2 columns even on smallest phones */
+  .sp-grid4 { grid-template-columns: repeat(2, 1fr); }
   .th-year { font-size: 1.65rem; }
   .hcard-title { font-size: .8rem; }
   .hcard-feat .hcard-title { font-size: .88rem; }
-  .fuel-grid, .fuel-grid-3 { grid-template-columns: 1fr; }
+  /* Fuel: keep 3 columns, shrink text further */
+  .fuel-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .fuel-price { font-size: .78rem; }
+  .fuel-type { font-size: .54rem; }
   .home-top-grid { grid-template-columns: 1fr; }
   .home-top-side { display: none; }
   .sp-tab { padding: .28rem .48rem; font-size: .7rem; }
