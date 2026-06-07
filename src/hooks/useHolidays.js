@@ -62,11 +62,22 @@ function computeObservances(year) {
   const add = (date, name, emoji, type = 'observance') =>
     ev.push({ date: iso(date), name, emoji, type });
 
+  // ── Fixed solar / regional Indian festivals ────────────────────────────
+  // These are solar-calendar based (fixed Gregorian dates) so safe to compute
+  add(new Date(year,  0, 13), 'Lohri',                                    '🔥', 'festival');
+  add(new Date(year,  0, 14), 'Makar Sankranti',                          '🪁', 'festival');
+  add(new Date(year,  0, 14), 'Thai Pongal (Pongal Day 1)',               '🍚', 'regional');
+  add(new Date(year,  0, 15), 'Mattu Pongal (Pongal Day 2)',              '🐄', 'regional');
+  add(new Date(year,  0, 16), 'Kaanum Pongal (Pongal Day 3)',             '🌺', 'regional');
+  add(new Date(year,  3, 13), 'Baisakhi / Vishu (Kerala)',               '🌾', 'festival');
+
   // ── Fixed dates — national (India) ──────────────────────────────────────
   add(new Date(year,  0,  1), "New Year's Day",                           '🎉', 'national');
+  add(new Date(year,  0, 10), 'World Hindi Day',                          '📜', 'national');
   add(new Date(year,  0, 12), 'National Youth Day (Vivekananda Jayanti)',  '🔱', 'national');
   add(new Date(year,  0, 15), 'Army Day',                                  '🎖️', 'national');
   add(new Date(year,  0, 23), 'Netaji Subhas Chandra Bose Jayanti',       '🎖️', 'national');
+  add(new Date(year,  0, 24), 'National Girl Child Day',                  '👧', 'national');
   add(new Date(year,  0, 25), 'National Voters Day',                      '🗳️', 'national');
   add(new Date(year,  0, 28), 'Data Protection Day',                      '🔒', 'observance');
   add(new Date(year,  0, 30), 'Martyrs Day (Bapu)',                       '🕊️', 'national');
@@ -177,18 +188,34 @@ function computeObservances(year) {
   ];
   vWeek.forEach(([d, n, e]) => add(new Date(year, 1, d), n, e, 'observance'));
 
+  // ── More fixed-date days ─────────────────────────────────────────────────
+  add(new Date(year,  3, 10), 'Siblings Day',                              '👫', 'observance');
+  add(new Date(year,  3, 29), 'International Dance Day',                   '💃', 'observance');
+  add(new Date(year,  3, 30), 'International Jazz Day',                    '🎷', 'observance');
+  add(new Date(year,  4,  4), 'Star Wars Day',                             '⭐', 'observance');
+  add(new Date(year,  5, 23), 'International Olympic Day',                 '🏅', 'observance');
+  add(new Date(year,  6, 17), 'World Emoji Day',                           '😊', 'observance');
+  add(new Date(year,  7, 12), 'World Elephant Day',                        '🐘', 'observance');
+  add(new Date(year,  9,  5), 'World Teachers Day (International)',        '📖', 'observance');
+  add(new Date(year,  9, 31), 'Halloween',                                 '🎃', 'observance');
+  add(new Date(year, 10, 11), 'Remembrance Day',                          '🌹', 'observance');
+  add(new Date(year, 10, 13), 'World Kindness Day',                        '💛', 'observance');
+
   // ── Nth-weekday rules ─────────────────────────────────────────────────────
+  // World Laughter Day: 1st Sunday of May
+  add(nthWeekday(year, 4, 0, 1),  'World Laughter Day',        '😂', 'observance');
   // Mother's Day: 2nd Sunday of May
-  add(nthWeekday(year, 4, 0, 2),  "Mother's Day",      '👩‍👧‍👦', 'observance');
+  add(nthWeekday(year, 4, 0, 2),  "Mother's Day",              '👩‍👧‍👦', 'observance');
   // Father's Day: 3rd Sunday of June
-  add(nthWeekday(year, 5, 0, 3),  "Father's Day",      '👨‍👧‍👦', 'observance');
+  add(nthWeekday(year, 5, 0, 3),  "Father's Day",              '👨‍👧‍👦', 'observance');
   // Friendship Day: 1st Sunday of August
-  add(nthWeekday(year, 7, 0, 1),  'Friendship Day',    '🤝', 'observance');
-  // World Hepatitis Day falls on a fixed date (Jul 28) — already added above
-  // Grandparents Day: 1st Sunday after Labour Day (Sep) — 2nd Sunday of Sep in India
-  add(nthWeekday(year, 8, 0, 2),  "Grandparents Day",  '👴👵', 'observance');
-  // Siblings Day: Apr 10 (fixed) — already could add, here it is:
-  add(new Date(year, 3, 10),       'Siblings Day',      '👫', 'observance');
+  add(nthWeekday(year, 7, 0, 1),  'Friendship Day',            '🤝', 'observance');
+  // Grandparents Day: 2nd Sunday of September
+  add(nthWeekday(year, 8, 0, 2),  "Grandparents Day",          '👴👵', 'observance');
+  // World Smile Day: 1st Friday of October
+  add(nthWeekday(year, 9, 5, 1),  'World Smile Day',           '😊', 'observance');
+  // Thanksgiving: 4th Thursday of November
+  add(nthWeekday(year, 10, 4, 4), 'Thanksgiving Day',          '🦃', 'observance');
 
   return ev;
 }
@@ -276,6 +303,24 @@ const NAGER_EMOJI = {
   'Ram Navami':'🪔','Vasant Panchami':'💛',
 };
 
+/** Derive Diwali-period events (Dhanteras → Chhath) from the Diwali date */
+function deriveDiwaliPeriod(official) {
+  const d = official.find(h => /diwali|deepavali/i.test(h.name));
+  if (!d) return [];
+  const [y, m, dy] = d.date.split('-').map(Number);
+  const dw = new Date(y, m - 1, dy);
+  return [
+    { date: iso(addDays(dw, -2)), name: 'Dhanteras (Dhantrayodashi)',         emoji: '🪙', type: 'festival' },
+    { date: iso(addDays(dw, -1)), name: 'Naraka Chaturdashi (Choti Diwali)', emoji: '🪔', type: 'festival' },
+    { date: iso(addDays(dw,  1)), name: 'Govardhan Puja / Annakut',          emoji: '🐄', type: 'festival' },
+    { date: iso(addDays(dw,  2)), name: 'Bhai Dooj',                          emoji: '👫', type: 'festival' },
+    { date: iso(addDays(dw,  6)), name: 'Chhath Puja — Nahay Khay',          emoji: '🌅', type: 'festival' },
+    { date: iso(addDays(dw,  7)), name: 'Chhath Puja — Kharna',              emoji: '🌅', type: 'festival' },
+    { date: iso(addDays(dw,  8)), name: 'Chhath Puja — Sandhya Arghya',      emoji: '🌅', type: 'festival' },
+    { date: iso(addDays(dw,  9)), name: 'Chhath Puja — Usha Arghya',         emoji: '🌅', type: 'festival' },
+  ];
+}
+
 /** Derive Navratri days (9) from the Dussehra date in official holidays */
 function deriveNavratri(official) {
   const d = official.find(h =>
@@ -334,7 +379,11 @@ export function useHolidays() {
       } catch {}
 
       // Derived events from official holidays
-      const derived = [...deriveNavratri(official), ...deriveGaneshPeriod(official)];
+      const derived = [
+        ...deriveNavratri(official),
+        ...deriveGaneshPeriod(official),
+        ...deriveDiwaliPeriod(official),
+      ];
 
       // Source 2: Lunar vrats (computed astronomy)
       const lunar = computeLunarEvents(today, 80);

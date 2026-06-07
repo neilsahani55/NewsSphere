@@ -46,20 +46,25 @@ export function useHistory(date) {
       .from('today_history')
       .select('id, event_year, title, description, category, details')
       .eq('history_date', targetDate)
-      .order('event_year', { ascending: false })
+      // Fetch all rows then sort numerically on the client.
+      // DB text ordering ('event_year' is stored as TEXT) fails for ancient years:
+      // "500" > "2026" alphabetically ('5' > '2'), putting year-500 events first.
+      // Numeric sort fixes this completely regardless of year magnitude.
       .then(({ data, error }) => {
         if (activeDate.current !== targetDate) return; // stale response
         if (error) { setStatus('error'); return; }
 
-        // Deduplicate by (event_year, title) — safety net for any DB-level
-        // duplicates that crept in from concurrent or repeated pipeline runs.
+        // Deduplicate by (event_year, title)
         const seen = new Set();
-        const rows = (data || []).filter(r => {
+        const deduped = (data || []).filter(r => {
           const key = `${r.event_year}|${(r.title || '').toLowerCase().trim()}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
         });
+
+        // Sort descending by year numerically (most recent first)
+        const rows = deduped.sort((a, b) => Number(b.event_year) - Number(a.event_year));
 
         writeCache(targetDate, rows);
         setEvents(rows);
