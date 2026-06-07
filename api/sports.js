@@ -75,8 +75,7 @@ function parseCompetitor(c, sportKey) {
 }
 
 const NOW = Date.now();
-const H24 = 24 * 60 * 60 * 1000;
-const H48 = 48 * 60 * 60 * 1000;
+const H48 = 48 * 60 * 60 * 1000;  // 48 hours = yesterday + today
 
 function parseEvent(ev, sport) {
   const comp = ev?.competitions?.[0];
@@ -86,10 +85,10 @@ function parseEvent(ev, sport) {
   const date   = comp.date ?? ev.date ?? null;
   const evTime = date ? new Date(date).getTime() : null;
 
-  // Drop completed events older than 24 hours
-  if (state === 'post' && evTime && NOW - evTime > H24) return null;
-  // Drop upcoming events more than 48 hours away
-  if (state === 'pre' && evTime && evTime - NOW > H48) return null;
+  // Results: yesterday + today (last 48 hours)
+  if (state === 'post' && evTime && NOW - evTime > H48) return null;
+  // Upcoming: today + tomorrow (next 48 hours)
+  if (state === 'pre'  && evTime && evTime - NOW > H48) return null;
 
   let competitors = (comp.competitors ?? []).map(c => parseCompetitor(c, sport.key));
 
