@@ -51,26 +51,28 @@ async function fetchSportEvents(sport) {
   return events;
 }
 
-// Parse a single competitor — handles both team sports AND racing (F1 uses athletes)
+// Parse a single competitor for any sport type
 function parseCompetitor(c, sportKey) {
-  const isRacing = RACING_KEYS.has(sportKey);
+  const isRacing  = RACING_KEYS.has(sportKey);
+  const isIndiv   = ['tennis', 'golf', 'mma', 'boxing'].includes(sportKey); // individual athletes
+
+  // Prefer athlete name for individual sports and racing; team name for team sports
+  const athleteName = c.athlete?.shortName || c.athlete?.displayName || c.athlete?.fullName || '';
+  const teamName    = c.team?.shortDisplayName || c.team?.abbreviation || c.team?.displayName || '';
 
   let name = '?';
-  if (isRacing) {
-    // F1/racing: driver name is in athlete, team is the constructor
-    name = c.athlete?.shortName || c.athlete?.displayName
-        || c.team?.shortDisplayName || c.team?.abbreviation || '?';
+  if (isRacing || isIndiv) {
+    name = athleteName || teamName || '?';
   } else {
-    name = c.team?.shortDisplayName || c.team?.abbreviation
-        || c.team?.displayName || c.athlete?.shortName
-        || c.athlete?.displayName || '?';
+    name = teamName || athleteName || '?';
   }
 
   return {
     name,
-    score:    c.score ?? '',
-    winner:   c.winner === 'true' || c.winner === true,
-    order:    Number(c.order ?? c.homeAway === 'home' ? 0 : 1),
+    score:  c.score ?? '',
+    winner: c.winner === 'true' || c.winner === true,
+    order:  Number(c.order ?? 99),
+    seed:   c.curatedRank?.current ?? null,
   };
 }
 
@@ -92,24 +94,38 @@ function parseEvent(ev, sport) {
 
   let competitors = (comp.competitors ?? []).map(c => parseCompetitor(c, sport.key));
 
-  // Racing: sort by finishing position (order field), show top 5 only
+  // Racing: sort by position, show top 5
   if (RACING_KEYS.has(sport.key)) {
     competitors = competitors.sort((a, b) => a.order - b.order).slice(0, 5);
   }
+  // Golf/large fields: limit to top 5
+  if (sport.key === 'golf' && competitors.length > 5) {
+    competitors = competitors.sort((a, b) => a.order - b.order).slice(0, 5);
+  }
+  // Remove all-'?' competitor lists (happens when ESPN uses a different data structure)
+  if (competitors.length > 0 && competitors.every(c => c.name === '?')) {
+    competitors = [];
+  }
+
+  const league = ev.competitions?.[0]?.series?.shortName
+              || ev.competitions?.[0]?.notes?.[0]?.headline
+              || ev.season?.displayName
+              || '';
 
   return {
-    id:          ev.id,
-    sport:       sport.key,
-    sportName:   sport.name,
-    emoji:       sport.emoji,
-    match:       ev.shortName || ev.name || '',
+    id:        ev.id,
+    sport:     sport.key,
+    sportName: sport.name,
+    emoji:     sport.emoji,
+    match:     ev.shortName || ev.name || '',
+    league,
     state,
     date,
-    summary:     comp.status?.summary ?? '',
-    detail:      comp.status?.type?.detail ?? '',
-    clock:       comp.status?.displayClock ?? '',
-    period:      comp.status?.period ?? null,
-    venue:       comp.venue?.fullName ?? '',
+    summary:   comp.status?.summary ?? '',
+    detail:    comp.status?.type?.detail ?? '',
+    clock:     comp.status?.displayClock ?? '',
+    period:    comp.status?.period ?? null,
+    venue:     comp.venue?.fullName ?? '',
     competitors,
   };
 }

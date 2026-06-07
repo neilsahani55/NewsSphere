@@ -48,16 +48,24 @@ function MatchCard({ m, showSport }) {
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
-      {showSport && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
 
+      {/* Sport + league label row */}
+      <div className="sp-card-label">
+        {showSport && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
+        {m.league  && <span className="sp-league-tag">{m.league}</span>}
+      </div>
+
+      {/* Match title */}
       <p className="sp-match">{m.match}</p>
 
+      {/* Live: clock pill */}
       {isLive && (m.clock || m.detail) && (
         <span className="sp-live-clock">
-          {[m.clock, m.detail].filter(Boolean).join(' · ')}
+          🔴 {[m.clock, m.detail].filter(Boolean).join(' · ')}
         </span>
       )}
 
+      {/* Competitors */}
       {m.competitors.length > 0 && (
         <div className="sp-teams">
           {m.competitors.map((c, i) => (
@@ -72,11 +80,13 @@ function MatchCard({ m, showSport }) {
         </div>
       )}
 
+      {/* Footer */}
       <div className="sp-meta">
         {isPre  && m.date && <span className="sp-time">🕐 {fmtTime(m.date)}</span>}
         {isPost && m.date && <span className="sp-meta-date">📅 {fmtDate(m.date)}</span>}
-        {isPost && m.summary && <span className="sp-summary">{m.summary}</span>}
-        {isLive && m.summary && !m.clock && <span className="sp-summary">{m.summary}</span>}
+        {(isPost || (isLive && !m.clock)) && m.summary && (
+          <span className="sp-summary">{m.summary}</span>
+        )}
         {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
       </div>
     </div>
@@ -157,7 +167,7 @@ export default memo(function SportsWidget() {
         ))}
       </div>
 
-      {/* Match cards */}
+      {/* Match cards — always 3-column grid */}
       {loading && all.length === 0 ? (
         <div className="sp-skeleton" aria-hidden />
       ) : shown.length === 0 ? (
@@ -167,7 +177,7 @@ export default memo(function SportsWidget() {
           {tab === 'results'  && 'No results from the last 2 days.'}
         </p>
       ) : (
-        <div className={`sp-cards${shown.length >= 2 ? ' sp-cards-grid' : ''}`}>
+        <div className="sp-grid3">
           {shown.slice(0, 12).map(m => (
             <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={sport === 'all'} />
           ))}
