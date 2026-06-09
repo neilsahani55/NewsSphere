@@ -73,6 +73,8 @@ function MatchCard({ m, showSport }) {
   const isPre    = m.state === 'pre';
   const isPost   = m.state === 'post';
   const isRacing = RACING.has(m.sport);
+  const metaBits = [m.matchType, m.venue].filter(Boolean);
+  const resultText = m.result || ((isPost || (isLive && !m.clock)) ? m.summary : '');
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
@@ -85,6 +87,13 @@ function MatchCard({ m, showSport }) {
 
       {/* Match title */}
       <p className="sp-match">{m.match}</p>
+
+      {metaBits.length > 0 && (
+        <div className="sp-meta-line">
+          {m.matchType && <span className="sp-match-type">{m.matchType}</span>}
+          {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
+        </div>
+      )}
 
       {/* Live: clock pill */}
       {isLive && (m.clock || m.detail) && (
@@ -112,10 +121,9 @@ function MatchCard({ m, showSport }) {
       <div className="sp-meta">
         {isPre  && m.date && <span className="sp-time">🕐 {fmtTime(m.date)}</span>}
         {isPost && m.date && <span className="sp-meta-date">📅 {fmtDate(m.date)}</span>}
-        {(isPost || (isLive && !m.clock)) && m.summary && (
-          <span className="sp-summary">{m.summary}</span>
+        {resultText && (
+          <span className="sp-result">{isPost ? '✓ ' : isLive ? '• ' : ''}{resultText}</span>
         )}
-        {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
       </div>
     </div>
   );

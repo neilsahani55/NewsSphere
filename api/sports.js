@@ -313,9 +313,11 @@ function buildHomeMatch({
   sport,
   match,
   league = '',
+  matchType = '',
   state = 'post',
   date = null,
   summary = '',
+  result = '',
   detail = '',
   clock = '',
   venue = '',
@@ -331,9 +333,11 @@ function buildHomeMatch({
     emoji: meta.emoji,
     match: normalizeWhitespace(match) || meta.name,
     league: normalizeWhitespace(league),
+    matchType: normalizeWhitespace(matchType),
     state,
     date,
     summary: normalizeWhitespace(summary),
+    result: normalizeWhitespace(result),
     detail: normalizeWhitespace(detail),
     clock: normalizeWhitespace(clock),
     period: null,
@@ -466,6 +470,115 @@ function splitCricketTeams(title) {
   return [core || 'Team 1', 'Team 2'];
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitCricketTitleAndStatus(rawTitle, rawStatus) {
+  const titleText = normalizeWhitespace(rawTitle);
+  const statusText = normalizeWhitespace(rawStatus);
+  let matchTitle = titleText || statusText;
+  let resultText = statusText;
+
+  if (matchTitle.includes(' - ')) {
+    const parts = matchTitle.split(/\s+-\s+/);
+    const tail = normalizeWhitespace(parts.slice(1).join(' - '));
+    if (tail && /\b(won|lead|need|trail|stumps|day\s*\d|live|complete|result|abandoned|draw|tie|no result)\b/i.test(tail)) {
+      matchTitle = normalizeWhitespace(parts[0]);
+      if (!resultText) resultText = tail;
+    }
+  }
+
+  return {
+    matchTitle: matchTitle || titleText || statusText,
+    resultText,
+  };
+}
+
+function extractCricketMeta(...texts) {
+  for (const text of texts) {
+    let clean = normalizeWhitespace(text).replace(/\s+-\s+.*$/, '');
+    clean = clean.replace(/^Cricket commentary\s*\|\s*/i, '');
+    const parts = clean.split(',').map((part) => normalizeWhitespace(part)).filter(Boolean);
+    if (parts.length >= 2 && /\s+vs\.?\s+/i.test(parts[0])) {
+      return {
+        matchType: parts[1] || '',
+        competition: parts.slice(2).join(', '),
+      };
+    }
+    if (parts.length >= 1 && !/\bcommentary\b/i.test(parts[0])) {
+      return {
+        matchType: parts[0] || '',
+        competition: parts.slice(1).join(', '),
+      };
+    }
+  }
+  return { matchType: '', competition: '' };
+}
+
+function extractCricketReadableTeams(...texts) {
+  for (const text of texts) {
+    let clean = normalizeWhitespace(text).replace(/^Cricket commentary\s*\|\s*/i, '');
+    clean = clean.replace(/\s+-\s+.*$/, '');
+    const head = normalizeWhitespace(clean.split(',')[0]);
+    if (/\d/.test(head)) continue;
+    if (!/\s+vs\.?\s+/i.test(head)) continue;
+    const [home, away] = splitCricketTeams(head);
+    if (home && away) return { home, away };
+  }
+  return null;
+}
+
+function extractCricketVenue(...texts) {
+  for (const text of texts) {
+    const clean = normalizeWhitespace(text);
+    if (!clean) continue;
+    const match = clean.match(/\bat\s+(.+?)(?:,\s*(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|,\s*\d{1,2}:\d{2}|\s+-\s+|$)/i);
+    if (match?.[1]) return normalizeWhitespace(match[1]);
+  }
+  return '';
+}
+
+function cricketAliases(name) {
+  const clean = normalizeWhitespace(name);
+  if (!clean) return [];
+  const aliases = new Set([clean.toLowerCase()]);
+  const compact = clean.replace(/[^A-Za-z]/g, '');
+  if (compact && compact.length <= 5) aliases.add(compact.toLowerCase());
+  const initials = clean.split(/\s+/).map((part) => part[0]).join('').toLowerCase();
+  if (initials.length >= 2) aliases.add(initials);
+  return Array.from(aliases);
+}
+
+function cricketTeamMatchesName(left, right) {
+  const leftAliases = cricketAliases(left);
+  const rightAliases = new Set(cricketAliases(right));
+  return leftAliases.some((alias) => rightAliases.has(alias));
+}
+
+function cricketWinnerFromText(text, sideName) {
+  const haystack = normalizeWhitespace(text).toLowerCase();
+  if (!haystack || !sideName) return false;
+  return cricketAliases(sideName).some((alias) => haystack.includes(`${alias} won`));
+}
+
+function cricketWinnerFromCode(text, sideName) {
+  const code = normalizeWhitespace(text).match(/\b([A-Z]{2,5})\s+won\b/i)?.[1]?.toLowerCase();
+  if (!code || !sideName) return false;
+  const clean = normalizeWhitespace(sideName).toLowerCase();
+  const compact = clean.replace(/[^a-z]/g, '');
+  const initials = clean.split(/\s+/).map((part) => part[0]).join('');
+  const code2 = code.slice(0, 2);
+  return compact.startsWith(code) || compact.startsWith(code2) || initials === code || initials === code2;
+}
+
+function compactCricketResult(summary, resultText) {
+  const text = normalizeWhitespace(resultText || summary);
+  if (!text) return '';
+  if (/\bwon\b/i.test(text) || /\b(stumps|trail|need|draw|tie|abandoned|no result)\b/i.test(text)) return text;
+  return '';
+}
+
 function parseScoreSummaryFromHtml(html) {
   const match = String(html || '').match(/<meta\s+name="description"\s+content="([^"]+)"/i);
   if (!match) return undefined;
@@ -487,20 +600,52 @@ function parseTitleFromHtml(html) {
 
 function parseCricketTeamSegment(segment, fallbackName) {
   const clean = normalizeWhitespace(segment);
-  const match = clean.match(/^(.+?)\s+(\d+(?:\/\d+)?(?:\s*\([^)]+\))?)$/);
-  if (match) return { name: normalizeWhitespace(match[1]), score: normalizeWhitespace(match[2]) };
-  return { name: fallbackName, score: '' };
+  const match = clean.match(/^(.+?)\s+(\d+(?:\/\d+)?(?:\s*\(\d+(?:\.\d+)?\))?)/);
+  if (!match) return null;
+  return { name: normalizeWhitespace(match[1]) || fallbackName, score: normalizeWhitespace(match[2]) };
 }
 
 function splitCricketSummary(summary, homeName, awayName) {
   const clean = normalizeWhitespace(summary);
-  if (!/\s+vs\.?\s+/i.test(clean)) return null;
+  if (!/\s+vs\.?\s+/i.test(clean) || !/\d/.test(clean)) return null;
   const parts = clean.split(/\s+vs\.?\s+/i);
   if (parts.length !== 2) return null;
+  const home = parseCricketTeamSegment(parts[0], homeName);
+  const away = parseCricketTeamSegment(parts[1], awayName);
+  if (!home || !away) return null;
   return {
-    home: parseCricketTeamSegment(parts[0], homeName),
-    away: parseCricketTeamSegment(parts[1], awayName),
+    home,
+    away,
   };
+}
+
+function cricketPrimaryScore(scoreText) {
+  const match = String(scoreText || '').match(/(\d+)/);
+  return match ? Number(match[1]) : undefined;
+}
+
+function resolveCricketDisplayName(parsedName, fallbackName) {
+  if (!parsedName) return fallbackName;
+  if (fallbackName && cricketTeamMatchesName(parsedName, fallbackName)) return fallbackName;
+  return parsedName;
+}
+
+function alignCricketSides(parsedSummary, fallbackHome, fallbackAway) {
+  if (!parsedSummary) return null;
+  const direct =
+    cricketTeamMatchesName(parsedSummary.home?.name, fallbackHome) ||
+    cricketTeamMatchesName(parsedSummary.away?.name, fallbackAway);
+  const reversed =
+    cricketTeamMatchesName(parsedSummary.home?.name, fallbackAway) ||
+    cricketTeamMatchesName(parsedSummary.away?.name, fallbackHome);
+
+  if (!direct && reversed) {
+    return {
+      home: parsedSummary.away,
+      away: parsedSummary.home,
+    };
+  }
+  return parsedSummary;
 }
 
 function parseCricbuzzMatchListPage({ html, baseUrl }) {
@@ -565,25 +710,51 @@ async function fetchCricbuzzScoreSummary(matchId) {
 
 function toHomeCricketMatch(rawMatch, kind, summaryData) {
   const state = stateFromKind(kind);
-  const [fallbackHome, fallbackAway] = splitCricketTeams(rawMatch.title || rawMatch.matchInfo || rawMatch.status);
-  const parsedSummary = splitCricketSummary(summaryData?.summary, fallbackHome, fallbackAway);
-  const home = parsedSummary?.home?.name || fallbackHome;
-  const away = parsedSummary?.away?.name || fallbackAway;
-  const summary = summaryData?.summary || rawMatch.status || rawMatch.matchInfo;
+  const { matchTitle, resultText } = splitCricketTitleAndStatus(rawMatch.title, rawMatch.status);
+  const [shortHome, shortAway] = splitCricketTeams(matchTitle || rawMatch.matchInfo || rawMatch.status);
+  const fallbackHome = shortHome;
+  const fallbackAway = shortAway;
+  const parsedSummary = alignCricketSides(
+    splitCricketSummary(summaryData?.summary, fallbackHome, fallbackAway),
+    fallbackHome,
+    fallbackAway,
+  );
+  const home = resolveCricketDisplayName(parsedSummary?.home?.name, fallbackHome);
+  const away = resolveCricketDisplayName(parsedSummary?.away?.name, fallbackAway);
+  const cricketMeta = extractCricketMeta(rawMatch.matchInfo, summaryData?.title, summaryData?.summary);
+  const venue = extractCricketVenue(summaryData?.title, rawMatch.matchInfo);
+  const resultSummary = compactCricketResult(summaryData?.summary, resultText);
+  const readableTeams = extractCricketReadableTeams(resultSummary, summaryData?.title, summaryData?.summary);
+  const summary = resultSummary || summaryData?.summary || rawMatch.status || rawMatch.matchInfo;
+  const result = resultSummary || (state === 'post' ? summary : '');
+  const winnerText = `${summaryData?.summary || ''} ${resultText}`;
+  let homeWinner = state === 'post' && (cricketWinnerFromText(winnerText, home) || cricketWinnerFromCode(winnerText, home));
+  let awayWinner = state === 'post' && (cricketWinnerFromText(winnerText, away) || cricketWinnerFromCode(winnerText, away));
+  if (!homeWinner && !awayWinner && state === 'post' && parsedSummary?.home?.score && parsedSummary?.away?.score) {
+    const homeRuns = cricketPrimaryScore(parsedSummary.home.score);
+    const awayRuns = cricketPrimaryScore(parsedSummary.away.score);
+    if (homeRuns != null && awayRuns != null && homeRuns !== awayRuns) {
+      homeWinner = homeRuns > awayRuns;
+      awayWinner = awayRuns > homeRuns;
+    }
+  }
   const searchText = [home, away, rawMatch.series, rawMatch.category, rawMatch.title].join(' ');
 
   return buildHomeMatch({
     id: `cricbuzz_${kind}_${rawMatch.matchId}`,
     sport: 'cricket',
-    match: rawMatch.title || `${home} vs ${away}`,
-    league: rawMatch.series || rawMatch.category,
+    match: readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : (matchTitle || `${home} vs ${away}`),
+    league: rawMatch.series || cricketMeta.competition || rawMatch.category,
+    matchType: cricketMeta.matchType,
     state,
     summary,
-    detail: rawMatch.matchInfo,
+    result,
+    detail: rawMatch.matchInfo || cricketMeta.matchType,
     clock: state === 'in' ? rawMatch.status || 'Live' : '',
+    venue,
     competitors: [
-      { name: home, score: parsedSummary?.home?.score || '', winner: false },
-      { name: away, score: parsedSummary?.away?.score || '', winner: false },
+      { name: home, score: parsedSummary?.home?.score || '', winner: homeWinner },
+      { name: away, score: parsedSummary?.away?.score || '', winner: awayWinner },
     ],
     isIndiaMatch: isIndia(searchText),
     source: 'cricbuzz',
@@ -597,16 +768,22 @@ async function fetchCricketMatches() {
     fetchCricbuzzList('recent'),
   ]);
 
-  const liveSummaryList = await promisePool(
-    liveRaw,
-    async (match) => ({ match, summary: await fetchCricbuzzScoreSummary(match.matchId) }),
+  const enrichCricketList = async (matches, kind) => promisePool(
+    matches,
+    async (match) => toHomeCricketMatch(match, kind, await fetchCricbuzzScoreSummary(match.matchId)),
     4,
   );
 
+  const [liveMatches, upcomingMatches, recentMatches] = await Promise.all([
+    enrichCricketList(liveRaw, 'live'),
+    enrichCricketList(upcomingRaw, 'upcoming'),
+    enrichCricketList(recentRaw, 'recent'),
+  ]);
+
   return [
-    ...liveSummaryList.map(({ match, summary }) => toHomeCricketMatch(match, 'live', summary)),
-    ...upcomingRaw.map((match) => toHomeCricketMatch(match, 'upcoming')),
-    ...recentRaw.map((match) => toHomeCricketMatch(match, 'recent')),
+    ...liveMatches,
+    ...upcomingMatches,
+    ...recentMatches,
   ];
 }
 
@@ -684,12 +861,15 @@ async function fetchKabaddiMatches() {
   for (const event of rawEvents) {
     const kind = classifyKabaddiState(event);
     if (!['live', 'upcoming', 'recent'].includes(kind)) continue;
+    const state = stateFromKind(kind);
 
     const participants = asArray(event?.participants).map((item) => ({
       name: normalizeWhitespace(item?.name || item?.short_name),
       score: item?.value ?? item?.score ?? '',
-      winner: false,
+      numericScore: toNumberOrUndefined(item?.value ?? item?.score),
     }));
+    const homeScore = participants[0]?.numericScore;
+    const awayScore = participants[1]?.numericScore;
     const searchText = [
       event?.event_name,
       event?.event_sub_status,
@@ -702,13 +882,21 @@ async function fetchKabaddiMatches() {
       sport: 'kabaddi',
       match: event?.event_name,
       league: event?.series_name || event?.league_code || 'Pro Kabaddi',
-      state: stateFromKind(kind),
+      matchType: event?.event_name?.split(',')[1] || '',
+      state,
       date: event?.start_date || null,
       summary: event?.event_sub_status || event?.event_status,
+      result: state === 'post' ? (event?.event_sub_status || event?.event_status) : '',
       detail: event?.event_status,
       clock: kind === 'live' ? event?.event_status || 'Live' : '',
       venue: event?.venue_name,
-      competitors: participants.slice(0, 2),
+      competitors: participants.slice(0, 2).map((team, index) => ({
+        name: team.name,
+        score: team.score,
+        winner: state === 'post' && homeScore != null && awayScore != null
+          ? (index === 0 ? homeScore > awayScore : awayScore > homeScore)
+          : false,
+      })),
       isIndiaMatch: isIndia(searchText) || true,
       source: 'prokabaddi',
     }));
@@ -896,6 +1084,7 @@ async function fetchEspnScoreboard({ sport, league, dates }) {
 
 function toHomeEspnMatch(event, sportKey) {
   const participants = event?.participants || [];
+  if (participants.length < 2) return null;
   const searchText = [
     event?.name,
     event?.shortName,
@@ -907,15 +1096,17 @@ function toHomeEspnMatch(event, sportKey) {
     id: `espn_${sportKey}_${event.eventId}`,
     sport: sportKey,
     match: event?.name || event?.shortName,
-    league: event?.leagueName,
+    league: [event?.leagueName, sportKey === 'tennis' ? event?.grouping : ''].filter(Boolean).join(' · '),
+    matchType: event?.status?.type?.description || '',
     state: event?.state || 'post',
     date: event?.date || null,
     summary: event?.scoreLine || event?.statusText,
+    result: event?.state === 'post' ? (event?.scoreLine || event?.statusText) : '',
     detail: event?.status?.type?.detail || event?.statusText,
     clock: event?.state === 'in' ? [event?.clock, event?.statusText].filter(Boolean).join(' · ') : '',
     venue: event?.competition?.venue?.fullName,
     competitors: participants.map((participant) => ({
-      name: participant.abbreviation || participant.name || '?',
+      name: participant.name || participant.abbreviation || '?',
       score: participant.score ?? '',
       winner: Boolean(participant.winner),
     })),
@@ -941,7 +1132,8 @@ async function fetchEspnPrimaryMatches() {
     for (const event of board.events) {
       const key = `${board.cfg.key}:${event.eventId}`;
       if (!event?.eventId || byEventId.has(key)) continue;
-      byEventId.set(key, toHomeEspnMatch(event, board.cfg.key));
+      const normalized = toHomeEspnMatch(event, board.cfg.key);
+      if (normalized) byEventId.set(key, normalized);
     }
   }
 
@@ -1104,6 +1296,7 @@ async function fetchF1UpcomingAndResults() {
       sport: 'f1',
       match: nextRace.name,
       league: 'Formula 1',
+      matchType: 'Upcoming Race',
       state: 'pre',
       date: nextRace.date,
       summary: [nextRace.locality, nextRace.country].filter(Boolean).join(', ') || 'Upcoming race',
@@ -1121,9 +1314,11 @@ async function fetchF1UpcomingAndResults() {
       sport: 'f1',
       match: lastRace.name,
       league: 'Formula 1',
+      matchType: 'Race Result',
       state: 'post',
       date: lastRace.date,
       summary: lastRace.results?.[0]?.driverName ? `${lastRace.results[0].driverName} won` : 'Result',
+      result: lastRace.results?.[0]?.driverName ? `${lastRace.results[0].driverName} won` : 'Result',
       venue: lastRace.circuitName,
       competitors: lastRace.results.slice(0, 3).map((row) => ({
         name: row.driverName || '?',
@@ -1160,6 +1355,7 @@ async function fetchBadmintonMatches() {
           sport: 'badminton',
           match: homeTitle,
           league: 'BWF Match Centre',
+          matchType: 'Upcoming Tournament',
           state: 'pre',
           summary: homeDateRange || 'Upcoming tournament',
           competitors: [],
@@ -1180,6 +1376,7 @@ async function fetchBadmintonMatches() {
       sport: 'badminton',
       match: title ? `${title} · Court ${match.court ?? '?'}` : `Badminton · Court ${match.court ?? '?'}`,
       league: 'BWF Match Centre',
+      matchType: `Court ${match.court ?? '?'}`,
       state: 'in',
       summary: match.scoreLine || 'Live',
       detail: match.raw,
@@ -1196,6 +1393,7 @@ async function fetchBadmintonMatches() {
         sport: 'badminton',
         match: title,
         league: 'BWF Match Centre',
+        matchType: 'Tournament',
         state: 'pre',
         summary: dateRange || 'Upcoming tournament',
         competitors: [],
@@ -1374,9 +1572,11 @@ async function fetchLegacyGolfEspn() {
       sport: 'golf',
       match: event.shortName || event.name || 'Golf',
       league: event.season?.displayName || 'Golf',
+      matchType: competition?.status?.type?.description || '',
       state,
       date,
       summary: competition?.status?.summary || '',
+      result: state === 'post' ? (competition?.status?.summary || '') : '',
       detail: competition?.status?.type?.detail || '',
       clock: state === 'in' ? 'Live' : '',
       venue: competition?.venue?.fullName,
@@ -1395,7 +1595,6 @@ async function fetchLegacyGolfEspn() {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
@@ -1432,6 +1631,12 @@ export default async function handler(req, res) {
   const live = all.filter((match) => match.state === 'in');
   const upcoming = all.filter((match) => match.state === 'pre');
   const completed = all.filter((match) => match.state === 'post');
+  res.setHeader(
+    'Cache-Control',
+    live.length > 0
+      ? 'public, s-maxage=20, stale-while-revalidate=40'
+      : 'public, s-maxage=90, stale-while-revalidate=180',
+  );
 
   return res.status(200).json({
     matches: all,

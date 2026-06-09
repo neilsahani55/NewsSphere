@@ -1,20 +1,25 @@
 /**
  * Live sports scores across multiple disciplines.
  * Calls /api/sports (Vercel function) which fetches from ESPN server-side.
- * Cached 1 minute in sessionStorage.
+ * Cached dynamically in sessionStorage.
  */
 
 import { useEffect, useState } from 'react';
 
-const CACHE_KEY = 'ns_sports_v4';
-const CACHE_TTL = 60 * 1000;
+const CACHE_KEY = 'ns_sports_v5';
+const DEFAULT_TTL = 60 * 1000;
+const LIVE_TTL = 20 * 1000;
+
+function ttlForData(data) {
+  return (data?.counts?.live ?? 0) > 0 ? LIVE_TTL : DEFAULT_TTL;
+}
 
 function readCache() {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const { ts, data } = JSON.parse(raw);
-    return Date.now() - ts > CACHE_TTL ? null : data;
+    return Date.now() - ts > ttlForData(data) ? null : data;
   } catch { return null; }
 }
 
@@ -32,11 +37,26 @@ export function useSports() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let live = true;
+    let mounted = true;
+    let timer = null;
+
+    function scheduleNext(data) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        sessionStorage.removeItem(CACHE_KEY);
+        load();
+      }, ttlForData(data));
+    }
 
     async function load() {
       const cached = readCache();
-      if (cached) { setMatches(cached); setCounts(cached.counts ?? {}); setLoading(false); return; }
+      if (cached) {
+        setMatches(cached);
+        setCounts(cached.counts ?? {});
+        setLoading(false);
+        scheduleNext(cached);
+        return;
+      }
 
       try {
         const res = await fetch('/api/sports', { signal: AbortSignal.timeout(15000) });
@@ -50,15 +70,23 @@ export function useSports() {
           counts:    json.counts    ?? {},
         };
         writeCache(data);
-        if (live) { setMatches(data); setCounts(data.counts); setLoading(false); }
+        if (mounted) {
+          setMatches(data);
+          setCounts(data.counts);
+          setLoading(false);
+          scheduleNext(data);
+        }
       } catch {
-        if (live) { setMatches([]); setLoading(false); }
+        if (mounted) {
+          setMatches([]);
+          setLoading(false);
+          scheduleNext({ counts: { live: 0 } });
+        }
       }
     }
 
     load();
-    const timer = setInterval(() => { sessionStorage.removeItem(CACHE_KEY); load(); }, CACHE_TTL);
-    return () => { live = false; clearInterval(timer); };
+    return () => { mounted = false; clearTimeout(timer); };
   }, []);
 
   const data = matches ?? EMPTY;
