@@ -1,38 +1,70 @@
 /**
- * /api/sports — India-first sports data
+ * /api/sports
  *
- * Cricket reality: ESPNCricinfo and Cricbuzz return 403 from ALL server IPs
- * (Vercel, GitHub Actions, etc.) — they only serve browsers.
- * Cricket data comes from Sports DB (schedule + results, not live ball-by-ball).
+ * Merges the standalone `score` Express service into the main NewsSphere app.
+ * Primary providers now come from the score service logic:
+ * - Cricbuzz scrape for cricket
+ * - ESPN site API for football / basketball / tennis / rugby / volleyball
+ * - ProKabaddi scrape for kabaddi
+ * - F1 live timing + Jolpica/Ergast-compatible API for Formula 1
+ * - BWF match-centre read-through proxy for badminton
  *
- * Sources:
- *  1. Sports DB — India team search → events for all sports India plays in
- *  2. Sports DB — today ±1 day for 12 sports (cricket, football, tennis, etc.)
- *  3. ESPN      — F1 + Golf (10-day window, ESPN works fine for these)
- *
- * State fix:  SportsDB past events with empty status → 'post'
- * Name fix:   Tennis/Badminton empty strHomeTeam → parsed from strEvent "X vs Y"
- * Sort:       India matches first within each tab (Live / Upcoming / Results)
+ * The previous SportsDB/ESPN implementation remains as a fallback layer so the
+ * home widget still surfaces extra sports when the richer providers do not.
  */
 
-const ESPN = 'https://site.api.espn.com/apis/site/v2/sports';
-const SDB  = 'https://www.thesportsdb.com/api/v1/json/3';
+const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2';
+const SPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
+const CRICBUZZ_BASE = 'https://www.cricbuzz.com';
+const PRO_KABADDI_BASE = 'https://www.prokabaddi.com';
+const F1_LIVE_BASE = 'https://livetiming.formula1.com/static/';
+const F1_RESULTS_BASE = 'https://api.jolpi.ca/ergast/f1';
+const BWF_HOME_URL = 'https://match-centre.bwfbadminton.com/';
 
-const HDR = {
+const HTTP_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  Accept: 'application/json',
+  Accept: 'application/json,text/html;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-IN,en;q=0.9',
 };
 
-async function safeJson(url, ms = 10000) {
-  try {
-    const r = await fetch(url, { headers: HDR, signal: AbortSignal.timeout(ms) });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
-}
+const CACHE_TTL_MS = 15_000;
+const cache = new Map();
 
-// ── India detection ───────────────────────────────────────────────────────
+const H1 = 60 * 60 * 1000;
+const H48 = 48 * H1;
+const H72 = 72 * H1;
+const H7D = 7 * 24 * H1;
+const H10D = 10 * 24 * H1;
+
+const SPORT_META = {
+  cricket: { key: 'cricket', name: 'Cricket', emoji: '🏏' },
+  football: { key: 'football', name: 'Football', emoji: '⚽' },
+  basketball: { key: 'basketball', name: 'Basketball', emoji: '🏀' },
+  tennis: { key: 'tennis', name: 'Tennis', emoji: '🎾' },
+  rugby: { key: 'rugby', name: 'Rugby', emoji: '🏉' },
+  volleyball: { key: 'volleyball', name: 'Volleyball', emoji: '🏐' },
+  kabaddi: { key: 'kabaddi', name: 'Kabaddi', emoji: '🤸' },
+  badminton: { key: 'badminton', name: 'Badminton', emoji: '🏸' },
+  f1: { key: 'f1', name: 'Formula 1', emoji: '🏎️' },
+  fieldhockey: { key: 'fieldhockey', name: 'Field Hockey', emoji: '🏑' },
+  golf: { key: 'golf', name: 'Golf', emoji: '⛳' },
+  athletics: { key: 'athletics', name: 'Athletics', emoji: '🏃' },
+  boxing: { key: 'boxing', name: 'Boxing', emoji: '🥊' },
+  mma: { key: 'mma', name: 'MMA', emoji: '🥊' },
+  wrestling: { key: 'wrestling', name: 'Wrestling', emoji: '🤼' },
+  tabletennis: { key: 'tabletennis', name: 'Table Tennis', emoji: '🏓' },
+  squash: { key: 'squash', name: 'Squash', emoji: '🎱' },
+  swimming: { key: 'swimming', name: 'Swimming', emoji: '🏊' },
+};
+
+const PRIMARY_ESPN_SPORTS = [
+  { key: 'football', sport: 'soccer', leagues: ['fifa.worldq.afc', 'uefa.champions', 'eng.1', 'esp.1'] },
+  { key: 'basketball', sport: 'basketball', leagues: ['nba', 'wnba'] },
+  { key: 'tennis', sport: 'tennis', leagues: ['atp', 'wta'] },
+  { key: 'rugby', sport: 'rugby', leagues: ['267979', '242041'] },
+  { key: 'volleyball', sport: 'volleyball', leagues: ['mens-college-volleyball', 'womens-college-volleyball'] },
+];
+
 const INDIA_KW = [
   'india', 'indian', ' ind ', 'ipl ', 'bcci',
   'csk', 'chennai super', 'mumbai indians', 'kolkata knight', 'kkr',
@@ -42,17 +74,225 @@ const INDIA_KW = [
   'isl', 'i-league', 'hockeyindia', 'fih india',
   'pro kabaddi', 'pkl', 'india women', 'india a', 'india u19', 'india u23',
 ];
-function isIndia(text = '') {
-  const t = (' ' + text + ' ').toLowerCase();
-  return INDIA_KW.some(k => t.includes(k));
+
+const SPORTSDB_META = {
+  Cricket: SPORT_META.cricket,
+  Soccer: SPORT_META.football,
+  Football: SPORT_META.football,
+  'Field Hockey': SPORT_META.fieldhockey,
+  Hockey: { key: 'fieldhockey', name: 'Hockey', emoji: '🏒' },
+  Badminton: SPORT_META.badminton,
+  Kabaddi: SPORT_META.kabaddi,
+  Basketball: SPORT_META.basketball,
+  Tennis: SPORT_META.tennis,
+  Rugby: SPORT_META.rugby,
+  Volleyball: SPORT_META.volleyball,
+  Athletics: SPORT_META.athletics,
+  Boxing: SPORT_META.boxing,
+  MMA: SPORT_META.mma,
+  Wrestling: SPORT_META.wrestling,
+  'Table Tennis': SPORT_META.tabletennis,
+  Squash: SPORT_META.squash,
+  Golf: SPORT_META.golf,
+  Motorsport: { key: 'f1', name: 'Motorsport', emoji: '🏎️' },
+  Swimming: SPORT_META.swimming,
+};
+
+function nowMs() {
+  return Date.now();
 }
 
-// ── Extract player names from "Roland Garros Mirra Andreeva vs Maja Chwalinska"
+async function remember(key, loader, ttlMs = CACHE_TTL_MS) {
+  const entry = cache.get(key);
+  if (entry?.value !== undefined && entry.expiresAt > nowMs()) return entry.value;
+  if (entry?.promise) return entry.promise;
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      cache.set(key, { value, expiresAt: nowMs() + ttlMs });
+      return value;
+    })
+    .catch((error) => {
+      cache.delete(key);
+      throw error;
+    });
+
+  cache.set(key, { promise, expiresAt: 0 });
+  return promise;
+}
+
+async function fetchJson(url, { timeoutMs = 15_000, ttlMs = CACHE_TTL_MS } = {}) {
+  return remember(`json:${url}`, async () => {
+    const res = await fetch(url, {
+      headers: HTTP_HEADERS,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }, ttlMs);
+}
+
+async function fetchText(url, { timeoutMs = 15_000, ttlMs = CACHE_TTL_MS } = {}) {
+  return remember(`text:${url}`, async () => {
+    const res = await fetch(url, {
+      headers: HTTP_HEADERS,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.text();
+  }, ttlMs);
+}
+
+async function safeJson(url, options) {
+  try {
+    return await fetchJson(url, options);
+  } catch {
+    return null;
+  }
+}
+
+async function safeText(url, options) {
+  try {
+    return await fetchText(url, options);
+  } catch {
+    return null;
+  }
+}
+
+async function promisePool(items, worker, concurrency = 4) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  const runner = async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= items.length) return;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  };
+
+  const limit = Math.max(1, Math.min(Number(concurrency) || 1, items.length || 1));
+  await Promise.all(Array.from({ length: limit }, runner));
+  return results;
+}
+
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function normalizeWhitespace(value) {
+  return String(value || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripTags(value) {
+  return normalizeWhitespace(String(value || '').replace(/<[^>]+>/g, ' '));
+}
+
+function decodeBasicHtmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ');
+}
+
+function stripHtml(value) {
+  return normalizeWhitespace(decodeBasicHtmlEntities(String(value || '').replace(/<[^>]+>/g, ' ')));
+}
+
+function toNumberOrUndefined(value) {
+  if (value === null || value === undefined) return undefined;
+  const n = Number(String(value).trim());
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toNumberOrString(value) {
+  if (value === null || value === undefined) return undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : s;
+}
+
+function buildAbsoluteUrl(baseUrl, href) {
+  if (!href) return undefined;
+  if (/^https?:\/\//i.test(href)) return href;
+  return String(baseUrl).replace(/\/$/, '') + (String(href).startsWith('/') ? href : `/${href}`);
+}
+
+function isIndia(text = '') {
+  const t = (` ${text} `).toLowerCase();
+  return INDIA_KW.some((kw) => t.includes(kw));
+}
+
+function inWindow(dateStr, state, preMax = H48, postMax = H48) {
+  if (!dateStr) return true;
+  const t = new Date(dateStr).getTime();
+  if (Number.isNaN(t)) return true;
+  const now = nowMs();
+  if (state === 'post' && now - t > postMax) return false;
+  if (state === 'pre' && t - now > preMax) return false;
+  return true;
+}
+
+function uniqueById(matches) {
+  const seen = new Set();
+  const out = [];
+  for (const match of matches) {
+    if (!match?.id || seen.has(match.id)) continue;
+    seen.add(match.id);
+    out.push(match);
+  }
+  return out;
+}
+
+function sortMatches(matches) {
+  return [...matches].sort((a, b) => {
+    const order = { in: 0, pre: 1, post: 2 };
+    const stateDelta = (order[a.state] ?? 9) - (order[b.state] ?? 9);
+    if (stateDelta !== 0) return stateDelta;
+
+    const indiaDelta = (a.isIndia ? 0 : 1) - (b.isIndia ? 0 : 1);
+    if (indiaDelta !== 0) return indiaDelta;
+
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+
+    return a.state === 'pre'
+      ? new Date(a.date).getTime() - new Date(b.date).getTime()
+      : new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+}
+
+function yyyymmddFromOffset(offsetDays) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
+function isoDateFromOffset(offsetDays) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
 function parseVsNames(strEvent, rawHome, rawAway) {
-  const home = (rawHome ?? '').trim();
-  const away = (rawAway ?? '').trim();
+  const home = normalizeWhitespace(rawHome);
+  const away = normalizeWhitespace(rawAway);
   if (home && away) return [home, away];
-  const parts = (strEvent ?? '').split(/\s+vs\.?\s+/i);
+  const parts = String(strEvent || '').split(/\s+vs\.?\s+/i);
   if (parts.length < 2) return [home || '?', away || '?'];
   const homeWords = parts[0].trim().split(/\s+/);
   const awayWords = parts[1].trim().split(/\s+/);
@@ -62,340 +302,1146 @@ function parseVsNames(strEvent, rawHome, rawAway) {
   ];
 }
 
-// ── Time windows ──────────────────────────────────────────────────────────
-const NOW = Date.now();
-const H1  = 3600000;
-const H48 = 48  * H1;
-const H72 = 72  * H1;
-const H7D = 7   * 24 * H1;
-const H10D = 10 * 24 * H1;
-
-function inWindow(dateStr, state, preMax = H48, postMax = H48) {
-  if (!dateStr) return true;
-  const t = new Date(dateStr).getTime();
-  if (isNaN(t)) return true;
-  if (state === 'post' && NOW - t > postMax) return false;
-  if (state === 'pre'  && t - NOW > preMax)  return false;
-  return true;
+function stateFromKind(kind) {
+  if (kind === 'live') return 'in';
+  if (kind === 'upcoming') return 'pre';
+  return 'post';
 }
 
-// ── Sports DB sport → internal key ───────────────────────────────────────
-const SDB_META = {
-  'Cricket':      { key: 'cricket',     name: 'Cricket',      emoji: '🏏' },
-  'Soccer':       { key: 'football',    name: 'Football',     emoji: '⚽' },
-  'Football':     { key: 'football',    name: 'Football',     emoji: '⚽' },
-  'Field Hockey': { key: 'fieldhockey', name: 'Field Hockey', emoji: '🏑' },
-  'Hockey':       { key: 'fieldhockey', name: 'Hockey',       emoji: '🏒' },
-  'Badminton':    { key: 'badminton',   name: 'Badminton',    emoji: '🏸' },
-  'Kabaddi':      { key: 'kabaddi',     name: 'Kabaddi',      emoji: '🤸' },
-  'Basketball':   { key: 'basketball',  name: 'Basketball',   emoji: '🏀' },
-  'Tennis':       { key: 'tennis',      name: 'Tennis',       emoji: '🎾' },
-  'Rugby':        { key: 'rugby',       name: 'Rugby',        emoji: '🏉' },
-  'Volleyball':   { key: 'volleyball',  name: 'Volleyball',   emoji: '🏐' },
-  'Athletics':    { key: 'athletics',   name: 'Athletics',    emoji: '🏃' },
-  'Boxing':       { key: 'boxing',      name: 'Boxing',       emoji: '🥊' },
-  'MMA':          { key: 'mma',         name: 'MMA',          emoji: '🥊' },
-  'Wrestling':    { key: 'wrestling',   name: 'Wrestling',    emoji: '🤼' },
-  'Table Tennis': { key: 'tabletennis', name: 'Table Tennis', emoji: '🏓' },
-  'Squash':       { key: 'squash',      name: 'Squash',       emoji: '🎱' },
-  'Golf':         { key: 'golf',        name: 'Golf',         emoji: '⛳' },
-  'Motorsport':   { key: 'f1',          name: 'Motorsport',   emoji: '🏎️' },
-  'Swimming':     { key: 'swimming',    name: 'Swimming',     emoji: '🏊' },
-};
-
-// Strip HTML tags from SportsDB text fields (strResult/strProgress contain <br> etc.)
-function stripTags(str) {
-  return (str ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-// Parse winner name from strResult text e.g. "Middlesex t20 won by 45 runs"
-// Returns { homeWin: bool, awayWin: bool }
-function parseWinner(strResult, homeName, awayName) {
-  if (!strResult || !homeName || !awayName) return { homeWin: false, awayWin: false };
-  const r = strResult.toLowerCase();
-  const h = homeName.toLowerCase();
-  const a = awayName.toLowerCase();
-  // "X won" or "X win"
-  const homeWin = r.includes(h + ' won') || r.includes(h + ' win') || r.startsWith(h + ' ');
-  const awayWin = r.includes(a + ' won') || r.includes(a + ' win') || r.startsWith(a + ' ');
-  return { homeWin, awayWin };
-}
-
-function sdbToMatch(ev, overrideSport) {
-  const sport = overrideSport ?? ev.strSport ?? 'Unknown';
-  const meta  = SDB_META[sport] ?? { key: sport.toLowerCase().replace(/\s+/g, ''), name: sport, emoji: '🏅' };
-
-  const rawStatus   = (ev.strStatus ?? '').trim();
-  const stTxt       = (rawStatus + ' ' + (ev.strProgress ?? '')).toLowerCase();
-
-  // Explicit "not started" signals from SportsDB — trust these over time inference
-  // NS = Not Started; these appear even after scheduled time if SDB hasn't updated yet
-  const isExplicitlyNotStarted =
-    rawStatus === 'NS' || rawStatus === '' ||
-    stTxt.includes('not started') || stTxt.includes('fixture') ||
-    stTxt.includes('scheduled') || stTxt.includes('postponed');
-
-  const isLive     = stTxt.includes('live') || stTxt.includes('inning') || stTxt.includes('progress') || stTxt.includes('quarter') || stTxt.includes('half') || stTxt.includes('set ');
-  const isDoneText = !isLive && !isExplicitlyNotStarted && (stTxt.includes('finish') || stTxt.includes('complet') || stTxt.includes('result') || stTxt.includes('final') || stTxt.includes('won') || stTxt.includes(' win'));
-  const hasBothScores = ev.intHomeScore != null && ev.intAwayScore != null;
-
-  const dateStr = ev.strTimestamp
-    ?? (ev.dateEvent && ev.strTime ? `${ev.dateEvent}T${ev.strTime}+00:00` : null)
-    ?? (ev.dateEvent ? `${ev.dateEvent}T00:00:00Z` : null);
-  const evTime = dateStr ? new Date(dateStr).getTime() : null;
-
-  // isPast: only override to 'post' if NOT explicitly "not started" by SportsDB
-  // This prevents NS/empty-status events from landing in Results just because
-  // their scheduled time has passed and SportsDB hasn't updated yet.
-  const isPast = evTime != null && evTime < NOW - H1 && !isExplicitlyNotStarted;
-
-  const state = isLive ? 'in'
-    : (isDoneText || hasBothScores || isPast) ? 'post'
-    : 'pre';
-
-  // Cricket gets wider windows (matches every few days, not daily)
-  const preMax  = sport === 'Cricket' ? H7D  : H48;
-  const postMax = sport === 'Cricket' ? H72  : H48;
-  if (!inWindow(dateStr, state, preMax, postMax)) return null;
-
-  const hs = ev.intHomeScore != null ? String(ev.intHomeScore) : '';
-  const as = ev.intAwayScore != null ? String(ev.intAwayScore) : '';
-
-  const [homeName, awayName] = parseVsNames(ev.strEvent, ev.strHomeTeam, ev.strAwayTeam);
-  const searchT = [homeName, awayName, ev.strLeague, ev.strSport].join(' ');
-
-  // Winner: score-based first, fall back to strResult text parsing
-  let hw = state === 'post' && hasBothScores && Number(ev.intHomeScore) > Number(ev.intAwayScore);
-  let aw = state === 'post' && hasBothScores && Number(ev.intAwayScore) > Number(ev.intHomeScore);
-  if (state === 'post' && !hw && !aw && ev.strResult) {
-    const { homeWin, awayWin } = parseWinner(ev.strResult, homeName, awayName);
-    hw = homeWin;
-    aw = awayWin;
-  }
-
-  // Strip HTML from SportsDB text fields (<br>, <b> etc. appear in strResult/strProgress)
-  const cleanResult   = stripTags(ev.strResult);
-  const cleanProgress = stripTags(ev.strProgress);
-  const cleanStatus   = rawStatus === 'NS' ? '' : rawStatus; // hide bare "NS" from UI
-
-  const summary = cleanResult || (isLive ? cleanProgress || 'Live' : cleanStatus);
-
+function buildHomeMatch({
+  id,
+  sport,
+  match,
+  league = '',
+  state = 'post',
+  date = null,
+  summary = '',
+  detail = '',
+  clock = '',
+  venue = '',
+  competitors = [],
+  isIndiaMatch = false,
+  source,
+}) {
+  const meta = SPORT_META[sport] || { key: sport, name: sport, emoji: '🏅' };
   return {
-    id:        `sdb_${ev.idEvent}`,
-    sport:     meta.key,
+    id,
+    sport: meta.key,
     sportName: meta.name,
-    emoji:     meta.emoji,
-    match:     ev.strEvent || `${homeName} vs ${awayName}`,
-    league:    ev.strLeague || ev.strSeason || '',
+    emoji: meta.emoji,
+    match: normalizeWhitespace(match) || meta.name,
+    league: normalizeWhitespace(league),
     state,
-    date:      dateStr,
-    summary,
-    detail:    cleanProgress,
-    clock:     isLive ? '🔴 Live' : '',
-    period:    null,
-    venue:     ev.strVenue || ev.strCountry || '',
-    competitors: [
-      { name: homeName, score: hs, winner: hw },
-      { name: awayName, score: as, winner: aw },
-    ],
-    isIndia: isIndia(searchT),
-    source:  'sdb',
+    date,
+    summary: normalizeWhitespace(summary),
+    detail: normalizeWhitespace(detail),
+    clock: normalizeWhitespace(clock),
+    period: null,
+    venue: normalizeWhitespace(venue),
+    competitors: Array.isArray(competitors) ? competitors : [],
+    isIndia: Boolean(isIndiaMatch),
+    source,
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SOURCE 1: Sports DB — search all "India" teams across every sport
-// Gets India cricket, hockey, football, badminton, kabaddi, etc.
-// ─────────────────────────────────────────────────────────────────────────
-async function fetchIndiaSportsDB() {
-  const data  = await safeJson(`${SDB}/searchteams.php?t=India`);
-  const teams = (data?.teams ?? []).filter(t => {
-    const n = (t.strTeam ?? '').toLowerCase();
-    return n === 'india' || n.startsWith('india ') || n.endsWith(' india') || n.includes(' india ');
-  }).slice(0, 30);
+function buildProxyUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return undefined;
+  const stripped = u.replace(/^https?:\/\//i, '');
+  return `https://r.jina.ai/http://${stripped}`;
+}
 
-  console.log(`SDB India teams: ${teams.length}`);
+function parseTournamentIdFromHome(text) {
+  const match = String(text || '').match(/https:\/\/match-centre\.bwfbadminton\.com\/(\d{3,6})/i);
+  return match ? match[1] : undefined;
+}
 
-  const fetches = teams.flatMap(team => [
-    safeJson(`${SDB}/eventsnext.php?id=${team.idTeam}`).then(r => r?.events ?? []),
-    safeJson(`${SDB}/eventslast.php?id=${team.idTeam}`).then(r => r?.events ?? []),
+function parseTournamentTitle(text) {
+  const lines = String(text || '').split(/\r?\n/).map((line) => normalizeWhitespace(line));
+  const idx = lines.findIndex((line) => line.startsWith('## ') && !line.toLowerCase().includes('bwf match centre'));
+  return idx >= 0 ? lines[idx].replace(/^##\s+/, '') : undefined;
+}
+
+function parseNextLiveTournamentTitle(text) {
+  const lines = String(text || '').split(/\r?\n/).map((line) => normalizeWhitespace(line));
+  const idx = lines.findIndex((line) => /^##\s+Next Live Tournament$/i.test(line));
+  if (idx < 0) return undefined;
+  for (let i = idx + 1; i < Math.min(lines.length, idx + 12); i += 1) {
+    const line = lines[i];
+    if (!line) continue;
+    if (line.startsWith('[')) continue;
+    if (/(live scores|draws|stay updated|download)/i.test(line)) continue;
+    return line;
+  }
+  return undefined;
+}
+
+function parseTournamentDateRange(text) {
+  const lines = String(text || '').split(/\r?\n/).map((line) => normalizeWhitespace(line));
+  return lines.find((line) => /^\d{1,2}\s*-\s*\d{1,2}\s+[A-Za-z]{3,}$/i.test(line));
+}
+
+function parseLiveMatchesFromTournament(text) {
+  if (/currently no live matches/i.test(String(text || ''))) return [];
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const matches = [];
+  for (const line of lines) {
+    if (!/^Court\s+\d+/i.test(line)) continue;
+    const courtMatch = line.match(/^Court\s+(\d+)/i);
+    const court = toNumberOrUndefined(courtMatch?.[1]);
+    const scoreDash = line.match(/\b(\d{1,2})\s*-\s*(\d{1,2})\b/);
+    matches.push({
+      id: `court-${court ?? 'x'}-${matches.length + 1}`,
+      court,
+      state: 'in',
+      scoreLine: scoreDash ? `${scoreDash[1]} - ${scoreDash[2]}` : '',
+      raw: line,
+    });
+  }
+
+  return matches;
+}
+
+function parseGmtOffsetToMs(offset) {
+  const match = String(offset || '').match(/^([+-]?)(\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) return 0;
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3]);
+  const seconds = Number(match[4]);
+  return sign * ((hours * 60 + minutes) * 60 + seconds) * 1000;
+}
+
+function parseIsoLocalToUtcMs(isoLocal, gmtOffset) {
+  const match = String(isoLocal || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) return undefined;
+  const localAsUtcMs = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6]),
+  );
+  return localAsUtcMs - parseGmtOffsetToMs(gmtOffset);
+}
+
+function buildSessionTitle({ meetingName, sessionType, sessionName }) {
+  return [meetingName, sessionType, sessionName !== sessionType ? sessionName : '']
+    .filter(Boolean)
+    .join(' - ');
+}
+
+function normalizeDriver(driver) {
+  if (!driver) return undefined;
+  return {
+    racingNumber: driver.RacingNumber,
+    fullName: driver.FullName,
+    lastName: driver.LastName,
+    teamName: driver.TeamName,
+    countryCode: driver.CountryCode,
+  };
+}
+
+function extractMatchIdFromHref(href) {
+  const match = String(href || '').match(/\/live-cricket-scores\/(\d+)\b/);
+  return match ? match[1] : undefined;
+}
+
+function classifyCricbuzzKind(status) {
+  const s = String(status || '').toLowerCase();
+  if (s.includes('preview') || s.includes('starts') || s.includes('scheduled') || s.includes('toss') || s.includes('match starts')) return 'upcoming';
+  if (s.includes('won') || s.includes('complete') || s.includes('abandoned') || s.includes('no result') || s.includes('cancelled') || s.includes('canceled') || s.includes('draw') || s.includes('tie')) return 'recent';
+  return 'live';
+}
+
+function splitCricketTeams(title) {
+  const core = normalizeWhitespace(String(title || '').split(',')[0]);
+  const parts = core.split(/\s+vs\.?\s+|\s+v\s+/i).map((part) => normalizeWhitespace(part));
+  if (parts.length >= 2) return [parts[0], parts[1]];
+  return [core || 'Team 1', 'Team 2'];
+}
+
+function parseScoreSummaryFromHtml(html) {
+  const match = String(html || '').match(/<meta\s+name="description"\s+content="([^"]+)"/i);
+  if (!match) return undefined;
+  const content = normalizeWhitespace(decodeBasicHtmlEntities(match[1]));
+  const followIdx = content.toLowerCase().indexOf('follow ');
+  if (followIdx !== -1) {
+    const afterFollow = content.slice(followIdx + 'follow '.length);
+    const pipeIdx = afterFollow.indexOf('|');
+    const summary = normalizeWhitespace(pipeIdx === -1 ? afterFollow : afterFollow.slice(0, pipeIdx));
+    return summary || content;
+  }
+  return content;
+}
+
+function parseTitleFromHtml(html) {
+  const match = String(html || '').match(/<title>([^<]+)<\/title>/i);
+  return match ? normalizeWhitespace(match[1]) : undefined;
+}
+
+function parseCricketTeamSegment(segment, fallbackName) {
+  const clean = normalizeWhitespace(segment);
+  const match = clean.match(/^(.+?)\s+(\d+(?:\/\d+)?(?:\s*\([^)]+\))?)$/);
+  if (match) return { name: normalizeWhitespace(match[1]), score: normalizeWhitespace(match[2]) };
+  return { name: fallbackName, score: '' };
+}
+
+function splitCricketSummary(summary, homeName, awayName) {
+  const clean = normalizeWhitespace(summary);
+  if (!/\s+vs\.?\s+/i.test(clean)) return null;
+  const parts = clean.split(/\s+vs\.?\s+/i);
+  if (parts.length !== 2) return null;
+  return {
+    home: parseCricketTeamSegment(parts[0], homeName),
+    away: parseCricketTeamSegment(parts[1], awayName),
+  };
+}
+
+function parseCricbuzzMatchListPage({ html, baseUrl }) {
+  const matches = new Map();
+
+  const attrValue = (attrs, name) => {
+    const match = String(attrs || '').match(new RegExp(`${name}="([^"]*)"`, 'i'));
+    return match ? decodeBasicHtmlEntities(match[1]) : '';
+  };
+
+  const anchorRegex = /<a\b([^>]*href="\/live-cricket-scores\/[^"]+"[^>]*)>([\s\S]*?)<\/a>/gi;
+  let match;
+
+  while ((match = anchorRegex.exec(String(html || '')))) {
+    const attrs = match[1];
+    const inner = match[2];
+    const href = attrValue(attrs, 'href');
+    const matchId = extractMatchIdFromHref(href);
+    if (!matchId || matches.has(matchId)) continue;
+
+    const titleAttr = normalizeWhitespace(attrValue(attrs, 'title'));
+    const titleText = stripHtml((inner.match(/<div[^>]*text-white[^>]*>([\s\S]*?)<\/div>/i) || [])[1]) || stripHtml(inner);
+    const matchInfoText = stripHtml((inner.match(/<div[^>]*text-xs[^>]*>([\s\S]*?)<\/div>/i) || [])[1]);
+    const status = titleAttr || titleText;
+
+    matches.set(matchId, {
+      matchId,
+      url: buildAbsoluteUrl(baseUrl, href),
+      title: titleText || titleAttr,
+      matchInfo: matchInfoText,
+      status,
+      kind: classifyCricbuzzKind(status),
+      series: '',
+      category: '',
+    });
+  }
+
+  return Array.from(matches.values());
+}
+
+function getCricbuzzListUrl(kind) {
+  if (kind === 'upcoming') return buildAbsoluteUrl(CRICBUZZ_BASE, '/cricket-match/live-scores/upcoming-matches');
+  if (kind === 'recent') return buildAbsoluteUrl(CRICBUZZ_BASE, '/cricket-match/live-scores/recent-matches');
+  return buildAbsoluteUrl(CRICBUZZ_BASE, '/cricket-match/live-scores');
+}
+
+async function fetchCricbuzzList(kind) {
+  const html = await safeText(getCricbuzzListUrl(kind), { ttlMs: CACHE_TTL_MS });
+  if (!html) return [];
+  return parseCricbuzzMatchListPage({ html, baseUrl: CRICBUZZ_BASE }).filter((match) => match.kind === kind);
+}
+
+async function fetchCricbuzzScoreSummary(matchId) {
+  const url = buildAbsoluteUrl(CRICBUZZ_BASE, `/live-cricket-scores/${encodeURIComponent(matchId)}`);
+  const html = await safeText(url, { ttlMs: CACHE_TTL_MS });
+  if (!html) return null;
+  return {
+    title: parseTitleFromHtml(html),
+    summary: parseScoreSummaryFromHtml(html),
+  };
+}
+
+function toHomeCricketMatch(rawMatch, kind, summaryData) {
+  const state = stateFromKind(kind);
+  const [fallbackHome, fallbackAway] = splitCricketTeams(rawMatch.title || rawMatch.matchInfo || rawMatch.status);
+  const parsedSummary = splitCricketSummary(summaryData?.summary, fallbackHome, fallbackAway);
+  const home = parsedSummary?.home?.name || fallbackHome;
+  const away = parsedSummary?.away?.name || fallbackAway;
+  const summary = summaryData?.summary || rawMatch.status || rawMatch.matchInfo;
+  const searchText = [home, away, rawMatch.series, rawMatch.category, rawMatch.title].join(' ');
+
+  return buildHomeMatch({
+    id: `cricbuzz_${kind}_${rawMatch.matchId}`,
+    sport: 'cricket',
+    match: rawMatch.title || `${home} vs ${away}`,
+    league: rawMatch.series || rawMatch.category,
+    state,
+    summary,
+    detail: rawMatch.matchInfo,
+    clock: state === 'in' ? rawMatch.status || 'Live' : '',
+    competitors: [
+      { name: home, score: parsedSummary?.home?.score || '', winner: false },
+      { name: away, score: parsedSummary?.away?.score || '', winner: false },
+    ],
+    isIndiaMatch: isIndia(searchText),
+    source: 'cricbuzz',
+  });
+}
+
+async function fetchCricketMatches() {
+  const [liveRaw, upcomingRaw, recentRaw] = await Promise.all([
+    fetchCricbuzzList('live'),
+    fetchCricbuzzList('upcoming'),
+    fetchCricbuzzList('recent'),
   ]);
 
-  const results = await Promise.allSettled(fetches);
-  const seen = new Set();
-  const out  = [];
-
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    for (const ev of r.value) {
-      if (!ev?.idEvent || seen.has(ev.idEvent)) continue;
-      seen.add(ev.idEvent);
-      const m = sdbToMatch(ev);
-      if (m) out.push(m);
-    }
-  }
-
-  console.log(`SDB India events: ${out.length}`);
-  return out;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// SOURCE 2: Sports DB — today ±1 day for 12 sports
-// Catches international matches + non-India events
-// ─────────────────────────────────────────────────────────────────────────
-async function fetchSportsDBToday() {
-  const today = new Date().toISOString().slice(0, 10);
-  const yest  = new Date(NOW - 86400000).toISOString().slice(0, 10);
-  const tmrw  = new Date(NOW + 86400000).toISOString().slice(0, 10);
-
-  const SPORTS = [
-    'Cricket', 'Soccer', 'Field Hockey', 'Badminton', 'Kabaddi',
-    'Tennis', 'Rugby', 'Basketball', 'Wrestling', 'Table Tennis',
-    'Volleyball', 'Boxing',
-  ];
-
-  const fetches = SPORTS.flatMap(sport =>
-    [yest, today, tmrw].map(d =>
-      safeJson(`${SDB}/eventsday.php?d=${d}&s=${encodeURIComponent(sport)}`).then(r => ({ sport, evs: r?.events ?? [] }))
-    )
+  const liveSummaryList = await promisePool(
+    liveRaw,
+    async (match) => ({ match, summary: await fetchCricbuzzScoreSummary(match.matchId) }),
+    4,
   );
 
-  const results = await Promise.allSettled(fetches);
-  const seen = new Set();
-  const out  = [];
+  return [
+    ...liveSummaryList.map(({ match, summary }) => toHomeCricketMatch(match, 'live', summary)),
+    ...upcomingRaw.map((match) => toHomeCricketMatch(match, 'upcoming')),
+    ...recentRaw.map((match) => toHomeCricketMatch(match, 'recent')),
+  ];
+}
 
-  for (const r of results) {
-    if (r.status !== 'fulfilled') continue;
-    for (const ev of r.value.evs) {
-      if (!ev?.idEvent || seen.has(ev.idEvent)) continue;
-      seen.add(ev.idEvent);
-      const m = sdbToMatch(ev, r.value.sport);
-      if (m) out.push(m);
+function classifyKabaddiState(event) {
+  const state = String(event?.event_state || '').toUpperCase();
+  if (state === 'L') return 'live';
+  if (state === 'U') return 'upcoming';
+  if (state === 'R') return 'recent';
+  const status = String(event?.event_status || '').toLowerCase();
+  if (status.includes('completed') || status.includes('result')) return 'recent';
+  if (status.includes('live') || status.includes('in progress')) return 'live';
+  if (status.includes('upcoming') || status.includes('scheduled')) return 'upcoming';
+  return 'unknown';
+}
+
+function extractWindowObject({ html, variableName }) {
+  const marker = `window.${variableName} = `;
+  const start = html.indexOf(marker);
+  if (start === -1) return undefined;
+
+  let i = start + marker.length;
+  while (i < html.length && /\s/.test(html[i])) i += 1;
+  if (html[i] !== '{') return undefined;
+
+  let depth = 0;
+  let inString = false;
+  let quote = null;
+  let escaped = false;
+  const begin = i;
+
+  for (; i < html.length; i += 1) {
+    const ch = html[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) {
+        inString = false;
+        quote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      quote = ch;
+      continue;
+    }
+
+    if (ch === '{') depth += 1;
+    if (ch === '}') depth -= 1;
+    if (depth === 0) return html.slice(begin, i + 1);
+  }
+
+  return undefined;
+}
+
+async function fetchKabaddiMatches() {
+  const html = await safeText(buildAbsoluteUrl(PRO_KABADDI_BASE, '/schedule-fixtures-results'));
+  if (!html) return [];
+
+  const jsonText = extractWindowObject({ html, variableName: 'fixtureWidgetData' });
+  if (!jsonText) return [];
+
+  const widget = JSON.parse(jsonText);
+  const rawEvents = Object.values(widget?.fixtureByDate || {}).flat();
+  const matches = [];
+
+  for (const event of rawEvents) {
+    const kind = classifyKabaddiState(event);
+    if (!['live', 'upcoming', 'recent'].includes(kind)) continue;
+
+    const participants = asArray(event?.participants).map((item) => ({
+      name: normalizeWhitespace(item?.name || item?.short_name),
+      score: item?.value ?? item?.score ?? '',
+      winner: false,
+    }));
+    const searchText = [
+      event?.event_name,
+      event?.event_sub_status,
+      event?.series_name,
+      ...participants.map((team) => team.name),
+    ].join(' ');
+
+    matches.push(buildHomeMatch({
+      id: `kabaddi_${event?.game_id || event?.event_id || event?.id || matches.length}`,
+      sport: 'kabaddi',
+      match: event?.event_name,
+      league: event?.series_name || event?.league_code || 'Pro Kabaddi',
+      state: stateFromKind(kind),
+      date: event?.start_date || null,
+      summary: event?.event_sub_status || event?.event_status,
+      detail: event?.event_status,
+      clock: kind === 'live' ? event?.event_status || 'Live' : '',
+      venue: event?.venue_name,
+      competitors: participants.slice(0, 2),
+      isIndiaMatch: isIndia(searchText) || true,
+      source: 'prokabaddi',
+    }));
+  }
+
+  return matches;
+}
+
+function pickRecordSummary(records) {
+  return asArray(records).map((record) => record?.summary).find(Boolean);
+}
+
+function buildScoreLine({ home, away, separator = ' - ' }) {
+  if (!home || !away) return undefined;
+  if (home.score === undefined || away.score === undefined) return undefined;
+  const homeLabel = home.abbreviation || home.name || 'HOME';
+  const awayLabel = away.abbreviation || away.name || 'AWAY';
+  return `${homeLabel} ${home.score}${separator}${away.score} ${awayLabel}`;
+}
+
+function normalizeEspnEvent(event) {
+  const competition = event?.competitions?.[0];
+  const competitors = asArray(competition?.competitors);
+
+  const participants = competitors
+    .map((item) => {
+      const team = item?.team || {};
+      return {
+        id: team.id,
+        name: team.displayName || team.name,
+        abbreviation: team.abbreviation,
+        score: toNumberOrString(item?.score),
+        record: pickRecordSummary(item?.records),
+        winner: Boolean(item?.winner),
+        homeAway: item?.homeAway,
+      };
+    })
+    .filter(Boolean);
+
+  const home =
+    participants.find((participant) => participant.homeAway === 'home') ||
+    participants.find((participant) => participant.homeAway === 'away') ||
+    participants[0];
+  const away =
+    participants.find((participant) => participant.homeAway === 'away') ||
+    participants.find((participant) => participant.homeAway === 'home') ||
+    participants[1];
+
+  const status = competition?.status || event?.status;
+  const statusText = status?.type?.shortDetail || status?.type?.detail || status?.type?.description || undefined;
+
+  return {
+    eventId: event?.id,
+    name: event?.name,
+    shortName: event?.shortName,
+    date: event?.date,
+    status,
+    statusText,
+    state: status?.type?.state,
+    clock: status?.displayClock,
+    period: status?.period,
+    competition: {
+      id: competition?.id,
+      venue: competition?.venue,
+    },
+    participants,
+    home,
+    away,
+    scoreLine: buildScoreLine({ home, away }),
+  };
+}
+
+function normalizeEspnTennisCompetition({ tournament, grouping, competition }) {
+  const participants = asArray(competition?.competitors)
+    .map((item) => {
+      const athlete = item?.athlete;
+      const team = item?.team;
+      const name = athlete?.displayName || athlete?.fullName || team?.displayName || team?.name;
+      const abbreviation = athlete?.shortName || team?.abbreviation;
+      return {
+        id: athlete?.id || team?.id,
+        name,
+        abbreviation,
+        score: toNumberOrUndefined(item?.score),
+        winner: Boolean(item?.winner),
+        homeAway: item?.homeAway,
+        linescores: asArray(item?.linescores).map((score) => toNumberOrUndefined(score?.value)),
+      };
+    })
+    .filter((participant) => participant?.name);
+
+  const home =
+    participants.find((participant) => participant.homeAway === 'home') ||
+    participants.find((participant) => participant.homeAway === 'away') ||
+    participants[0];
+  const away =
+    participants.find((participant) => participant.homeAway === 'away') ||
+    participants.find((participant) => participant.homeAway === 'home') ||
+    participants[1];
+
+  const status = competition?.status;
+  const statusText = status?.type?.shortDetail || status?.type?.detail || status?.type?.description || undefined;
+
+  const maxSets = Math.max(home?.linescores?.length || 0, away?.linescores?.length || 0);
+  const sets = maxSets > 0
+    ? Array.from({ length: maxSets }, (_, index) => ({
+        home: home?.linescores?.[index],
+        away: away?.linescores?.[index],
+      }))
+    : undefined;
+
+  const computedSetWins = sets
+    ? sets.reduce((acc, set) => {
+        if (typeof set.home === 'number' && typeof set.away === 'number') {
+          if (set.home > set.away) acc.home += 1;
+          if (set.away > set.home) acc.away += 1;
+        }
+        return acc;
+      }, { home: 0, away: 0 })
+    : undefined;
+
+  if (home && away && (home.score === undefined || away.score === undefined) && computedSetWins) {
+    home.score = computedSetWins.home;
+    away.score = computedSetWins.away;
+  }
+
+  const setScoreText = sets
+    ? sets
+        .map((set) => (set.home !== undefined && set.away !== undefined ? `${set.home}-${set.away}` : undefined))
+        .filter(Boolean)
+        .join(' ')
+    : undefined;
+
+  const scoreLineBase = buildScoreLine({ home, away, separator: '-' });
+
+  return {
+    eventId: competition?.id,
+    name: home && away ? `${home.name} vs ${away.name}` : tournament?.name,
+    shortName: home && away ? `${home.abbreviation || home.name} vs ${away.abbreviation || away.name}` : tournament?.shortName,
+    date: competition?.date || tournament?.date,
+    status,
+    statusText,
+    state: status?.type?.state,
+    participants,
+    home,
+    away,
+    grouping: grouping?.displayName,
+    scoreLine: setScoreText && scoreLineBase ? `${scoreLineBase} (${setScoreText})` : scoreLineBase || setScoreText,
+  };
+}
+
+function flattenEspnTennisEvents(events) {
+  const matches = [];
+  for (const tournament of asArray(events)) {
+    for (const groupingEntry of asArray(tournament?.groupings)) {
+      for (const competition of asArray(groupingEntry?.competitions)) {
+        matches.push(normalizeEspnTennisCompetition({
+          tournament,
+          grouping: groupingEntry?.grouping,
+          competition,
+        }));
+      }
+    }
+  }
+  return matches.filter((match) => match?.eventId);
+}
+
+async function fetchEspnScoreboard({ sport, league, dates }) {
+  const url = `${ESPN_BASE}/sports/${sport}/${league}/scoreboard?dates=${dates}`;
+  const data = await safeJson(url);
+  if (!data) return [];
+
+  const rawEvents = asArray(data?.events);
+  const normalized = sport === 'tennis' && rawEvents.some((event) => Array.isArray(event?.groupings))
+    ? flattenEspnTennisEvents(rawEvents)
+    : rawEvents.map(normalizeEspnEvent);
+
+  const leagueInfo = data?.leagues?.[0];
+  return normalized.map((event) => ({
+    ...event,
+    leagueSlug: league,
+    leagueName: leagueInfo?.name || league,
+  }));
+}
+
+function toHomeEspnMatch(event, sportKey) {
+  const participants = event?.participants || [];
+  const searchText = [
+    event?.name,
+    event?.shortName,
+    event?.leagueName,
+    ...participants.map((participant) => participant?.name),
+  ].join(' ');
+
+  return buildHomeMatch({
+    id: `espn_${sportKey}_${event.eventId}`,
+    sport: sportKey,
+    match: event?.name || event?.shortName,
+    league: event?.leagueName,
+    state: event?.state || 'post',
+    date: event?.date || null,
+    summary: event?.scoreLine || event?.statusText,
+    detail: event?.status?.type?.detail || event?.statusText,
+    clock: event?.state === 'in' ? [event?.clock, event?.statusText].filter(Boolean).join(' · ') : '',
+    venue: event?.competition?.venue?.fullName,
+    competitors: participants.map((participant) => ({
+      name: participant.abbreviation || participant.name || '?',
+      score: participant.score ?? '',
+      winner: Boolean(participant.winner),
+    })),
+    isIndiaMatch: isIndia(searchText),
+    source: 'espn',
+  });
+}
+
+async function fetchEspnPrimaryMatches() {
+  const dates = [yyyymmddFromOffset(-1), yyyymmddFromOffset(0), yyyymmddFromOffset(1)];
+  const tasks = PRIMARY_ESPN_SPORTS.flatMap((cfg) =>
+    cfg.leagues.flatMap((league) => dates.map((date) => ({ cfg, league, date })))
+  );
+
+  const boards = await promisePool(
+    tasks,
+    async ({ cfg, league, date }) => ({ cfg, events: await fetchEspnScoreboard({ sport: cfg.sport, league, dates: date }) }),
+    6,
+  );
+
+  const byEventId = new Map();
+  for (const board of boards) {
+    for (const event of board.events) {
+      const key = `${board.cfg.key}:${event.eventId}`;
+      if (!event?.eventId || byEventId.has(key)) continue;
+      byEventId.set(key, toHomeEspnMatch(event, board.cfg.key));
     }
   }
 
-  console.log(`SDB today: ${out.length}`);
-  return out;
+  return Array.from(byEventId.values());
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SOURCE 3: ESPN — F1 + Golf (10-day window; races happen every 2-3 weeks)
-// ─────────────────────────────────────────────────────────────────────────
-async function fetchESPN() {
-  const SPORTS = [
-    { key: 'f1',   path: 'racing/f1', name: 'Formula 1', emoji: '🏎️' },
-    { key: 'golf', path: 'golf',      name: 'Golf',       emoji: '⛳' },
-  ];
-  const out = [];
+async function getLatestF1Year() {
+  const index = await safeJson(`${F1_LIVE_BASE}Index.json`);
+  const year = index?.Years?.[0]?.Year;
+  return year ? String(year) : undefined;
+}
 
-  for (const s of SPORTS) {
-    const base = `${ESPN}/${s.path}`;
-    let raw = await safeJson(`${base}/scoreboard`);
-    if (!raw?.events?.length) {
-      const lg  = await safeJson(`${base}/leagues`);
-      const ids = (lg?.leagues ?? []).map(l => l.id).filter(Boolean).slice(0, 6);
-      if (ids.length) {
-        const rs = await Promise.allSettled(ids.map(id => safeJson(`${base}/${id}/scoreboard`)));
-        raw = { events: rs.flatMap(r => r.status === 'fulfilled' ? r.value?.events ?? [] : []) };
-      }
-    }
-    for (const ev of raw?.events ?? []) {
-      const comp = ev?.competitions?.[0];
-      if (!comp) continue;
-      const state = comp.status?.type?.state ?? 'post';
-      const date  = comp.date ?? ev.date ?? null;
-      if (!inWindow(date, state, H10D, H10D)) continue;
-      const competitors = (comp.competitors ?? [])
-        .map(c => ({
-          name:   c.athlete?.shortName || c.athlete?.displayName || c.team?.shortDisplayName || c.team?.abbreviation || '?',
-          score:  c.score ?? '',
-          winner: c.winner === 'true' || c.winner === true,
-          order:  Number(c.order ?? 99),
-        }))
-        .sort((a, b) => a.order - b.order)
-        .slice(0, 10);
-      out.push({
-        id:        `espn_${ev.id}`,
-        sport:     s.key,
-        sportName: s.name,
-        emoji:     s.emoji,
-        match:     ev.shortName || ev.name || '',
-        league:    ev.season?.displayName || '',
-        state,
-        date,
-        summary:   comp.status?.summary ?? '',
-        detail:    comp.status?.type?.detail ?? '',
-        clock:     state === 'in' ? '🔴 Live' : '',
-        period:    comp.status?.period ?? null,
-        venue:     comp.venue?.fullName ?? '',
-        competitors,
-        isIndia:   false,
-        source:    'espn',
+async function listF1SessionsForYear(year) {
+  const data = await safeJson(`${F1_LIVE_BASE}${year}/Index.json`);
+  const meetings = asArray(data?.Meetings);
+  const sessions = [];
+
+  for (const meeting of meetings) {
+    for (const session of asArray(meeting?.Sessions)) {
+      sessions.push({
+        meetingKey: meeting?.Key,
+        meetingName: meeting?.Name,
+        meetingOfficialName: meeting?.OfficialName,
+        circuit: meeting?.Circuit,
+        country: meeting?.Country,
+        sessionKey: session?.Key,
+        sessionType: session?.Type,
+        sessionName: session?.Name,
+        startUtcMs: parseIsoLocalToUtcMs(session?.StartDate, session?.GmtOffset),
+        endUtcMs: parseIsoLocalToUtcMs(session?.EndDate, session?.GmtOffset),
+        path: session?.Path,
       });
     }
   }
 
-  console.log(`ESPN F1+Golf: ${out.length}`);
+  return sessions
+    .filter((session) => session.path && session.startUtcMs !== undefined)
+    .sort((a, b) => a.startUtcMs - b.startUtcMs);
+}
+
+function pickF1Session(sessions, referenceMs = nowMs()) {
+  const active = sessions.find((session) => {
+    if (session.startUtcMs === undefined || session.endUtcMs === undefined) return false;
+    return referenceMs >= session.startUtcMs - 2 * H1 && referenceMs <= session.endUtcMs + 3 * H1;
+  });
+  if (active) return active;
+  return undefined;
+}
+
+async function getF1Keyframe(sessionPath, feedName) {
+  const index = await safeJson(`${F1_LIVE_BASE}${sessionPath}Index.json`);
+  const keyPath = index?.Feeds?.[feedName]?.KeyFramePath;
+  if (!keyPath) return undefined;
+  return safeJson(`${F1_LIVE_BASE}${sessionPath}${keyPath}`);
+}
+
+async function fetchF1LiveMatch() {
+  const year = await getLatestF1Year();
+  if (!year) return [];
+
+  const session = pickF1Session(await listF1SessionsForYear(year));
+  if (!session?.path) return [];
+
+  const sessionPath = session.path.endsWith('/') ? session.path : `${session.path}/`;
+  const [sessionStatus, driverList, timing] = await Promise.all([
+    getF1Keyframe(sessionPath, 'SessionStatus'),
+    getF1Keyframe(sessionPath, 'DriverList'),
+    getF1Keyframe(sessionPath, 'TimingDataF1'),
+  ]);
+
+  const state =
+    sessionStatus?.Started === 'Started' && sessionStatus?.Status !== 'Ends'
+      ? 'in'
+      : sessionStatus?.Started === 'Finished' || sessionStatus?.Status === 'Ends'
+        ? 'post'
+        : 'pre';
+
+  if (state !== 'in') return [];
+
+  const lines = timing?.Lines || {};
+  const drivers = driverList || {};
+  const standings = Object.values(lines)
+    .map((line) => {
+      const position = toNumberOrUndefined(line?.Position);
+      const racingNumber = String(line?.RacingNumber || '');
+      const driver = normalizeDriver(drivers?.[racingNumber]) || { fullName: racingNumber, lastName: racingNumber };
+      return {
+        position,
+        driver,
+        gapToLeader: line?.GapToLeader,
+      };
+    })
+    .filter((row) => typeof row.position === 'number')
+    .sort((a, b) => a.position - b.position);
+
+  const title = buildSessionTitle({
+    meetingName: session.meetingName,
+    sessionType: session.sessionType,
+    sessionName: session.sessionName,
+  });
+
+  return [
+    buildHomeMatch({
+      id: `f1_live_${session.sessionKey || session.meetingKey}`,
+      sport: 'f1',
+      match: title,
+      league: session.meetingOfficialName || session.meetingName,
+      state: 'in',
+      date: session.startUtcMs ? new Date(session.startUtcMs).toISOString() : null,
+      summary: standings[0]?.driver?.fullName ? `Leader: ${standings[0].driver.fullName}` : sessionStatus?.Status || 'Live',
+      detail: session.sessionType,
+      clock: sessionStatus?.Status || 'Live',
+      venue: session.circuit?.ShortName || session.circuit?.Name || session.country?.Name,
+      competitors: standings.slice(0, 5).map((row) => ({
+        name: row.driver?.lastName || row.driver?.fullName || '?',
+        score: row.position === 1 ? 'Leader' : row.gapToLeader || '',
+        winner: row.position === 1,
+      })),
+      isIndiaMatch: false,
+      source: 'f1livetiming',
+    }),
+  ];
+}
+
+function normalizeF1Race(race) {
+  const season = String(race?.season || '');
+  const round = String(race?.round || '');
+  const eventId = season && round ? `${season}-${round}` : undefined;
+  const whenIso = race?.date && race?.time
+    ? `${race.date}T${String(race.time).replace('Z', '')}Z`
+    : race?.date
+      ? `${race.date}T00:00:00Z`
+      : undefined;
+
+  return {
+    eventId,
+    name: race?.raceName,
+    date: whenIso,
+    circuitName: race?.Circuit?.circuitName,
+    country: race?.Circuit?.Location?.country,
+    locality: race?.Circuit?.Location?.locality,
+    results: asArray(race?.Results).map((result) => ({
+      position: toNumberOrUndefined(result?.position),
+      driverName: [result?.Driver?.givenName, result?.Driver?.familyName].filter(Boolean).join(' '),
+    })),
+  };
+}
+
+async function fetchF1UpcomingAndResults() {
+  const [nextRaw, lastRaw] = await Promise.all([
+    safeJson(`${F1_RESULTS_BASE}/current/next.json`),
+    safeJson(`${F1_RESULTS_BASE}/current/last/results.json`),
+  ]);
+
+  const out = [];
+  const nextRace = normalizeF1Race(nextRaw?.MRData?.RaceTable?.Races?.[0]);
+  if (nextRace?.eventId) {
+    out.push(buildHomeMatch({
+      id: `f1_next_${nextRace.eventId}`,
+      sport: 'f1',
+      match: nextRace.name,
+      league: 'Formula 1',
+      state: 'pre',
+      date: nextRace.date,
+      summary: [nextRace.locality, nextRace.country].filter(Boolean).join(', ') || 'Upcoming race',
+      venue: nextRace.circuitName,
+      competitors: [],
+      isIndiaMatch: false,
+      source: 'ergast',
+    }));
+  }
+
+  const lastRace = normalizeF1Race(lastRaw?.MRData?.RaceTable?.Races?.[0]);
+  if (lastRace?.eventId) {
+    out.push(buildHomeMatch({
+      id: `f1_last_${lastRace.eventId}`,
+      sport: 'f1',
+      match: lastRace.name,
+      league: 'Formula 1',
+      state: 'post',
+      date: lastRace.date,
+      summary: lastRace.results?.[0]?.driverName ? `${lastRace.results[0].driverName} won` : 'Result',
+      venue: lastRace.circuitName,
+      competitors: lastRace.results.slice(0, 3).map((row) => ({
+        name: row.driverName || '?',
+        score: '',
+        winner: row.position === 1,
+      })),
+      isIndiaMatch: false,
+      source: 'ergast',
+    }));
+  }
+
   return out;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Handler
-// ─────────────────────────────────────────────────────────────────────────
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, s-maxage=180, stale-while-revalidate=360');
-  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
-
-  const [indiaSDB, todaySDB, espnEvents] = await Promise.all([
-    fetchIndiaSportsDB(),
-    fetchSportsDBToday(),
-    fetchESPN(),
+async function fetchF1Matches() {
+  const [liveMatches, scheduleMatches] = await Promise.all([
+    fetchF1LiveMatch(),
+    fetchF1UpcomingAndResults(),
   ]);
+  return [...liveMatches, ...scheduleMatches];
+}
+
+async function fetchBadmintonMatches() {
+  const homeText = await safeText(buildProxyUrl(BWF_HOME_URL), { ttlMs: CACHE_TTL_MS });
+  if (!homeText) return [];
+
+  const tournamentId = parseTournamentIdFromHome(homeText);
+  const homeTitle = parseNextLiveTournamentTitle(homeText) || parseTournamentTitle(homeText);
+  const homeDateRange = parseTournamentDateRange(homeText);
+  if (!tournamentId) {
+    return homeTitle
+      ? [buildHomeMatch({
+          id: 'bwf_home',
+          sport: 'badminton',
+          match: homeTitle,
+          league: 'BWF Match Centre',
+          state: 'pre',
+          summary: homeDateRange || 'Upcoming tournament',
+          competitors: [],
+          isIndiaMatch: isIndia(homeTitle),
+          source: 'bwf-proxy',
+        })]
+      : [];
+  }
+
+  const tournamentText = await safeText(buildProxyUrl(`${BWF_HOME_URL}${tournamentId}`), { ttlMs: CACHE_TTL_MS });
+  const title = parseTournamentTitle(tournamentText) || homeTitle;
+  const dateRange = parseTournamentDateRange(tournamentText) || homeDateRange;
+  const liveMatches = parseLiveMatchesFromTournament(tournamentText);
+
+  if (liveMatches.length > 0) {
+    return liveMatches.map((match, index) => buildHomeMatch({
+      id: `bwf_live_${tournamentId}_${match.id || index}`,
+      sport: 'badminton',
+      match: title ? `${title} · Court ${match.court ?? '?'}` : `Badminton · Court ${match.court ?? '?'}`,
+      league: 'BWF Match Centre',
+      state: 'in',
+      summary: match.scoreLine || 'Live',
+      detail: match.raw,
+      clock: 'Live',
+      competitors: [],
+      isIndiaMatch: isIndia(`${title} ${match.raw}`),
+      source: 'bwf-proxy',
+    }));
+  }
+
+  return title
+    ? [buildHomeMatch({
+        id: `bwf_tournament_${tournamentId}`,
+        sport: 'badminton',
+        match: title,
+        league: 'BWF Match Centre',
+        state: 'pre',
+        summary: dateRange || 'Upcoming tournament',
+        competitors: [],
+        isIndiaMatch: isIndia(title),
+        source: 'bwf-proxy',
+      })]
+    : [];
+}
+
+function parseWinner(resultText, homeName, awayName) {
+  if (!resultText || !homeName || !awayName) return { homeWin: false, awayWin: false };
+  const result = resultText.toLowerCase();
+  const home = homeName.toLowerCase();
+  const away = awayName.toLowerCase();
+  return {
+    homeWin: result.includes(`${home} won`) || result.includes(`${home} win`) || result.startsWith(`${home} `),
+    awayWin: result.includes(`${away} won`) || result.includes(`${away} win`) || result.startsWith(`${away} `),
+  };
+}
+
+function sportsDbToMatch(event, overrideSport) {
+  const sport = overrideSport ?? event.strSport ?? 'Unknown';
+  const meta = SPORTSDB_META[sport] ?? { key: sport.toLowerCase().replace(/\s+/g, ''), name: sport, emoji: '🏅' };
+  const rawStatus = normalizeWhitespace(event.strStatus);
+  const statusText = `${rawStatus} ${event.strProgress || ''}`.toLowerCase();
+
+  const explicitlyNotStarted =
+    rawStatus === 'NS' || rawStatus === '' ||
+    statusText.includes('not started') ||
+    statusText.includes('fixture') ||
+    statusText.includes('scheduled') ||
+    statusText.includes('postponed');
+
+  const live =
+    statusText.includes('live') ||
+    statusText.includes('inning') ||
+    statusText.includes('progress') ||
+    statusText.includes('quarter') ||
+    statusText.includes('half') ||
+    statusText.includes('set ');
+
+  const doneText =
+    !live &&
+    !explicitlyNotStarted &&
+    (statusText.includes('finish') ||
+      statusText.includes('complet') ||
+      statusText.includes('result') ||
+      statusText.includes('final') ||
+      statusText.includes('won') ||
+      statusText.includes(' win'));
+
+  const hasBothScores = event.intHomeScore != null && event.intAwayScore != null;
+  const dateStr = event.strTimestamp
+    ?? (event.dateEvent && event.strTime ? `${event.dateEvent}T${event.strTime}+00:00` : null)
+    ?? (event.dateEvent ? `${event.dateEvent}T00:00:00Z` : null);
+  const eventTime = dateStr ? new Date(dateStr).getTime() : null;
+  const state = live
+    ? 'in'
+    : (doneText || hasBothScores || (eventTime != null && eventTime < nowMs() - H1 && !explicitlyNotStarted))
+      ? 'post'
+      : 'pre';
+
+  const preMax = sport === 'Cricket' ? H7D : H48;
+  const postMax = sport === 'Cricket' ? H72 : H48;
+  if (!inWindow(dateStr, state, preMax, postMax)) return null;
+
+  const [homeName, awayName] = parseVsNames(event.strEvent, event.strHomeTeam, event.strAwayTeam);
+  const cleanResult = stripTags(event.strResult);
+  const cleanProgress = stripTags(event.strProgress);
+  const summary = cleanResult || (state === 'in' ? cleanProgress || 'Live' : rawStatus === 'NS' ? '' : rawStatus);
+
+  let homeWin = state === 'post' && hasBothScores && Number(event.intHomeScore) > Number(event.intAwayScore);
+  let awayWin = state === 'post' && hasBothScores && Number(event.intAwayScore) > Number(event.intHomeScore);
+  if (state === 'post' && !homeWin && !awayWin && event.strResult) {
+    const parsed = parseWinner(event.strResult, homeName, awayName);
+    homeWin = parsed.homeWin;
+    awayWin = parsed.awayWin;
+  }
+
+  return buildHomeMatch({
+    id: `sdb_${event.idEvent}`,
+    sport: meta.key,
+    match: event.strEvent || `${homeName} vs ${awayName}`,
+    league: event.strLeague || event.strSeason,
+    state,
+    date: dateStr,
+    summary,
+    detail: cleanProgress,
+    clock: state === 'in' ? 'Live' : '',
+    venue: event.strVenue || event.strCountry,
+    competitors: [
+      { name: homeName, score: event.intHomeScore != null ? String(event.intHomeScore) : '', winner: homeWin },
+      { name: awayName, score: event.intAwayScore != null ? String(event.intAwayScore) : '', winner: awayWin },
+    ],
+    isIndiaMatch: isIndia([homeName, awayName, event.strLeague, event.strSport].join(' ')),
+    source: 'sportsdb',
+  });
+}
+
+async function fetchSportsDbIndia() {
+  const data = await safeJson(`${SPORTSDB_BASE}/searchteams.php?t=India`);
+  const teams = asArray(data?.teams)
+    .filter((team) => {
+      const name = String(team?.strTeam || '').toLowerCase();
+      return name === 'india' || name.startsWith('india ') || name.endsWith(' india') || name.includes(' india ');
+    })
+    .slice(0, 30);
+
+  const eventLists = await Promise.allSettled(
+    teams.flatMap((team) => [
+      safeJson(`${SPORTSDB_BASE}/eventsnext.php?id=${team.idTeam}`).then((response) => response?.events ?? []),
+      safeJson(`${SPORTSDB_BASE}/eventslast.php?id=${team.idTeam}`).then((response) => response?.events ?? []),
+    ]),
+  );
+
+  const events = [];
+  const seen = new Set();
+  for (const result of eventLists) {
+    if (result.status !== 'fulfilled') continue;
+    for (const event of result.value) {
+      if (!event?.idEvent || seen.has(event.idEvent)) continue;
+      seen.add(event.idEvent);
+      const match = sportsDbToMatch(event);
+      if (match) events.push(match);
+    }
+  }
+
+  return events;
+}
+
+async function fetchSportsDbToday() {
+  const sports = [
+    'Cricket', 'Soccer', 'Field Hockey', 'Badminton', 'Kabaddi', 'Tennis',
+    'Rugby', 'Basketball', 'Wrestling', 'Table Tennis', 'Volleyball',
+    'Boxing', 'Golf', 'Athletics', 'Swimming',
+  ];
+  const dates = [isoDateFromOffset(-1), isoDateFromOffset(0), isoDateFromOffset(1)];
+
+  const resultSets = await Promise.allSettled(
+    sports.flatMap((sport) =>
+      dates.map((date) =>
+        safeJson(`${SPORTSDB_BASE}/eventsday.php?d=${date}&s=${encodeURIComponent(sport)}`)
+          .then((response) => ({ sport, events: response?.events ?? [] }))
+      )
+    ),
+  );
 
   const seen = new Set();
-  const all  = [];
-  const add  = (evs) => {
-    for (const ev of evs) {
-      if (!ev?.id || seen.has(ev.id)) continue;
-      seen.add(ev.id);
-      all.push(ev);
+  const matches = [];
+  for (const result of resultSets) {
+    if (result.status !== 'fulfilled') continue;
+    for (const event of result.value.events) {
+      if (!event?.idEvent || seen.has(event.idEvent)) continue;
+      seen.add(event.idEvent);
+      const match = sportsDbToMatch(event, result.value.sport);
+      if (match) matches.push(match);
     }
-  };
+  }
 
-  // India events first (covers cricket, hockey, football, kabaddi, etc.)
-  add(indiaSDB);
-  // Then broad today's events (catches international matches not in India search)
-  add(todaySDB);
-  // F1 + Golf
-  add(espnEvents);
+  return matches;
+}
 
-  // Sort: live → upcoming soonest → completed most-recent; India first within each
-  all.sort((a, b) => {
-    const so = { in: 0, pre: 1, post: 2 };
-    const sd = (so[a.state] ?? 9) - (so[b.state] ?? 9);
-    if (sd !== 0) return sd;
-    const id = (a.isIndia ? 0 : 1) - (b.isIndia ? 0 : 1);
-    if (id !== 0) return id;
-    if (!a.date && !b.date) return 0;
-    if (!a.date) return 1;
-    if (!b.date) return -1;
-    return a.state === 'pre'
-      ? new Date(a.date) - new Date(b.date)
-      : new Date(b.date) - new Date(a.date);
-  });
+async function fetchLegacyGolfEspn() {
+  const scoreboard = await safeJson(`${ESPN_BASE}/sports/golf/scoreboard`);
+  if (!scoreboard?.events?.length) return [];
 
-  const live      = all.filter(m => m.state === 'in');
-  const upcoming  = all.filter(m => m.state === 'pre');
-  const completed = all.filter(m => m.state === 'post');
+  const matches = [];
+  for (const event of scoreboard.events) {
+    const competition = event?.competitions?.[0];
+    if (!competition) continue;
+    const state = competition?.status?.type?.state ?? 'post';
+    const date = competition?.date ?? event?.date ?? null;
+    if (!inWindow(date, state, H10D, H10D)) continue;
+    matches.push(buildHomeMatch({
+      id: `golf_${event.id}`,
+      sport: 'golf',
+      match: event.shortName || event.name || 'Golf',
+      league: event.season?.displayName || 'Golf',
+      state,
+      date,
+      summary: competition?.status?.summary || '',
+      detail: competition?.status?.type?.detail || '',
+      clock: state === 'in' ? 'Live' : '',
+      venue: competition?.venue?.fullName,
+      competitors: asArray(competition?.competitors).slice(0, 6).map((competitor) => ({
+        name: competitor?.athlete?.shortName || competitor?.athlete?.displayName || competitor?.team?.shortDisplayName || '?',
+        score: competitor?.score ?? '',
+        winner: competitor?.winner === true || competitor?.winner === 'true',
+      })),
+      isIndiaMatch: false,
+      source: 'espn',
+    }));
+  }
 
-  const sc = {};
-  all.forEach(m => { sc[m.sport] = (sc[m.sport] ?? 0) + 1; });
-  console.log(`TOTAL: ${all.length} | India: ${all.filter(m=>m.isIndia).length} | live:${live.length} upcoming:${upcoming.length} completed:${completed.length}`);
-  console.log(`Sports: ${Object.entries(sc).map(([k,v])=>`${k}:${v}`).join(' ')}`);
+  return matches;
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  const results = await Promise.allSettled([
+    fetchCricketMatches(),
+    fetchEspnPrimaryMatches(),
+    fetchKabaddiMatches(),
+    fetchF1Matches(),
+    fetchBadmintonMatches(),
+    fetchSportsDbIndia(),
+    fetchSportsDbToday(),
+    fetchLegacyGolfEspn(),
+  ]);
+
+  const primary = uniqueById([
+    ...(results[0].status === 'fulfilled' ? results[0].value : []),
+    ...(results[1].status === 'fulfilled' ? results[1].value : []),
+    ...(results[2].status === 'fulfilled' ? results[2].value : []),
+    ...(results[3].status === 'fulfilled' ? results[3].value : []),
+    ...(results[4].status === 'fulfilled' ? results[4].value : []),
+  ]);
+
+  const primarySports = new Set(primary.map((match) => match.sport));
+  const fallbackCandidates = uniqueById([
+    ...(results[5].status === 'fulfilled' ? results[5].value : []),
+    ...(results[6].status === 'fulfilled' ? results[6].value : []),
+    ...(results[7].status === 'fulfilled' ? results[7].value : []),
+  ]);
+
+  const fallback = fallbackCandidates.filter((match) => !primarySports.has(match.sport));
+  const all = sortMatches(uniqueById([...primary, ...fallback]));
+  const live = all.filter((match) => match.state === 'in');
+  const upcoming = all.filter((match) => match.state === 'pre');
+  const completed = all.filter((match) => match.state === 'post');
 
   return res.status(200).json({
-    matches: all, live, upcoming, completed,
-    counts:  { live: live.length, upcoming: upcoming.length, completed: completed.length },
+    matches: all,
+    live,
+    upcoming,
+    completed,
+    counts: {
+      live: live.length,
+      upcoming: upcoming.length,
+      completed: completed.length,
+    },
   });
 }

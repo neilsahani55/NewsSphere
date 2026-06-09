@@ -1,13 +1,13 @@
 /**
  * Live sports scores across multiple disciplines.
  * Calls /api/sports (Vercel function) which fetches from ESPN server-side.
- * Cached 3 minutes in sessionStorage.
+ * Cached 1 minute in sessionStorage.
  */
 
 import { useEffect, useState } from 'react';
 
 const CACHE_KEY = 'ns_sports_v4';
-const CACHE_TTL = 3 * 60 * 1000;
+const CACHE_TTL = 60 * 1000;
 
 function readCache() {
   try {
@@ -39,7 +39,7 @@ export function useSports() {
       if (cached) { setMatches(cached); setCounts(cached.counts ?? {}); setLoading(false); return; }
 
       try {
-        const res = await fetch('/api/sports', { signal: AbortSignal.timeout(12000) });
+        const res = await fetch('/api/sports', { signal: AbortSignal.timeout(15000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const data = {
