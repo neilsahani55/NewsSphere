@@ -260,6 +260,9 @@ function sortMatches(matches) {
     const stateDelta = (order[a.state] ?? 9) - (order[b.state] ?? 9);
     if (stateDelta !== 0) return stateDelta;
 
+    const abandonedDelta = (a.isAbandoned ? 1 : 0) - (b.isAbandoned ? 1 : 0);
+    if (abandonedDelta !== 0) return abandonedDelta;
+
     const indiaDelta = (a.isIndia ? 0 : 1) - (b.isIndia ? 0 : 1);
     if (indiaDelta !== 0) return indiaDelta;
 
@@ -323,6 +326,7 @@ function buildHomeMatch({
   venue = '',
   competitors = [],
   isIndiaMatch = false,
+  isAbandoned = false,
   source,
 }) {
   const meta = SPORT_META[sport] || { key: sport, name: sport, emoji: '🏅' };
@@ -344,6 +348,7 @@ function buildHomeMatch({
     venue: normalizeWhitespace(venue),
     competitors: Array.isArray(competitors) ? competitors : [],
     isIndia: Boolean(isIndiaMatch),
+    isAbandoned: Boolean(isAbandoned),
     source,
   };
 }
@@ -495,10 +500,44 @@ function splitCricketTitleAndStatus(rawTitle, rawStatus) {
   };
 }
 
+function cleanCricbuzzMarketingText(text) {
+  return normalizeWhitespace(String(text || '')
+    .replace(/\|\s*Cricbuzz.*$/i, '')
+    .replace(/\bLive Cricket Stream\b/gi, '')
+    .replace(/\blive scores?\b/gi, '')
+    .replace(/\bball-by-ball commentary\b/gi, '')
+    .replace(/\bhighlights?\b/gi, '')
+    .replace(/\bvideos?\b/gi, '')
+    .replace(/\bnews\b/gi, '')
+    .replace(/\band more\b/gi, '')
+    .replace(/\bin USA\s*&\s*Canada\b/gi, '')
+    .replace(/\bin USA & Canada\b/gi, '')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,+/g, ', ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/,\s*$/g, ''));
+}
+
+function stripCricketMatchLead(text) {
+  const clean = cleanCricbuzzMarketingText(text).replace(/^Cricket commentary\s*\|\s*/i, '');
+  const parts = clean.split(',').map((part) => normalizeWhitespace(part)).filter(Boolean);
+  if (parts.length >= 2 && /\s+vs\.?\s+/i.test(parts[0])) return parts.slice(1).join(', ');
+  return clean;
+}
+
+function expandCricketCompetitionLabel(competition, matchType, matchTitle) {
+  const cleanCompetition = normalizeWhitespace(competition);
+  if (!cleanCompetition) return '';
+  if (/^group\s+[a-z0-9]+$/i.test(cleanCompetition)) {
+    return [matchType, cleanCompetition, matchTitle].filter(Boolean).join(' · ');
+  }
+  return cleanCompetition;
+}
+
 function extractCricketMeta(...texts) {
   for (const text of texts) {
-    let clean = normalizeWhitespace(text).replace(/\s+-\s+.*$/, '');
-    clean = clean.replace(/^Cricket commentary\s*\|\s*/i, '');
+    let clean = stripCricketMatchLead(text).replace(/\s+-\s+.*$/, '');
+    clean = cleanCricbuzzMarketingText(clean);
     const parts = clean.split(',').map((part) => normalizeWhitespace(part)).filter(Boolean);
     if (parts.length >= 2 && /\s+vs\.?\s+/i.test(parts[0])) {
       return {
@@ -518,7 +557,7 @@ function extractCricketMeta(...texts) {
 
 function extractCricketReadableTeams(...texts) {
   for (const text of texts) {
-    let clean = normalizeWhitespace(text).replace(/^Cricket commentary\s*\|\s*/i, '');
+    let clean = cleanCricbuzzMarketingText(text).replace(/^Cricket commentary\s*\|\s*/i, '');
     clean = clean.replace(/\s+-\s+.*$/, '');
     const head = normalizeWhitespace(clean.split(',')[0]);
     if (/\d/.test(head)) continue;
@@ -577,6 +616,32 @@ function compactCricketResult(summary, resultText) {
   if (!text) return '';
   if (/\bwon\b/i.test(text) || /\b(stumps|trail|need|draw|tie|abandoned|no result)\b/i.test(text)) return text;
   return '';
+}
+
+function deriveCricketState(match, summaryData, fallbackKind) {
+  const text = normalizeWhitespace([
+    match?.status,
+    match?.title,
+    match?.matchInfo,
+    summaryData?.title,
+    summaryData?.summary,
+  ].join(' ')).toLowerCase();
+
+  if (/\b(abandon|abandoned|cancelled|canceled|no result|match drawn|drawn|draw|complete|completed|won|tie)\b/.test(text)) {
+    return 'post';
+  }
+  if (/\b(upcoming|preview|scheduled|schedule|match starts|starts at|start time|toss at)\b/.test(text)) {
+    return 'pre';
+  }
+  if (/\b(live|in progress|need|trail|stumps|day\s*\d|innings break)\b/.test(text)) {
+    return 'in';
+  }
+  return stateFromKind(fallbackKind);
+}
+
+function isCricketAbandoned(...texts) {
+  const text = normalizeWhitespace(texts.join(' ')).toLowerCase();
+  return /\b(abandon|abandoned|no result|cancelled|canceled)\b/.test(text);
 }
 
 function parseScoreSummaryFromHtml(html) {
@@ -709,7 +774,7 @@ async function fetchCricbuzzScoreSummary(matchId) {
 }
 
 function toHomeCricketMatch(rawMatch, kind, summaryData) {
-  const state = stateFromKind(kind);
+  const state = deriveCricketState(rawMatch, summaryData, kind);
   const { matchTitle, resultText } = splitCricketTitleAndStatus(rawMatch.title, rawMatch.status);
   const [shortHome, shortAway] = splitCricketTeams(matchTitle || rawMatch.matchInfo || rawMatch.status);
   const fallbackHome = shortHome;
@@ -727,6 +792,7 @@ function toHomeCricketMatch(rawMatch, kind, summaryData) {
   const readableTeams = extractCricketReadableTeams(resultSummary, summaryData?.title, summaryData?.summary);
   const summary = resultSummary || summaryData?.summary || rawMatch.status || rawMatch.matchInfo;
   const result = resultSummary || (state === 'post' ? summary : '');
+  const isAbandonedMatch = state === 'post' && isCricketAbandoned(summaryData?.summary || '', resultText, rawMatch.status);
   const winnerText = `${summaryData?.summary || ''} ${resultText}`;
   let homeWinner = state === 'post' && (cricketWinnerFromText(winnerText, home) || cricketWinnerFromCode(winnerText, home));
   let awayWinner = state === 'post' && (cricketWinnerFromText(winnerText, away) || cricketWinnerFromCode(winnerText, away));
@@ -744,7 +810,7 @@ function toHomeCricketMatch(rawMatch, kind, summaryData) {
     id: `cricbuzz_${kind}_${rawMatch.matchId}`,
     sport: 'cricket',
     match: readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : (matchTitle || `${home} vs ${away}`),
-    league: rawMatch.series || cricketMeta.competition || rawMatch.category,
+    league: expandCricketCompetitionLabel(rawMatch.series || cricketMeta.competition || rawMatch.category, cricketMeta.matchType, readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : matchTitle),
     matchType: cricketMeta.matchType,
     state,
     summary,
@@ -753,10 +819,11 @@ function toHomeCricketMatch(rawMatch, kind, summaryData) {
     clock: state === 'in' ? rawMatch.status || 'Live' : '',
     venue,
     competitors: [
-      { name: home, score: parsedSummary?.home?.score || '', winner: homeWinner },
-      { name: away, score: parsedSummary?.away?.score || '', winner: awayWinner },
+      { name: home, score: parsedSummary?.home?.score || '', winner: isAbandonedMatch ? false : homeWinner },
+      { name: away, score: parsedSummary?.away?.score || '', winner: isAbandonedMatch ? false : awayWinner },
     ],
     isIndiaMatch: isIndia(searchText),
+    isAbandoned: isAbandonedMatch,
     source: 'cricbuzz',
   });
 }
