@@ -113,7 +113,9 @@ function MatchCard({ m, showSport }) {
   const isPost   = m.state === 'post';
   const isRacing = RACING.has(m.sport);
   const metaBits = [m.matchType, m.venue].filter(Boolean);
-  const resultText = m.result || ((isPost || (isLive && !m.clock)) ? m.summary : '');
+  const footerTime = (isPre || isPost) && m.date ? fmtTime(m.date) : '';
+  const footerLeague = isPost ? m.league : '';
+  const showFooter = Boolean(footerTime || footerLeague);
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
@@ -150,13 +152,12 @@ function MatchCard({ m, showSport }) {
       )}
 
       {/* Footer */}
-      <div className="sp-meta">
-        {isPre  && m.date && <span className="sp-time">🕐 {fmtTime(m.date)}</span>}
-        {isPost && m.date && <span className="sp-meta-date">📅 {fmtDate(m.date)}</span>}
-        {resultText && (
-          <span className="sp-result">{isPost ? '✓ ' : isLive ? '• ' : ''}{resultText}</span>
-        )}
-      </div>
+      {showFooter && (
+        <div className="sp-meta">
+          {footerTime && <span className="sp-time">🕐 {footerTime}</span>}
+          {footerLeague && <span className="sp-result">🏆 {footerLeague}</span>}
+        </div>
+      )}
     </div>
   );
 }
