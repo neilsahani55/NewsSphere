@@ -32,9 +32,7 @@ const cache = new Map();
 
 const H1 = 60 * 60 * 1000;
 const H48 = 48 * H1;
-const H72 = 72 * H1;
-const H7D = 7 * 24 * H1;
-const H10D = 10 * 24 * H1;
+const H2D = 48 * H1;
 
 const SPORT_META = {
   cricket: { key: 'cricket', name: 'Cricket', emoji: '🏏' },
@@ -58,11 +56,8 @@ const SPORT_META = {
 };
 
 const PRIMARY_ESPN_SPORTS = [
-  { key: 'football', sport: 'soccer', leagues: ['fifa.worldq.afc', 'uefa.champions', 'eng.1', 'esp.1'] },
-  { key: 'basketball', sport: 'basketball', leagues: ['nba', 'wnba'] },
+  { key: 'football', sport: 'soccer', leagues: ['fifa.worldq.afc'] },
   { key: 'tennis', sport: 'tennis', leagues: ['atp', 'wta'] },
-  { key: 'rugby', sport: 'rugby', leagues: ['267979', '242041'] },
-  { key: 'volleyball', sport: 'volleyball', leagues: ['mens-college-volleyball', 'womens-college-volleyball'] },
 ];
 
 const INDIA_KW = [
@@ -73,6 +68,38 @@ const INDIA_KW = [
   'rajasthan royals', 'rr ',
   'isl', 'i-league', 'hockeyindia', 'fih india',
   'pro kabaddi', 'pkl', 'india women', 'india a', 'india u19', 'india u23',
+];
+
+const INDIA_DOMESTIC_KW = [
+  'india', 'indian', 'india a', 'india women', 'india u19', 'india u23',
+  'ipl', 'ranji', 'syed mushtaq', 'vijay hazare', 'duleep', 'devdhar', 'irani',
+  'pro kabaddi', 'pkl', 't20 mumbai', 'maharaja trophy', 'tnpl', 'ksca', 'saurashtra',
+  'mumbai', 'delhi', 'karnataka', 'tamil nadu', 'punjab', 'haryana', 'kerala', 'bengal',
+  'uttar pradesh', 'rajasthan', 'gujarat', 'assam', 'hyderabad', 'vidarbha', 'jharkhand',
+  'railways', 'services', 'chennai', 'kolkata', 'lucknow', 'andhra', 'odisha', 'goa',
+  'madhya pradesh', 'tripura', 'nagaland', 'mizoram', 'meghalaya', 'manipur', 'sikkim',
+  'pondicherry', 'jammu', 'kashmir', 'chhattisgarh', 'bihar', 'arunachal',
+];
+
+const COUNTRY_NAMES = [
+  'india', 'afghanistan', 'australia', 'bangladesh', 'england', 'new zealand', 'pakistan',
+  'south africa', 'sri lanka', 'west indies', 'zimbabwe', 'ireland', 'netherlands',
+  'united states of america', 'united states', 'usa', 'canada', 'nepal', 'oman', 'uae',
+  'united arab emirates', 'scotland', 'namibia', 'hong kong', 'papua new guinea',
+  'japan', 'thailand', 'mongolia', 'philippines', 'saudi arabia', 'china', 'qatar',
+  'bahrain', 'kuwait', 'jordan', 'iraq', 'iran', 'uzbekistan', 'tajikistan',
+  'turkmenistan', 'kyrgyzstan', 'malaysia', 'singapore', 'indonesia', 'vietnam',
+  'south korea', 'korea republic', 'north korea', 'mexico', 'argentina', 'brazil',
+  'france', 'germany', 'italy', 'spain', 'portugal', 'belgium', 'netherlands',
+  'switzerland', 'croatia', 'serbia', 'poland', 'ukraine', 'turkey', 'morocco',
+  'tunisia', 'egypt', 'nigeria', 'kenya',
+];
+
+const COUNTRY_CODES = [
+  'ind', 'inda', 'indw', 'afg', 'aus', 'ban', 'eng', 'enga', 'engw', 'nz', 'pak', 'sa',
+  'saa', 'saw', 'sl', 'sla', 'slw', 'wi', 'wiw', 'zim', 'ire', 'ned', 'usa', 'can',
+  'nep', 'oman', 'uae', 'uaew', 'sco', 'nam', 'hkg', 'png', 'jpn', 'thaiw', 'jpnw',
+  'mglw', 'mmrw', 'phiw', 'chnw', 'sauw', 'rsaa', 'rsaw', 'nedw',
 ];
 
 const SPORTSDB_META = {
@@ -231,6 +258,60 @@ function buildAbsoluteUrl(baseUrl, href) {
 function isIndia(text = '') {
   const t = (` ${text} `).toLowerCase();
   return INDIA_KW.some((kw) => t.includes(kw));
+}
+
+function includesKeyword(text, keywords) {
+  const haystack = (` ${normalizeWhitespace(text)} `).toLowerCase();
+  return keywords.some((kw) => haystack.includes(` ${kw.toLowerCase()} `) || haystack.includes(kw.toLowerCase()));
+}
+
+function isIndiaDomesticText(text = '') {
+  return includesKeyword(text, INDIA_DOMESTIC_KW);
+}
+
+function isCountrySideName(name = '') {
+  const clean = normalizeWhitespace(name).toLowerCase();
+  if (!clean) return false;
+  return COUNTRY_NAMES.includes(clean) || COUNTRY_CODES.includes(clean.replace(/[^a-z]/g, ''));
+}
+
+function isInternationalNationalMatch(names = []) {
+  const normalized = names
+    .map((name) => normalizeWhitespace(name))
+    .filter(Boolean);
+  if (normalized.length < 2) return false;
+  return normalized.every((name) => isCountrySideName(name));
+}
+
+function keepForFocusedFeed(match) {
+  if (!match) return false;
+  if (match.state !== 'in' && !inWindow(match.date, match.state, H2D, H2D)) return false;
+  if (/\bTBD\b/i.test(match.match || '')) return false;
+
+  const text = [
+    match.match,
+    match.league,
+    match.matchType,
+    match.summary,
+    match.result,
+    match.venue,
+    ...(match.competitors || []).map((c) => c.name),
+  ].join(' ');
+
+  if (match.sport === 'kabaddi') return true;
+  if (match.sport === 'cricket') {
+    const competitorNames = (match.competitors || []).map((c) => c.name);
+    return isInternationalNationalMatch(competitorNames) || isIndiaDomesticText(text);
+  }
+  if (match.sport === 'football' || match.sport === 'fieldhockey') {
+    const competitorNames = (match.competitors || []).map((c) => c.name);
+    return isInternationalNationalMatch(competitorNames) || isIndia(text);
+  }
+  if (match.sport === 'tennis' || match.sport === 'badminton' || match.sport === 'f1' || match.sport === 'golf') {
+    return true;
+  }
+
+  return false;
 }
 
 function inWindow(dateStr, state, preMax = H48, postMax = H48) {
@@ -1523,8 +1604,8 @@ function sportsDbToMatch(event, overrideSport) {
       ? 'post'
       : 'pre';
 
-  const preMax = sport === 'Cricket' ? H7D : H48;
-  const postMax = sport === 'Cricket' ? H72 : H48;
+  const preMax = H2D;
+  const postMax = H2D;
   if (!inWindow(dateStr, state, preMax, postMax)) return null;
 
   const [homeName, awayName] = parseVsNames(event.strEvent, event.strHomeTeam, event.strAwayTeam);
@@ -1592,11 +1673,7 @@ async function fetchSportsDbIndia() {
 }
 
 async function fetchSportsDbToday() {
-  const sports = [
-    'Cricket', 'Soccer', 'Field Hockey', 'Badminton', 'Kabaddi', 'Tennis',
-    'Rugby', 'Basketball', 'Wrestling', 'Table Tennis', 'Volleyball',
-    'Boxing', 'Golf', 'Athletics', 'Swimming',
-  ];
+  const sports = ['Cricket', 'Soccer', 'Field Hockey', 'Kabaddi', 'Badminton', 'Tennis', 'Golf'];
   const dates = [isoDateFromOffset(-1), isoDateFromOffset(0), isoDateFromOffset(1)];
 
   const resultSets = await Promise.allSettled(
@@ -1633,7 +1710,7 @@ async function fetchLegacyGolfEspn() {
     if (!competition) continue;
     const state = competition?.status?.type?.state ?? 'post';
     const date = competition?.date ?? event?.date ?? null;
-    if (!inWindow(date, state, H10D, H10D)) continue;
+    if (!inWindow(date, state, H2D, H2D)) continue;
     matches.push(buildHomeMatch({
       id: `golf_${event.id}`,
       sport: 'golf',
@@ -1694,7 +1771,7 @@ export default async function handler(req, res) {
   ]);
 
   const fallback = fallbackCandidates.filter((match) => !primarySports.has(match.sport));
-  const all = sortMatches(uniqueById([...primary, ...fallback]));
+  const all = sortMatches(uniqueById([...primary, ...fallback]).filter(keepForFocusedFeed));
   const live = all.filter((match) => match.state === 'in');
   const upcoming = all.filter((match) => match.state === 'pre');
   const completed = all.filter((match) => match.state === 'post');
