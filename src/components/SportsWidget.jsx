@@ -114,14 +114,14 @@ function MatchCard({ m, showSport }) {
   const isRacing = RACING.has(m.sport);
   const metaBits = [m.matchType, m.venue].filter(Boolean);
   const footerTime = (isPre || isPost) && m.date ? fmtTime(m.date) : '';
-  const footerLeague = (isPre || isPost) ? m.league : '';
+  const footerLeague = isPost ? m.league : '';
   const showFooter = Boolean(footerTime || footerLeague);
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
 
       {/* Sport + league label row */}
-      <div className={`sp-card-label${showSport ? ' sp-card-label-all' : ''}`}>
+      <div className="sp-card-label">
         {showSport && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
         {m.league  && <span className="sp-league-tag">{m.league}</span>}
       </div>
@@ -311,7 +311,7 @@ function SportsWidgetContent() {
           </p>
         ) : (
           <div className="sp-grid4">
-            {shown.slice(0, 16).map(m => (
+            {shown.map(m => (
               <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={sport === 'all'} />
             ))}
           </div>
