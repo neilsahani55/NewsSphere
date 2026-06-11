@@ -253,25 +253,27 @@ export default memo(function SportsWidget() {
         ))}
       </div>
 
-      {/* Match cards — always 3-column grid */}
-      {loading && all.length === 0 ? (
-        <div className="sp-skeleton" aria-hidden />
-      ) : shown.length === 0 ? (
-        <p className="sp-empty">
-          {sport !== 'all'
-            ? `No ${tab} matches for this sport right now — try another tab or sport.`
-            : tab === 'live'     ? 'No live matches right now.'
-            : tab === 'upcoming' ? 'No upcoming matches in the next 2 days.'
-            :                      'No results from the last 2 days.'
-          }
-        </p>
-      ) : (
-        <div className="sp-grid4">
-          {shown.slice(0, 16).map(m => (
-            <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={sport === 'all'} />
-          ))}
-        </div>
-      )}
+      <div className="sp-card-scroll">
+        {/* Match cards — always 3-column grid */}
+        {loading && all.length === 0 ? (
+          <div className="sp-skeleton" aria-hidden />
+        ) : shown.length === 0 ? (
+          <p className="sp-empty">
+            {sport !== 'all'
+              ? `No ${tab} matches for this sport right now — try another tab or sport.`
+              : tab === 'live'     ? 'No live matches right now.'
+              : tab === 'upcoming' ? 'No upcoming matches in the next 2 days.'
+              :                      'No results from the last 2 days.'
+            }
+          </p>
+        ) : (
+          <div className="sp-grid4">
+            {shown.slice(0, 16).map(m => (
+              <MatchCard key={`${m.sport}-${m.id}`} m={m} showSport={sport === 'all'} />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 });

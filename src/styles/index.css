@@ -1856,7 +1856,7 @@ button { font-family: inherit; }
 .home-info-right > .sp-wrap {
   height: 100%;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 @media (max-width: 1024px) {
   .home-info-grid { grid-template-columns: 1fr; }
@@ -1865,7 +1865,7 @@ button { font-family: inherit; }
   }
   .home-info-right > .sp-wrap {
     height: auto;
-    overflow-y: visible;
+    overflow: visible;
   }
 }
 
@@ -1985,6 +1985,9 @@ button { font-family: inherit; }
 .sp-wrap {
   background: var(--paper2); border: 1px solid var(--border);
   border-radius: var(--rmd); padding: .8rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
 }
 
 /* Header */
@@ -2073,6 +2076,16 @@ button { font-family: inherit; }
 .sp-section-count { font-size: .68rem; color: var(--ink3); }
 
 /* Cards — 3-column grid; minmax(0,1fr) forces truly equal columns */
+.sp-card-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: .2rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sp-card-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .sp-grid4 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2556,7 +2569,7 @@ mark.tts-hl {
 }
 
 /* ── Logged-in wrapper ── */
-.sp-wrap { display: flex; flex-direction: column; gap: 1.25rem; padding-bottom: 2rem; }
+.sp-wrap { padding-bottom: 2rem; }
 
 /* Profile card */
 .sp-profile-card {
