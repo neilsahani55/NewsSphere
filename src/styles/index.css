@@ -2058,13 +2058,13 @@ button { font-family: inherit; }
 .sp-section-title { font-size: .78rem; font-weight: 700; color: var(--ink); }
 .sp-section-count { font-size: .68rem; color: var(--ink3); }
 
-/* Cards — 4-column grid; minmax(0,1fr) forces truly equal columns */
+/* Cards — 3-column grid; minmax(0,1fr) forces truly equal columns */
 .sp-grid4 {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .4rem;
 }
-@media (max-width: 1024px) { .sp-grid4 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1024px) { .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px)  { .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px)  { .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* Keep for legacy use in other widgets */
@@ -3479,7 +3479,7 @@ mark.tts-hl {
   .fuel-grid { gap: .45rem; }
 
   /* Sports */
-  .sp-grid4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sp-match { font-size: .82rem; }
 }
 
