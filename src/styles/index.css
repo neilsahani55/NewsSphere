@@ -1850,9 +1850,23 @@ button { font-family: inherit; }
 }
 .home-info-right {
   min-width: 0;
+  min-height: 0;
+  height: var(--home-info-height, auto);
+}
+.home-info-right > .sp-wrap {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 @media (max-width: 1024px) {
   .home-info-grid { grid-template-columns: 1fr; }
+  .home-info-right {
+    height: auto;
+  }
+  .home-info-right > .sp-wrap {
+    height: auto;
+    overflow-y: visible;
+  }
 }
 
 /* ── Fuel Widget ─────────────────────────────────────────────────── */

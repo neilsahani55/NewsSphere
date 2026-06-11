@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { matchesTopic } from '../utils/categories.js';
 import { isBoilerplate, parseDate, relativeTime, stripHtml, truncate } from '../utils/format.js';
 import { getCached } from '../services/translateService.js';
@@ -116,6 +116,8 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
   const now = Date.now();
   const loading = articlesStatus === 'loading' || articlesStatus === 'idle';
+  const infoLeftRef = useRef(null);
+  const [infoColumnHeight, setInfoColumnHeight] = useState(0);
 
   const topStories = useMemo(() => {
     const last24h = articles.filter(a => {
@@ -137,6 +139,26 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
 
   const [featured, ...sideStories] = topStories;
 
+  useEffect(() => {
+    const element = infoLeftRef.current;
+    if (!element) return undefined;
+
+    const syncHeight = () => {
+      setInfoColumnHeight(Math.ceil(element.getBoundingClientRect().height));
+    };
+
+    syncHeight();
+
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(element);
+    window.addEventListener('resize', syncHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncHeight);
+    };
+  }, []);
+
   return (
     <div className="home-pg">
       <div className="home-briefing">
@@ -152,8 +174,11 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
 
       <MarketsWidget />
 
-      <div className="home-info-grid">
-        <div className="home-info-left">
+      <div
+        className="home-info-grid"
+        style={infoColumnHeight ? { '--home-info-height': `${infoColumnHeight}px` } : undefined}
+      >
+        <div className="home-info-left" ref={infoLeftRef}>
           <FuelWidget />
           <HolidayWidget />
         </div>
