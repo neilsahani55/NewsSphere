@@ -31,8 +31,8 @@ const CACHE_TTL_MS = 15_000;
 const cache = new Map();
 
 const H1 = 60 * 60 * 1000;
-const H48 = 48 * H1;
-const H2D = 48 * H1;
+const H24 = 24 * H1;
+const H1D = 24 * H1;
 
 const SPORT_META = {
   cricket: { key: 'cricket', name: 'Cricket', emoji: '🏏' },
@@ -295,7 +295,7 @@ function isInternationalNationalMatch(names = []) {
 
 function keepForFocusedFeed(match) {
   if (!match) return false;
-  if (match.state !== 'in' && !inWindow(match.date, match.state, H2D, H2D)) return false;
+  if (match.state !== 'in' && !inWindow(match.date, match.state, H1D, H1D)) return false;
   if (/\bTBD\b/i.test(match.match || '')) return false;
 
   const text = [
@@ -325,7 +325,7 @@ function keepForFocusedFeed(match) {
   return false;
 }
 
-function inWindow(dateStr, state, preMax = H48, postMax = H48) {
+function inWindow(dateStr, state, preMax = H24, postMax = H24) {
   if (!dateStr) return true;
   const t = new Date(dateStr).getTime();
   if (Number.isNaN(t)) return true;
@@ -1615,8 +1615,8 @@ function sportsDbToMatch(event, overrideSport) {
       ? 'post'
       : 'pre';
 
-  const preMax = H2D;
-  const postMax = H2D;
+  const preMax = H1D;
+  const postMax = H1D;
   if (!inWindow(dateStr, state, preMax, postMax)) return null;
 
   const [homeName, awayName] = parseVsNames(event.strEvent, event.strHomeTeam, event.strAwayTeam);
@@ -1721,7 +1721,7 @@ async function fetchLegacyGolfEspn() {
     if (!competition) continue;
     const state = competition?.status?.type?.state ?? 'post';
     const date = competition?.date ?? event?.date ?? null;
-    if (!inWindow(date, state, H2D, H2D)) continue;
+    if (!inWindow(date, state, H1D, H1D)) continue;
     matches.push(buildHomeMatch({
       id: `golf_${event.id}`,
       sport: 'golf',
