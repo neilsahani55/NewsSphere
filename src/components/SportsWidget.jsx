@@ -67,6 +67,45 @@ function fmtDate(dateStr) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', ...IST_OPTS });
 }
 
+function normalizeLiveText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function dedupeLiveParts(parts) {
+  const out = [];
+  for (const part of parts) {
+    const clean = normalizeLiveText(part);
+    if (!clean) continue;
+    const lower = clean.toLowerCase();
+    const exists = out.some((item) => {
+      const current = item.toLowerCase();
+      return current === lower || current.includes(lower) || lower.includes(current);
+    });
+    if (!exists) out.push(clean);
+  }
+  return out;
+}
+
+function buildLiveStatus(m) {
+  const blockers = [m.match, m.matchType, m.league]
+    .map((value) => normalizeLiveText(value).toLowerCase())
+    .filter(Boolean);
+
+  const rawParts = [m.clock, m.detail]
+    .flatMap((value) => normalizeLiveText(value).split(/\s+[·|-]\s+/))
+    .map((value) => value.replace(/^live\s*[:-]?\s*/i, '').trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const lower = value.toLowerCase();
+      if (lower === 'live') return false;
+      return !blockers.some((blocker) => lower === blocker || blocker.includes(lower) || lower.includes(blocker));
+    });
+
+  const compact = dedupeLiveParts(rawParts);
+  if (compact.length === 0) return '';
+  return compact.join(' · ');
+}
+
 // ── Match card ────────────────────────────────────────────────────────────
 function MatchCard({ m, showSport }) {
   const isLive   = m.state === 'in';
@@ -75,6 +114,7 @@ function MatchCard({ m, showSport }) {
   const isRacing = RACING.has(m.sport);
   const metaBits = [m.matchType, m.venue].filter(Boolean);
   const resultText = m.result || ((isPost || (isLive && !m.clock)) ? m.summary : '');
+  const liveStatus = isLive ? buildLiveStatus(m) : '';
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
@@ -96,9 +136,9 @@ function MatchCard({ m, showSport }) {
       )}
 
       {/* Live: clock pill */}
-      {isLive && (m.clock || m.detail) && (
+      {isLive && liveStatus && (
         <span className="sp-live-clock">
-          🔴 {[m.clock, m.detail].filter(Boolean).join(' · ')}
+          🔴 {liveStatus}
         </span>
       )}
 
