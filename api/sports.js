@@ -102,6 +102,16 @@ const COUNTRY_CODES = [
   'mglw', 'mmrw', 'phiw', 'chnw', 'sauw', 'rsaa', 'rsaw', 'nedw',
 ];
 
+const TENNIS_GLOBAL_KW = [
+  'atp', 'wta', 'grand slam', 'wimbledon', 'us open', 'french open',
+  'roland garros', 'australian open', 'davis cup', 'billie jean king cup',
+  'men\'s singles', 'women\'s singles', 'men\'s doubles', 'women\'s doubles',
+  'mixed doubles',
+];
+
+const BADMINTON_GLOBAL_KW = ['bwf', 'super 1000', 'super 750', 'super 500', 'super 300', 'world championships', 'thomas cup', 'uber cup', 'sudirman cup'];
+const GOLF_ALLOWED_KW = ['masters', 'open championship', 'u.s. open', 'us open', 'pga championship', 'ryder cup', 'presidents cup', 'olympic', 'world golf', 'indian open'];
+
 const SPORTSDB_META = {
   Cricket: SPORT_META.cricket,
   Soccer: SPORT_META.football,
@@ -307,9 +317,10 @@ function keepForFocusedFeed(match) {
     const competitorNames = (match.competitors || []).map((c) => c.name);
     return isInternationalNationalMatch(competitorNames) || isIndia(text);
   }
-  if (match.sport === 'tennis' || match.sport === 'badminton' || match.sport === 'f1' || match.sport === 'golf') {
-    return true;
-  }
+  if (match.sport === 'tennis') return includesKeyword(text, TENNIS_GLOBAL_KW) || isIndia(text);
+  if (match.sport === 'badminton') return includesKeyword(text, BADMINTON_GLOBAL_KW) || isIndia(text);
+  if (match.sport === 'f1') return true;
+  if (match.sport === 'golf') return includesKeyword(text, GOLF_ALLOWED_KW) || isIndia(text);
 
   return false;
 }
