@@ -152,12 +152,15 @@ export default function HomePage({ articles, articlesStatus, selectedUrl, onSele
 
       <MarketsWidget />
 
-      <div className="home-row-2">
-        <HolidayWidget />
-        <FuelWidget />
+      <div className="home-info-grid">
+        <div className="home-info-left">
+          <FuelWidget />
+          <HolidayWidget />
+        </div>
+        <div className="home-info-right">
+          <SportsWidget />
+        </div>
       </div>
-
-      <SportsWidget />
 
       <TodayHistory target={target} />
 

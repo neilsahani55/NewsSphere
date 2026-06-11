@@ -1836,14 +1836,23 @@ button { font-family: inherit; }
 .aqi-value { font-weight: 700; color: var(--aqi-color, var(--ink)); }
 .aqi-cat   { color: var(--aqi-color, var(--ink3)); font-weight: 600; font-size: .72rem; }
 
-/* ── Holiday + Fuel side-by-side row ────────────────────────────── */
-.home-row-2 {
+/* ── Homepage Info Grid: Fuel + Holidays left, Sports right ────── */
+.home-info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.55fr);
+  gap: 1rem;
+  align-items: start;
+}
+.home-info-left {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
 }
-@media (max-width: 720px) {
-  .home-row-2 { grid-template-columns: 1fr; }
+.home-info-right {
+  min-width: 0;
+}
+@media (max-width: 1024px) {
+  .home-info-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Fuel Widget ─────────────────────────────────────────────────── */
@@ -3541,8 +3550,9 @@ mark.tts-hl {
   .quote-author { font-size: .72rem; }
   .quote-mark { font-size: 2.2rem; }
 
-  /* Holidays + Fuel (row) */
-  .home-row-2 { grid-template-columns: 1fr; gap: .75rem; }
+  /* Homepage info grid */
+  .home-info-grid { grid-template-columns: 1fr; gap: .75rem; }
+  .home-info-left { gap: .75rem; }
   .hol-wrap { padding: .6rem .8rem .7rem; }
   .hol-title { font-size: .68rem; }
   .hol-featured { padding: .48rem .6rem; gap: .45rem; }
