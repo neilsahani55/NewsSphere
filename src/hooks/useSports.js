@@ -9,6 +9,35 @@ import { useEffect, useState } from 'react';
 const CACHE_KEY = 'ns_sports_v5';
 const DEFAULT_TTL = 60 * 1000;
 const LIVE_TTL = 20 * 1000;
+const EMPTY = { matches: [], live: [], upcoming: [], completed: [], counts: { live: 0, upcoming: 0, completed: 0 } };
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeSportsData(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const live = asArray(source.live);
+  const upcoming = asArray(source.upcoming);
+  const completed = asArray(source.completed);
+  const matches = asArray(source.matches);
+  const countsSource = source.counts && typeof source.counts === 'object' && !Array.isArray(source.counts)
+    ? source.counts
+    : {};
+
+  return {
+    matches: matches.length > 0 ? matches : [...live, ...upcoming, ...completed],
+    live,
+    upcoming,
+    completed,
+    counts: {
+      ...countsSource,
+      live: Number.isFinite(countsSource.live) ? countsSource.live : live.length,
+      upcoming: Number.isFinite(countsSource.upcoming) ? countsSource.upcoming : upcoming.length,
+      completed: Number.isFinite(countsSource.completed) ? countsSource.completed : completed.length,
+    },
+  };
+}
 
 function ttlForData(data) {
   return (data?.counts?.live ?? 0) > 0 ? LIVE_TTL : DEFAULT_TTL;
@@ -19,21 +48,19 @@ function readCache() {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const { ts, data } = JSON.parse(raw);
-    return Date.now() - ts > ttlForData(data) ? null : data;
+    const normalized = normalizeSportsData(data);
+    return Date.now() - ts > ttlForData(normalized) ? null : normalized;
   } catch { return null; }
 }
 
 function writeCache(data) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: normalizeSportsData(data) }));
   } catch {}
 }
 
-const EMPTY = { matches: [], live: [], upcoming: [], completed: [], counts: {} };
-
 export function useSports() {
-  const [matches, setMatches] = useState(null);
-  const [counts, setCounts]   = useState({});
+  const [data, setData]       = useState(EMPTY);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,8 +78,7 @@ export function useSports() {
     async function load() {
       const cached = readCache();
       if (cached) {
-        setMatches(cached);
-        setCounts(cached.counts ?? {});
+        setData(cached);
         setLoading(false);
         scheduleNext(cached);
         return;
@@ -62,25 +88,24 @@ export function useSports() {
         const res = await fetch('/api/sports', { signal: AbortSignal.timeout(15000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const data = {
+        const nextData = normalizeSportsData({
           matches:   json.matches   ?? [],
           live:      json.live      ?? [],
           upcoming:  json.upcoming  ?? [],
           completed: json.completed ?? [],
           counts:    json.counts    ?? {},
-        };
-        writeCache(data);
+        });
+        writeCache(nextData);
         if (mounted) {
-          setMatches(data);
-          setCounts(data.counts);
+          setData(nextData);
           setLoading(false);
-          scheduleNext(data);
+          scheduleNext(nextData);
         }
       } catch {
         if (mounted) {
-          setMatches([]);
+          setData(EMPTY);
           setLoading(false);
-          scheduleNext({ counts: { live: 0 } });
+          scheduleNext(EMPTY);
         }
       }
     }
@@ -89,14 +114,12 @@ export function useSports() {
     return () => { mounted = false; clearTimeout(timer); };
   }, []);
 
-  const data = matches ?? EMPTY;
-
   return {
     matches:   data.matches,
     live:      data.live,
     upcoming:  data.upcoming,
     completed: data.completed,
-    counts,
+    counts:    data.counts,
     loading,
   };
 }

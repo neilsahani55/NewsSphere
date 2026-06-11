@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { Component, memo, useMemo, useState } from 'react';
 import { useSports } from '../hooks/useSports.js';
 
 const SPORT_CONFIG = [
@@ -162,8 +162,51 @@ function MatchCard({ m, showSport }) {
   );
 }
 
+class SportsWidgetErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('Sports widget crashed', error);
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <section className="sp-wrap" aria-label="Sports">
+        <div className="sp-head">
+          <span className="sp-title">🏆 Sports</span>
+        </div>
+        <div className="sp-card-scroll">
+          <div className="sp-empty-state">
+            <div className="sp-empty-icon" aria-hidden>🏆</div>
+            <h3>Sports is temporarily unavailable</h3>
+            <p>This issue is isolated to the sports section. The rest of the page will keep working.</p>
+            <button className="sp-filter-btn sp-fbtn-on" type="button" onClick={this.props.onRetry}>
+              Retry sports
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+}
+
 // ── Main widget ───────────────────────────────────────────────────────────
-export default memo(function SportsWidget() {
+function SportsWidgetContent() {
   const { live, upcoming, completed, counts, loading } = useSports();
   const [sport, setSport] = useState('all');
   const [tab,   setTab]   = useState('live');  // live | upcoming | results
@@ -275,5 +318,18 @@ export default memo(function SportsWidget() {
         )}
       </div>
     </section>
+  );
+}
+
+export default memo(function SportsWidget() {
+  const [resetKey, setResetKey] = useState(0);
+
+  return (
+    <SportsWidgetErrorBoundary
+      resetKey={resetKey}
+      onRetry={() => setResetKey((value) => value + 1)}
+    >
+      <SportsWidgetContent key={resetKey} />
+    </SportsWidgetErrorBoundary>
   );
 });
