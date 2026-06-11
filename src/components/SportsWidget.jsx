@@ -114,7 +114,6 @@ function MatchCard({ m, showSport }) {
   const isRacing = RACING.has(m.sport);
   const metaBits = [m.matchType, m.venue].filter(Boolean);
   const resultText = m.result || ((isPost || (isLive && !m.clock)) ? m.summary : '');
-  const liveStatus = isLive ? buildLiveStatus(m) : '';
 
   return (
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
@@ -133,13 +132,6 @@ function MatchCard({ m, showSport }) {
           {m.matchType && <span className="sp-match-type">{m.matchType}</span>}
           {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
         </div>
-      )}
-
-      {/* Live: clock pill */}
-      {isLive && liveStatus && (
-        <span className="sp-live-clock">
-          🔴 {liveStatus}
-        </span>
       )}
 
       {/* Competitors */}
