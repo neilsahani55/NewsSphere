@@ -2035,6 +2035,10 @@ button { font-family: inherit; }
   background: rgba(255,255,255,.25);
   color: #fff;
 }
+[data-theme="dark"] .sp-fbtn-on .sp-fbtn-cnt {
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+  color: var(--paper);
+}
 
 /* Section tabs: Live | Upcoming | Results */
 .sp-tabs {
