@@ -593,7 +593,7 @@ function splitCricketTitleAndStatus(rawTitle, rawStatus) {
 }
 
 function cleanCricbuzzMarketingText(text) {
-  return normalizeWhitespace(String(text || '')
+  return normalizeWhitespace(decodeBasicHtmlEntities(String(text || ''))
     .replace(/\|\s*Cricbuzz.*$/i, '')
     .replace(/\bLive Cricket Stream\b/gi, '')
     .replace(/\blive scores?\b/gi, '')
@@ -602,8 +602,8 @@ function cleanCricbuzzMarketingText(text) {
     .replace(/\bvideos?\b/gi, '')
     .replace(/\bnews\b/gi, '')
     .replace(/\band more\b/gi, '')
-    .replace(/\bin USA\s*&\s*Canada\b/gi, '')
-    .replace(/\bin USA & Canada\b/gi, '')
+    .replace(/,?\s*in USA\s*&\s*Canada\b/gi, '')
+    .replace(/,?\s*in USA & Canada\b/gi, '')
     .replace(/\s+,/g, ',')
     .replace(/,\s*,+/g, ', ')
     .replace(/\s{2,}/g, ' ')
@@ -618,7 +618,7 @@ function stripCricketMatchLead(text) {
 }
 
 function expandCricketCompetitionLabel(competition, matchType, matchTitle) {
-  const cleanCompetition = normalizeWhitespace(competition);
+  const cleanCompetition = cleanCricbuzzMarketingText(competition);
   if (!cleanCompetition) return '';
   if (/^group\s+[a-z0-9]+$/i.test(cleanCompetition)) {
     return [matchType, cleanCompetition, matchTitle].filter(Boolean).join(' · ');
