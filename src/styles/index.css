@@ -544,6 +544,7 @@ button { font-family: inherit; }
   line-height: 1.25;
   margin-bottom: .35rem;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -575,6 +576,7 @@ button { font-family: inherit; }
   color: var(--ink3);
   line-height: 1.45;
   display: -webkit-box;
+  line-clamp: 1;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -1045,6 +1047,7 @@ button { font-family: inherit; }
   line-height: 1.45;
   margin-top: 4px;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -2430,6 +2433,7 @@ mark.tts-hl {
   font-weight: 600;
   line-height: 1.35;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -2763,7 +2767,7 @@ mark.tts-hl {
 .sp-saved-body { flex: 1; display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
 .sp-saved-source { font-size: .73rem; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .04em; }
 .sp-saved-title { font-size: .9rem; font-weight: 600; color: var(--ink); line-height: 1.35; }
-.sp-saved-prev { font-size: .8rem; color: var(--ink3); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sp-saved-prev { font-size: .8rem; color: var(--ink3); line-height: 1.4; display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sp-saved-meta { font-size: .74rem; color: var(--ink3); margin-top: .1rem; }
 .sp-saved-bm {
   background: none; border: none; color: var(--hl);
@@ -3235,7 +3239,6 @@ mark.tts-hl {
   gap: 1.5rem;
   padding: 2.5rem 0;
 }
-.fb-hdr {}
 .fb-title { font-family: var(--ffd); font-size: 1.4rem; font-weight: 800; color: var(--ink); }
 .fb-sub { font-size: .9rem; color: var(--ink3); margin-top: .3rem; }
 .fb-form { display: flex; flex-direction: column; gap: 1.2rem; }
