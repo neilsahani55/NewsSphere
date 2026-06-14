@@ -4,13 +4,13 @@
  *
  * Lookup order:
  *   1. Exact city match  (e.g. city_key = "mumbai")
- *   2. Any city in the same state (e.g. state_key = "maharashtra")
- *   3. Show nothing — no fake reference prices
+ *   2. Any city in the same state
+ *   3. Fallback to New Delhi when state data is unavailable
  */
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { useLocation } from './useLocation.js';
+import { INDIA_DEFAULT, useLocation } from './useLocation.js';
 
 // Normalise a name to a DB key (same logic as pipeline)
 function toKey(s) {
@@ -41,11 +41,25 @@ const REGION_STATE = {
 
 function regionToState(region = '') {
   return REGION_STATE[region]
-    ?? Object.entries(REGION_STATE).find(([k]) =>
-        k.toLowerCase() === region.toLowerCase() ||
-        region.toLowerCase().includes(k.toLowerCase())
-       )?.[1]
+    ?? Object.entries(REGION_STATE).find(([key]) =>
+      key.toLowerCase() === region.toLowerCase() ||
+      region.toLowerCase().includes(key.toLowerCase())
+    )?.[1]
     ?? toDbKey(toKey(region));
+}
+
+async function loadFuelRow(cityKeys) {
+  const keys = cityKeys.filter(Boolean);
+  if (keys.length === 0) return null;
+
+  const { data: rows } = await supabase
+    .from('fuel')
+    .select('city_key, petrol, diesel, cng, city, state, updated_at')
+    .in('city_key', keys);
+
+  return keys
+    .map((key) => rows?.find((row) => row.city_key === key))
+    .find((row) => row?.petrol) ?? null;
 }
 
 export function useFuel() {
@@ -58,46 +72,45 @@ export function useFuel() {
     let mounted = true;
 
     async function load() {
-      const cityKey  = toDbKey(toKey(city || ''));
+      const cityKey = toDbKey(toKey(city || ''));
       const stateKey = regionToState(region || '');
+      const fallbackKey = toDbKey(toKey(INDIA_DEFAULT.city));
+      let source = 'fallback';
 
-      // 1. Exact city match
-      if (cityKey) {
-        const { data: row } = await supabase
-          .from('fuel')
-          .select('petrol, diesel, cng, city, state, updated_at')
-          .eq('city_key', cityKey)
-          .maybeSingle();
-
-        if (row?.petrol && mounted) {
-          setData({ petrol: row.petrol, diesel: row.diesel, cng: row.cng,
-                    city: row.city, state: row.state,
-                    updatedAt: row.updated_at, source: 'live' });
-          setLoading(false);
-          return;
-        }
-      }
-
-      // 2. Any city in the same state (ordered alphabetically → most likely capital)
-      if (stateKey) {
+      let row = await loadFuelRow([cityKey]);
+      if (row?.petrol) {
+        source = 'live';
+      } else if (stateKey) {
         const { data: rows } = await supabase
           .from('fuel')
-          .select('petrol, diesel, cng, city, state, updated_at')
+          .select('city_key, petrol, diesel, cng, city, state, updated_at')
           .eq('state_key', stateKey)
           .order('city_key')
           .limit(1);
-
-        const row = rows?.[0];
-        if (row?.petrol && mounted) {
-          setData({ petrol: row.petrol, diesel: row.diesel, cng: row.cng,
-                    city: row.city, state: row.state,
-                    updatedAt: row.updated_at, source: 'live' });
-          setLoading(false);
-          return;
-        }
+        row = rows?.find((entry) => entry?.petrol) ?? null;
+        if (row?.petrol) source = 'state';
       }
 
-      // 3. No data yet (pipeline hasn't run) — show nothing, not a fake value
+      if (!row?.petrol) {
+        const fallbackKeys = [fallbackKey, toDbKey(toKey('Delhi'))];
+        row = await loadFuelRow(fallbackKeys);
+        if (row?.petrol) source = 'fallback';
+      }
+
+      if (row?.petrol && mounted) {
+        setData({
+          petrol: row.petrol,
+          diesel: row.diesel,
+          cng: row.cng,
+          city: row.city,
+          state: row.state,
+          updatedAt: row.updated_at,
+          source,
+        });
+        setLoading(false);
+        return;
+      }
+
       if (mounted) setLoading(false);
     }
 

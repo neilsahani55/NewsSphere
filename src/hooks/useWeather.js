@@ -33,13 +33,24 @@ async function wttrWeather(lat, lon, city) {
   return { city, temp: parseInt(curr.temp_C, 10), emoji, label };
 }
 
+async function loadWeatherForLocation(location) {
+  return wttrWeather(location.lat, location.lon, location.city);
+}
+
 export function useWeather() {
   const [weather, setWeather] = useState(null);
 
   useEffect(() => {
     let live = true;
     fetchLocation()
-      .then(({ lat, lon, city }) => wttrWeather(lat, lon, city))
+      .then(async (location) => {
+        try {
+          return await loadWeatherForLocation(location);
+        } catch {
+          if (location.city === INDIA_DEFAULT.city) throw new Error('weather unavailable');
+          return loadWeatherForLocation(INDIA_DEFAULT);
+        }
+      })
       .then(w => { if (live) setWeather(w); })
       .catch(() => { if (live) setWeather(null); });
     return () => { live = false; };

@@ -65,8 +65,8 @@ Fuel collection jobs ──────────┘          (fetch -> enrich
                                               │
                                               ▼
                                      Supabase (Postgres + Auth)
-                                 news / today_history / market_data
-                                   profiles / saved_news / reads
+                              news / today_history / fuel / user tables
+                              profiles / saved_news / user_prefs
                                               │
                      ┌────────────────────────┴────────────────────────┐
                      │                                                 │
@@ -168,7 +168,8 @@ The history/utility jobs may use only the Supabase credentials when they are not
 │   ├── pipeline-3.yml       # Group 3 — India deep coverage (every :10/:40)
 │   └── history.yml          # Today in History — Wikipedia (daily 00:00 IST)
 ├── history-pipeline/
-│   ├── index.js             # Scheduled utility/history data jobs
+│   ├── index.js             # Today in History pipeline
+│   ├── fuel.js              # Fuel collection pipeline
 │   └── package.json
 ├── pipeline/
 │   ├── index.js             # Orchestrator: fetch → enrich → save (per-batch)
@@ -248,9 +249,9 @@ The history/utility jobs may use only the Supabase credentials when they are not
 |-------|---------|
 | `news` | All enriched articles — title, description, content, key_points, category, sentiment, image_url, source_name, published_at_ist |
 | `today_history` | Wikipedia "On This Day" events — event_year, title, description, category, details, history_date |
-| `market_data` | Widget-ready utility values such as fuel and market-related data |
 | `profiles` | User display names and preferences |
 | `saved_news` | Per-user bookmark arrays (article_urls[]) |
+| `user_prefs` | Followed topics and sources for `Your Special` personalization |
 
 ## Tech stack
 
