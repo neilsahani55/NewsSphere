@@ -644,6 +644,46 @@ function expandCricketCompetitionLabel(competition, matchType, matchTitle) {
   return cleanCompetition;
 }
 
+function isLikelyCricketMatchType(text) {
+  const clean = normalizeWhitespace(text).toLowerCase();
+  if (!clean) return false;
+  return /\b(\d+(st|nd|rd|th)\s+match|match\s+\d+|test|odi|t20i?|warm-?up|tour match|one-?dayer|semi.?final|quarter.?final|final|eliminator|qualifier|play-?off|league match|super over)\b/.test(clean);
+}
+
+function deriveCricketCompetitionLabel({ rawMatch, cricketMeta, summaryData, matchTitle, readableTitle }) {
+  const direct = expandCricketCompetitionLabel(
+    rawMatch.series || cricketMeta.competition || rawMatch.category,
+    cricketMeta.matchType,
+    readableTitle || matchTitle,
+  );
+  if (direct) return direct;
+
+  const preferredMatchType = cleanCricbuzzMarketingText(cricketMeta.matchType);
+  const texts = [summaryData?.title, rawMatch.matchInfo, rawMatch.title, summaryData?.summary];
+  for (const text of texts) {
+    let clean = stripCricketMatchLead(text).replace(/\s+-\s+.*$/, '');
+    clean = cleanCricbuzzMarketingText(clean);
+    if (!clean) continue;
+
+    let parts = clean.split(',').map((part) => normalizeWhitespace(part)).filter(Boolean);
+    if (parts.length === 0) continue;
+    if (/\s+vs\.?\s+/i.test(parts[0])) parts = parts.slice(1);
+    if (parts.length === 0) continue;
+
+    if (preferredMatchType && parts[0]?.toLowerCase() === preferredMatchType.toLowerCase()) {
+      parts = parts.slice(1);
+    } else if (isLikelyCricketMatchType(parts[0])) {
+      parts = parts.slice(1);
+    }
+    if (parts.length === 0) continue;
+
+    const candidate = expandCricketCompetitionLabel(parts.join(', '), preferredMatchType, readableTitle || matchTitle);
+    if (candidate) return candidate;
+  }
+
+  return preferredMatchType || '';
+}
+
 function extractCricketMeta(...texts) {
   for (const text of texts) {
     let clean = stripCricketMatchLead(text).replace(/\s+-\s+.*$/, '');
@@ -900,6 +940,14 @@ function toHomeCricketMatch(rawMatch, kind, summaryData) {
   const venue = extractCricketVenue(summaryData?.title, rawMatch.matchInfo);
   const resultSummary = compactCricketResult(summaryData?.summary, resultText);
   const readableTeams = extractCricketReadableTeams(resultSummary, summaryData?.title, summaryData?.summary);
+  const displayMatchTitle = readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : matchTitle;
+  const competitionLabel = deriveCricketCompetitionLabel({
+    rawMatch,
+    cricketMeta,
+    summaryData,
+    matchTitle,
+    readableTitle: displayMatchTitle,
+  });
   const summary = resultSummary || summaryData?.summary || rawMatch.status || rawMatch.matchInfo;
   const result = resultSummary || (state === 'post' ? summary : '');
   const isAbandonedMatch = state === 'post' && isCricketAbandoned(summaryData?.summary || '', resultText, rawMatch.status);
@@ -919,8 +967,8 @@ function toHomeCricketMatch(rawMatch, kind, summaryData) {
   return buildHomeMatch({
     id: `cricbuzz_${kind}_${rawMatch.matchId}`,
     sport: 'cricket',
-    match: readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : (matchTitle || `${home} vs ${away}`),
-    league: expandCricketCompetitionLabel(rawMatch.series || cricketMeta.competition || rawMatch.category, cricketMeta.matchType, readableTeams ? `${readableTeams.home} vs ${readableTeams.away}` : matchTitle),
+    match: displayMatchTitle || `${home} vs ${away}`,
+    league: competitionLabel,
     matchType: cricketMeta.matchType,
     state,
     summary,
