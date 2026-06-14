@@ -112,7 +112,6 @@ function MatchCard({ m, showSport }) {
   const isPre    = m.state === 'pre';
   const isPost   = m.state === 'post';
   const isRacing = RACING.has(m.sport);
-  const metaBits = [m.matchType, m.venue].filter(Boolean);
   const footerTime = (isPre || isPost) && m.date ? fmtTime(m.date) : '';
   const footerLeague = isPost ? m.league : '';
   const showFooter = Boolean(footerTime || footerLeague);
@@ -121,7 +120,7 @@ function MatchCard({ m, showSport }) {
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
 
       {/* Sport + league label row */}
-      <div className="sp-card-label">
+      <div className={`sp-card-label${showSport ? '' : ' sp-card-label-compact'}`}>
         {showSport && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
         {m.league  && <span className="sp-league-tag">{m.league}</span>}
       </div>
@@ -129,9 +128,8 @@ function MatchCard({ m, showSport }) {
       {/* Match title */}
       <p className="sp-match">{m.match}</p>
 
-      {metaBits.length > 0 && (
+      {m.venue && (
         <div className="sp-meta-line">
-          {m.matchType && <span className="sp-match-type">{m.matchType}</span>}
           {m.venue && <span className="sp-venue">📍 {m.venue}</span>}
         </div>
       )}
@@ -207,7 +205,7 @@ class SportsWidgetErrorBoundary extends Component {
 
 // ── Main widget ───────────────────────────────────────────────────────────
 function SportsWidgetContent() {
-  const { live, upcoming, completed, counts, loading } = useSports();
+  const { live, upcoming, completed, counts, loading, refreshing, refresh } = useSports();
   const [sport, setSport] = useState('all');
   const [tab,   setTab]   = useState('live');  // live | upcoming | results
 
@@ -244,11 +242,22 @@ function SportsWidgetContent() {
       {/* Header */}
       <div className="sp-head">
         <span className="sp-title">🏆 Sports</span>
-        {counts.live > 0 && (
-          <span className="sp-live-pill">
-            <span className="sp-live-dot" />{counts.live} live
-          </span>
-        )}
+        <div className="sp-head-right">
+          <button
+            type="button"
+            className={`sp-refresh-btn${refreshing ? ' sp-refresh-btn-busy' : ''}`}
+            onClick={refresh}
+            disabled={refreshing}
+            aria-label="Refresh sports"
+          >
+            ↻ Refresh
+          </button>
+          {counts.live > 0 && (
+            <span className="sp-live-pill">
+              <span className="sp-live-dot" />{counts.live} live
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Row 1: Sport filter with per-tab count badges */}
@@ -305,8 +314,8 @@ function SportsWidgetContent() {
             {sport !== 'all'
               ? `No ${tab} matches for this sport right now — try another tab or sport.`
               : tab === 'live'     ? 'No live matches right now.'
-              : tab === 'upcoming' ? 'No upcoming matches in the next 2 days.'
-              :                      'No results from the last 2 days.'
+              : tab === 'upcoming' ? 'No upcoming matches in the next day.'
+              :                      'No results from the last day.'
             }
           </p>
         ) : (

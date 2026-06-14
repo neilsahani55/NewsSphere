@@ -233,12 +233,24 @@ function stripTags(value) {
 
 function decodeBasicHtmlEntities(value) {
   return String(value || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const code = parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const code = parseInt(dec, 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+    })
     .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&nbsp;/gi, ' ');
+}
+
+function cleanDisplayText(value) {
+  return normalizeWhitespace(decodeBasicHtmlEntities(String(value || '')));
 }
 
 function stripHtml(value) {
@@ -427,18 +439,24 @@ function buildHomeMatch({
     sport: meta.key,
     sportName: meta.name,
     emoji: meta.emoji,
-    match: normalizeWhitespace(match) || meta.name,
-    league: normalizeWhitespace(league),
-    matchType: normalizeWhitespace(matchType),
+    match: cleanDisplayText(match) || meta.name,
+    league: cleanDisplayText(league),
+    matchType: cleanDisplayText(matchType),
     state,
     date,
-    summary: normalizeWhitespace(summary),
-    result: normalizeWhitespace(result),
-    detail: normalizeWhitespace(detail),
-    clock: normalizeWhitespace(clock),
+    summary: cleanDisplayText(summary),
+    result: cleanDisplayText(result),
+    detail: cleanDisplayText(detail),
+    clock: cleanDisplayText(clock),
     period: null,
-    venue: normalizeWhitespace(venue),
-    competitors: Array.isArray(competitors) ? competitors : [],
+    venue: cleanDisplayText(venue),
+    competitors: Array.isArray(competitors)
+      ? competitors.map((competitor) => ({
+          ...competitor,
+          name: cleanDisplayText(competitor?.name),
+          score: competitor?.score ?? '',
+        }))
+      : [],
     isIndia: Boolean(isIndiaMatch),
     isAbandoned: Boolean(isAbandoned),
     source,
@@ -1755,6 +1773,8 @@ export default async function handler(req, res) {
     return;
   }
 
+  const forceFresh = req.query?.refresh === '1';
+
   const results = await Promise.allSettled([
     fetchCricketMatches(),
     fetchEspnPrimaryMatches(),
@@ -1788,9 +1808,11 @@ export default async function handler(req, res) {
   const completed = all.filter((match) => match.state === 'post');
   res.setHeader(
     'Cache-Control',
-    live.length > 0
-      ? 'public, s-maxage=20, stale-while-revalidate=40'
-      : 'public, s-maxage=90, stale-while-revalidate=180',
+    forceFresh
+      ? 'no-store'
+      : live.length > 0
+        ? 'public, max-age=0, s-maxage=15, must-revalidate'
+        : 'public, max-age=0, s-maxage=45, must-revalidate',
   );
 
   return res.status(200).json({

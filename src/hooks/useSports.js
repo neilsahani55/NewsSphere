@@ -1,14 +1,14 @@
 /**
  * Live sports scores across multiple disciplines.
- * Calls /api/sports (Vercel function) which fetches from ESPN server-side.
- * Cached dynamically in sessionStorage.
+ * Calls /api/sports (Vercel function) which fetches from multiple providers server-side.
+ * Cached dynamically in sessionStorage with an escape hatch for manual refreshes.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-const CACHE_KEY = 'ns_sports_v5';
-const DEFAULT_TTL = 60 * 1000;
-const LIVE_TTL = 20 * 1000;
+const CACHE_KEY = 'ns_sports_v6';
+const DEFAULT_TTL = 45 * 1000;
+const LIVE_TTL = 15 * 1000;
 const EMPTY = { matches: [], live: [], upcoming: [], completed: [], counts: { live: 0, upcoming: 0, completed: 0 } };
 
 function asArray(value) {
@@ -43,14 +43,19 @@ function ttlForData(data) {
   return (data?.counts?.live ?? 0) > 0 ? LIVE_TTL : DEFAULT_TTL;
 }
 
-function readCache() {
+function readCacheEntry() {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const { ts, data } = JSON.parse(raw);
     const normalized = normalizeSportsData(data);
-    return Date.now() - ts > ttlForData(normalized) ? null : normalized;
+    if (Date.now() - ts > ttlForData(normalized)) return null;
+    return { ts, data: normalized };
   } catch { return null; }
+}
+
+function readCache() {
+  return readCacheEntry()?.data ?? null;
 }
 
 function writeCache(data) {
@@ -60,66 +65,112 @@ function writeCache(data) {
 }
 
 export function useSports() {
-  const [data, setData]       = useState(EMPTY);
+  const [data, setData] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const timerRef = useRef(null);
+  const mountedRef = useRef(false);
+  const lastForcedRefreshRef = useRef(0);
+  const loadRef = useRef(async () => {});
 
-  useEffect(() => {
-    let mounted = true;
-    let timer = null;
+  const scheduleNext = useCallback((nextData) => {
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      sessionStorage.removeItem(CACHE_KEY);
+      void loadRef.current(true);
+    }, ttlForData(nextData));
+  }, []);
 
-    function scheduleNext(data) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        sessionStorage.removeItem(CACHE_KEY);
-        load();
-      }, ttlForData(data));
-    }
-
-    async function load() {
+  const load = useCallback(async (force = false) => {
+    if (!force) {
       const cached = readCache();
       if (cached) {
-        setData(cached);
-        setLoading(false);
+        if (mountedRef.current) {
+          setData(cached);
+          setLoading(false);
+          setRefreshing(false);
+        }
         scheduleNext(cached);
         return;
       }
+    }
 
-      try {
-        const res = await fetch('/api/sports', { signal: AbortSignal.timeout(15000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const nextData = normalizeSportsData({
-          matches:   json.matches   ?? [],
-          live:      json.live      ?? [],
-          upcoming:  json.upcoming  ?? [],
-          completed: json.completed ?? [],
-          counts:    json.counts    ?? {},
-        });
-        writeCache(nextData);
-        if (mounted) {
-          setData(nextData);
-          setLoading(false);
-          scheduleNext(nextData);
-        }
-      } catch {
-        if (mounted) {
-          setData(EMPTY);
-          setLoading(false);
-          scheduleNext(EMPTY);
-        }
+    try {
+      const suffix = force ? `?refresh=1&t=${Date.now()}` : '';
+      const res = await fetch(`/api/sports${suffix}`, {
+        signal: AbortSignal.timeout(15000),
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const nextData = normalizeSportsData({
+        matches: json.matches ?? [],
+        live: json.live ?? [],
+        upcoming: json.upcoming ?? [],
+        completed: json.completed ?? [],
+        counts: json.counts ?? {},
+      });
+      writeCache(nextData);
+      if (mountedRef.current) {
+        setData(nextData);
+        setLoading(false);
+        setRefreshing(false);
+      }
+      scheduleNext(nextData);
+    } catch {
+      const fallback = readCache() ?? EMPTY;
+      if (mountedRef.current) {
+        setData((current) => (current.matches.length > 0 ? current : fallback));
+        setLoading(false);
+        setRefreshing(false);
+      }
+      scheduleNext(fallback);
+    }
+  }, [scheduleNext]);
+
+  loadRef.current = load;
+
+  const refresh = useCallback(() => {
+    lastForcedRefreshRef.current = Date.now();
+    sessionStorage.removeItem(CACHE_KEY);
+    setRefreshing(true);
+    void load(true);
+  }, [load]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    void load(false);
+
+    function refreshOnReturn() {
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastForcedRefreshRef.current < 5000) return;
+      const cached = readCacheEntry();
+      if (!cached || now - cached.ts >= Math.min(ttlForData(cached.data), 30 * 1000)) {
+        lastForcedRefreshRef.current = now;
+        void load(true);
       }
     }
 
-    load();
-    return () => { mounted = false; clearTimeout(timer); };
-  }, []);
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timerRef.current);
+      window.removeEventListener('focus', refreshOnReturn);
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+    };
+  }, [load]);
 
   return {
-    matches:   data.matches,
-    live:      data.live,
+    matches: data.matches,
+    live: data.live,
     upcoming:  data.upcoming,
     completed: data.completed,
-    counts:    data.counts,
+    counts: data.counts,
     loading,
+    refreshing,
+    refresh,
   };
 }

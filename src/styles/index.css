@@ -1997,6 +1997,28 @@ button { font-family: inherit; }
 .sp-head       { display: flex; align-items: center; justify-content: space-between; margin-bottom: .65rem; }
 .sp-title      { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--ink3); }
 .sp-head-right { display: flex; align-items: center; gap: .4rem; }
+.sp-refresh-btn {
+  border: 1px solid var(--border);
+  background: var(--paper3);
+  color: var(--ink2);
+  border-radius: 999px;
+  padding: .16rem .55rem;
+  font-size: .64rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.sp-refresh-btn:hover:not(:disabled) {
+  background: var(--paper);
+  border-color: var(--border2);
+}
+.sp-refresh-btn:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+.sp-refresh-btn-busy {
+  color: var(--hl);
+}
 .sp-live-pill  {
   display: inline-flex; align-items: center; gap: .28rem;
   font-size: .63rem; font-weight: 700; color: #dc2626;
@@ -2118,10 +2140,37 @@ button { font-family: inherit; }
 
 /* Card label row: sport + league */
 .sp-card-label {
-  display: flex; align-items: center; justify-content: space-between; gap: .25rem;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .35rem;
 }
-.sp-sport-tag  { font-size: .62rem; font-weight: 700; color: var(--ink3); }
-.sp-league-tag { font-size: .6rem;  color: var(--ink3); opacity: .75; }
+.sp-card-label-compact { justify-content: flex-start; }
+.sp-sport-tag  {
+  display: inline-flex;
+  align-items: center;
+  gap: .18rem;
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--ink3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sp-league-tag {
+  min-width: 0;
+  flex: 1;
+  font-size: .6rem;
+  color: var(--ink3);
+  opacity: .82;
+  text-align: right;
+  line-height: 1.25;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.sp-card-label-compact .sp-league-tag {
+  text-align: left;
+}
 
 /* Match title */
 .sp-match { font-size: .8rem; font-weight: 700; color: var(--ink); margin: 0; line-height: 1.3; }
@@ -3620,6 +3669,8 @@ mark.tts-hl {
   .sp-tabs { border-bottom-width: 1.5px; }
   .sp-tab { padding: .35rem .7rem; font-size: .77rem; }
   .sp-tab-cnt { font-size: .58rem; padding: .03rem .28rem; }
+  .sp-head-right { gap: .3rem; }
+  .sp-refresh-btn { padding: .15rem .45rem; font-size: .61rem; }
   .sp-card { flex: 0 0 240px; padding: .48rem .58rem; gap: .2rem; }
   .sp-match { font-size: .78rem; }
   .sp-team { font-size: .72rem; }
@@ -3627,7 +3678,7 @@ mark.tts-hl {
   .sp-venue, .sp-summary, .sp-result, .sp-meta-date { font-size: .6rem; }
   .sp-live-clock { font-size: .6rem; }
   .sp-sport-tag { font-size: .59rem; }
-  .sp-league-tag { display: none; }
+  .sp-league-tag { font-size: .56rem; }
 
   /* News feed */
   .feed-hdr { padding: .6rem 0; }
