@@ -3601,13 +3601,26 @@ mark.tts-hl {
 
   /* Sports widget */
   .sp-wrap { padding: .65rem .8rem .85rem; }
-  .sp-grid4 { grid-template-columns: repeat(2, 1fr); gap: .35rem; }
+  .sp-card-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-right: 0;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .sp-card-scroll::-webkit-scrollbar { display: none; }
+  .sp-grid4 {
+    display: flex;
+    gap: .35rem;
+    width: max-content;
+  }
   .sp-filter { gap: .25rem; margin-bottom: .6rem; }
   .sp-filter-btn { padding: .18rem .5rem; font-size: .67rem; }
   .sp-tabs { border-bottom-width: 1.5px; }
   .sp-tab { padding: .35rem .7rem; font-size: .77rem; }
   .sp-tab-cnt { font-size: .58rem; padding: .03rem .28rem; }
-  .sp-card { padding: .48rem .58rem; gap: .2rem; }
+  .sp-card { flex: 0 0 240px; padding: .48rem .58rem; gap: .2rem; }
   .sp-match { font-size: .78rem; }
   .sp-team { font-size: .72rem; }
   .sp-time { font-size: .64rem; }
@@ -3644,8 +3657,8 @@ mark.tts-hl {
   .mkt-tile { flex: 0 0 75px; padding: .32rem .42rem; }
   .mkt-value { font-size: .76rem; }
 
-  /* Sports: 2 columns on mobile (never collapse to 1) */
-  .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Sports: horizontal card strip on phones */
+  .sp-card { flex-basis: 220px; }
   .sp-tab { padding: .3rem .58rem; font-size: .74rem; }
 
   /* Cards smaller */
@@ -3681,8 +3694,8 @@ mark.tts-hl {
   .layout, .filters, .foot { padding-left: .72rem; padding-right: .72rem; }
   .mkt-tile { flex: 0 0 68px; }
   .mkt-value { font-size: .72rem; }
-  /* Sports: keep 2 columns even on smallest phones */
-  .sp-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Sports: slightly narrower cards on smallest phones */
+  .sp-card { flex-basis: 205px; }
   .th-year { font-size: 1.65rem; }
   .hcard-title { font-size: .8rem; }
   .hcard-feat .hcard-title { font-size: .88rem; }
