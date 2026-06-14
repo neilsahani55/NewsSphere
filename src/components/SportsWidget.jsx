@@ -112,6 +112,7 @@ function MatchCard({ m, showSport }) {
   const isPre    = m.state === 'pre';
   const isPost   = m.state === 'post';
   const isRacing = RACING.has(m.sport);
+  const showSportTag = showSport || !m.league;
   const footerTime = (isPre || isPost) && m.date ? fmtTime(m.date) : '';
   const footerLeague = isPost ? m.league : '';
   const showFooter = Boolean(footerTime || footerLeague);
@@ -120,8 +121,8 @@ function MatchCard({ m, showSport }) {
     <div className={`sp-card sp-card-${isLive ? 'live' : isPre ? 'pre' : 'done'}`}>
 
       {/* Sport + league label row */}
-      <div className={`sp-card-label${showSport ? '' : ' sp-card-label-compact'}`}>
-        {showSport && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
+      <div className={`sp-card-label${showSportTag ? '' : ' sp-card-label-compact'}`}>
+        {showSportTag && <span className="sp-sport-tag">{m.emoji} {m.sportName}</span>}
         {m.league  && <span className="sp-league-tag">{m.league}</span>}
       </div>
 

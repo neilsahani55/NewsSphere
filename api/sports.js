@@ -1262,10 +1262,13 @@ async function fetchEspnScoreboard({ sport, league, dates }) {
 function toHomeEspnMatch(event, sportKey) {
   const participants = event?.participants || [];
   if (participants.length < 2) return null;
+  const leagueLabel = [event?.leagueName, sportKey === 'tennis' ? event?.grouping : '']
+    .filter(Boolean)
+    .join(' · ') || event?.leagueName || event?.grouping || SPORT_META[sportKey]?.name || '';
   const searchText = [
     event?.name,
     event?.shortName,
-    event?.leagueName,
+    leagueLabel,
     ...participants.map((participant) => participant?.name),
   ].join(' ');
 
@@ -1273,7 +1276,7 @@ function toHomeEspnMatch(event, sportKey) {
     id: `espn_${sportKey}_${event.eventId}`,
     sport: sportKey,
     match: event?.name || event?.shortName,
-    league: [event?.leagueName, sportKey === 'tennis' ? event?.grouping : ''].filter(Boolean).join(' · '),
+    league: leagueLabel,
     matchType: event?.status?.type?.description || '',
     state: event?.state || 'post',
     date: event?.date || null,
@@ -1654,7 +1657,7 @@ function sportsDbToMatch(event, overrideSport) {
     id: `sdb_${event.idEvent}`,
     sport: meta.key,
     match: event.strEvent || `${homeName} vs ${awayName}`,
-    league: event.strLeague || event.strSeason,
+    league: event.strLeague || event.strSeason || event.strSeries || sportName || meta.name,
     state,
     date: dateStr,
     summary,
@@ -1744,7 +1747,7 @@ async function fetchLegacyGolfEspn() {
       id: `golf_${event.id}`,
       sport: 'golf',
       match: event.shortName || event.name || 'Golf',
-      league: event.season?.displayName || 'Golf',
+      league: event.season?.displayName || event.name || competition?.type?.text || 'Golf',
       matchType: competition?.status?.type?.description || '',
       state,
       date,
