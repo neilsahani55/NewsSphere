@@ -150,12 +150,26 @@ function extractRaw(json, provider) {
 
 // ── Enrichment with 3-provider fallback ──────────────────────────────────────
 
+// Per-run provider health. Skipping a provably-dead provider saves real time:
+// a dead OpenAI key alone costs ~43s per article (3s stagger + 20s retry + calls).
+// Strike counts are consecutive final failures; any success resets them.
+const health = {
+  deadNvidiaModels: new Set(),  // models that returned 404/410 (retired)
+  geminiStrikes: 0,             // consecutive Gemini quota failures
+  openaiStrikes: 0,             // consecutive OpenAI quota failures
+  geminiTripped: false,
+  openaiTripped: false,
+};
+const GEMINI_MAX_STRIKES = 8;   // generous: bursts recover within a minute
+const OPENAI_MAX_STRIKES = 3;   // a dead key fails fast and forever
+
 async function enrichOne(article) {
   const prompt = buildPrompt(article.title, article.description || '');
   const label  = article.title.slice(0, 50);
 
   // ── 1. NVIDIA (primary) — tries each model in order, one retry on 429 ─
   for (const model of NVIDIA_MODELS) {
+    if (health.deadNvidiaModels.has(model)) continue;
     let nvidiaRes = null;
     try {
       nvidiaRes = await callNvidia(prompt, model);
@@ -179,16 +193,23 @@ async function enrichOne(article) {
       console.warn(`    ✗ [NVIDIA ${model}] parse failed`);
       console.warn(`    ⚠ NVIDIA raw (first 300): ${raw.slice(0, 300)}`);
     } else if (nvidiaRes) {
-      console.warn(`    ✗ NVIDIA ${model} ${nvidiaRes.status}`);
+      // 404/410 means the model was retired — no point calling it again this run
+      if (nvidiaRes.status === 404 || nvidiaRes.status === 410) {
+        health.deadNvidiaModels.add(model);
+        console.warn(`    ✗ NVIDIA ${model} ${nvidiaRes.status} — model unavailable, skipping it for the rest of this run`);
+      } else {
+        console.warn(`    ✗ NVIDIA ${model} ${nvidiaRes.status}`);
+      }
     }
   }
 
-  // ── 2. Gemini fallback — one retry on 429 ────────────────────────────
-  if (GEMINI_KEY) {
+  // ── 2. Gemini fallback — one retry on 429/503 ────────────────────────
+  if (GEMINI_KEY && health.geminiStrikes < GEMINI_MAX_STRIKES) {
     try {
       let gRes = await callGemini(prompt);
-      if (gRes.status === 429) {
-        console.warn(`    429 Gemini rate-limit — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
+      // 429 = rate/quota, 503 = transient overload — both worth one retry
+      if (gRes.status === 429 || gRes.status === 503) {
+        console.warn(`    ${gRes.status} Gemini — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
         await sleep(RETRY_SLEEP_MS);
         try { gRes = await callGemini(prompt); } catch { gRes = null; }
       }
@@ -196,11 +217,22 @@ async function enrichOne(article) {
         let json;
         try { json = await gRes.json(); } catch { json = null; }
         const result = parseResponse(extractRaw(json, 'Gemini'));
-        if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
+        if (result) {
+          health.geminiStrikes = 0;
+          console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`);
+          return result;
+        }
         console.warn(`    ✗ [Gemini] parse failed — trying OpenAI`);
       } else if (gRes) {
         let body = '';
         try { body = await gRes.text(); } catch { /**/ }
+        if (gRes.status === 429) {
+          health.geminiStrikes++;
+          if (health.geminiStrikes >= GEMINI_MAX_STRIKES && !health.geminiTripped) {
+            health.geminiTripped = true;
+            console.warn(`    ⚠ Gemini quota appears exhausted (${GEMINI_MAX_STRIKES} consecutive 429s) — skipping Gemini for the rest of this run`);
+          }
+        }
         console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying OpenAI`);
       }
     } catch (e) {
@@ -209,7 +241,7 @@ async function enrichOne(article) {
   }
 
   // ── 3. OpenAI fallback (sequential — free tier allows only 3 RPM) ────
-  if (OPENAI_KEY) {
+  if (OPENAI_KEY && health.openaiStrikes < OPENAI_MAX_STRIKES) {
     // Brief pause so parallel articles don't all hit OpenAI simultaneously
     await sleep(3000);
     try {
@@ -224,9 +256,20 @@ async function enrichOne(article) {
         let json;
         try { json = await oRes.json(); } catch { json = null; }
         const result = parseResponse(extractRaw(json, 'OpenAI'));
-        if (result) { console.log(`    ✓ [OpenAI] "${article.title.slice(0, 65)}"`); return result; }
+        if (result) {
+          health.openaiStrikes = 0;
+          console.log(`    ✓ [OpenAI] "${article.title.slice(0, 65)}"`);
+          return result;
+        }
         console.warn(`    ✗ [OpenAI] parse failed`);
       } else if (oRes) {
+        if (oRes.status === 429) {
+          health.openaiStrikes++;
+          if (health.openaiStrikes >= OPENAI_MAX_STRIKES && !health.openaiTripped) {
+            health.openaiTripped = true;
+            console.warn(`    ⚠ OpenAI quota appears exhausted (${OPENAI_MAX_STRIKES} consecutive 429s) — skipping OpenAI for the rest of this run`);
+          }
+        }
         console.warn(`    ✗ OpenAI ${oRes.status}`);
       }
     } catch (e) {

@@ -5,7 +5,9 @@ import { SOURCES } from './sources.js';
 const rssParser = new Parser({
   timeout: 15000,
   headers: {
-    'User-Agent': 'NewsSphereBot/2.0 (+https://github.com/neilsahani55/NewsSphere)',
+    // Browser UA: several outlets (Indian Express, Business Standard, NDTV…)
+    // return 403 to anything that identifies as a bot
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
   },
   customFields: {
