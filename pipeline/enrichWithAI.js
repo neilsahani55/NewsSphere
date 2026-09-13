@@ -46,7 +46,9 @@ async function callNvidia(prompt) {
     body: JSON.stringify({
       model: NVIDIA_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
+      // deepseek spends part of the budget on reasoning tokens before the JSON;
+      // 2000 was truncating responses mid-article
+      max_tokens: 4000,
       temperature: 0.5,
       top_p: 0.9,
     }),
@@ -60,7 +62,8 @@ async function callGemini(prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.5, topP: 0.9 },
+      // Flash models with thinking enabled count thoughts against this budget
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.5, topP: 0.9 },
     }),
     signal: AbortSignal.timeout(NVIDIA_TIMEOUT_MS),
   });
@@ -83,14 +86,35 @@ async function callOpenAI(prompt) {
 
 // ── Response parsing (provider-agnostic) ──────────────────────────────────────
 
+// Escape raw control characters inside JSON string literals — some models emit
+// literal newlines in string values, which breaks JSON.parse.
+function repairJson(s) {
+  let out = '', inString = false, escaped = false;
+  for (const ch of s) {
+    if (inString) {
+      if (escaped) { out += ch; escaped = false; continue; }
+      if (ch === '\\') { out += ch; escaped = true; continue; }
+      if (ch === '"')  { inString = false; out += ch; continue; }
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+      out += ch;
+    } else {
+      if (ch === '"') inString = true;
+      out += ch;
+    }
+  }
+  return out;
+}
+
 function parseResponse(raw) {
   try {
     const clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch {
-      const m = clean.match(/\{[\s\S]*\}/);
-      if (m) parsed = JSON.parse(m[0]);
+    for (const candidate of [clean, repairJson(clean)]) {
+      try { parsed = JSON.parse(candidate); break; } catch { /**/ }
+      const m = candidate.match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); break; } catch { /**/ } }
     }
     if (!parsed?.content || typeof parsed.content !== 'string') return null;
     if (parsed.content.length < MIN_CONTENT_LEN) return null;
@@ -125,7 +149,32 @@ async function enrichOne(article) {
   const prompt = buildPrompt(article.title, article.description || '');
   const label  = article.title.slice(0, 50);
 
-  // ── 1. NVIDIA (primary) — one retry on 429 ──────────────────────────
+  // ── 1. Gemini (primary — answers in seconds) — one retry on 429 ──────
+  if (GEMINI_KEY) {
+    try {
+      let gRes = await callGemini(prompt);
+      if (gRes.status === 429) {
+        console.warn(`    429 Gemini rate-limit — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
+        await sleep(RETRY_SLEEP_MS);
+        try { gRes = await callGemini(prompt); } catch { gRes = null; }
+      }
+      if (gRes?.status === 200) {
+        let json;
+        try { json = await gRes.json(); } catch { json = null; }
+        const result = parseResponse(extractRaw(json, 'Gemini'));
+        if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
+        console.warn(`    ✗ [Gemini] parse failed — trying NVIDIA`);
+      } else if (gRes) {
+        let body = '';
+        try { body = await gRes.text(); } catch { /**/ }
+        console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying NVIDIA`);
+      }
+    } catch (e) {
+      console.warn(`    ✗ Gemini error: ${e.message} — trying NVIDIA`);
+    }
+  }
+
+  // ── 2. NVIDIA fallback (deepseek — slow, 35–120s) — one retry on 429 ─
   let nvidiaRes = null;
   try {
     nvidiaRes = await callNvidia(prompt);
@@ -146,30 +195,10 @@ async function enrichOne(article) {
     const raw = extractRaw(json, 'NVIDIA');
     const result = parseResponse(raw);
     if (result) { console.log(`    ✓ [NVIDIA] "${article.title.slice(0, 65)}"`); return result; }
-    console.warn(`    ✗ [NVIDIA] parse failed — trying Gemini`);
+    console.warn(`    ✗ [NVIDIA] parse failed — trying OpenAI`);
     console.warn(`    ⚠ NVIDIA raw (first 300): ${raw.slice(0, 300)}`);
   } else if (nvidiaRes) {
-    console.warn(`    ✗ NVIDIA ${nvidiaRes.status} — trying Gemini`);
-  }
-
-  // ── 2. Gemini fallback ───────────────────────────────────────────────
-  if (GEMINI_KEY) {
-    try {
-      const gRes = await callGemini(prompt);
-      if (gRes.status === 200) {
-        let json;
-        try { json = await gRes.json(); } catch { json = null; }
-        const result = parseResponse(extractRaw(json, 'Gemini'));
-        if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
-        console.warn(`    ✗ [Gemini] parse failed — trying OpenAI`);
-      } else {
-        let body = '';
-        try { body = await gRes.text(); } catch { /**/ }
-        console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying OpenAI`);
-      }
-    } catch (e) {
-      console.warn(`    ✗ Gemini error: ${e.message} — trying OpenAI`);
-    }
+    console.warn(`    ✗ NVIDIA ${nvidiaRes.status} — trying OpenAI`);
   }
 
   // ── 3. OpenAI fallback (sequential — free tier allows only 3 RPM) ────
