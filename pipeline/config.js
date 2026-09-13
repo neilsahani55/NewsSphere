@@ -15,10 +15,14 @@ export const NVIDIA_KEY           = required('NVIDIA_KEY');
 export const GEMINI_KEY   = optional('GEMINI_KEY');
 export const OPENAI_KEY   = optional('OPENAI_KEY');
 
-// DeepSeek v4 flash is the only model still invokable on this NVIDIA account —
-// every llama/mistral/nemotron catalog entry returns 404 "Function not found",
+// Tried in order until one returns parseable JSON. Both are reasoning models
+// measuring 35–120s+ per call with intermittent timeouts; most other catalog
+// entries (llama/mistral) return 404 "Function not found" for this account,
 // and the old meta/llama-3.3-70b-instruct was retired (410 Gone).
-export const NVIDIA_MODEL  = 'deepseek-ai/deepseek-v4-flash-0731';
+export const NVIDIA_MODELS = [
+  'deepseek-ai/deepseek-v4-flash-0731',
+  'nvidia/nemotron-3-super-120b-a12b',
+];
 export const NVIDIA_URL    = 'https://integrate.api.nvidia.com/v1/chat/completions';
 // Auto-updating alias for the newest stable Flash model — survives Google's
 // model retirements (gemini-2.0-flash was shut down 2026-06-01).
@@ -30,15 +34,14 @@ export const OPENAI_URL    = 'https://api.openai.com/v1/chat/completions';
 // Enrich-first: AI writes content BEFORE inserting into Supabase.
 // Only fully-enriched articles ever touch the DB — no blank rows.
 //
-// Provider order is Gemini → NVIDIA → OpenAI: Gemini Flash answers in seconds,
-// while NVIDIA's deepseek-v4-flash measures 35–120s+ per call and times out
-// intermittently, so it serves as fallback only.
+// Provider order is NVIDIA (both models) → Gemini → OpenAI.
 //
-// Timing budget (worst case, Gemini down + all NVIDIA timeouts):
+// Timing budget (worst case, both NVIDIA models timing out every article):
 //   30 articles ÷ 6 parallel = 5 batches
-//   5 × (120s NVIDIA timeout + OpenAI straggler ~25s) ≈ 12 min
+//   5 × (2 × 120s NVIDIA timeouts + Gemini ~10s) ≈ 21 min
 //   + 4 × 4s batch sleeps = 16s
-//   Total worst case ≈ 13 min  →  under the 30-min GitHub Actions limit
+//   Total worst case ≈ 21 min → under the 30-min GitHub Actions limit, and
+//   each batch saves to DB immediately, so a timeout only loses the tail.
 export const MAX_NEW_PER_RUN  = 30;    // keeps runtime bounded per run
 export const ITEMS_PER_FEED   = 8;     // items fetched per RSS feed
 export const PARALLEL_NVIDIA  = 6;     // concurrent AI requests per batch

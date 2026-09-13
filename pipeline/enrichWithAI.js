@@ -1,5 +1,5 @@
 import {
-  NVIDIA_KEY, NVIDIA_MODEL, NVIDIA_URL,
+  NVIDIA_KEY, NVIDIA_MODELS, NVIDIA_URL,
   GEMINI_KEY, GEMINI_URL,
   OPENAI_KEY, OPENAI_MODEL, OPENAI_URL,
   MIN_CONTENT_LEN, CATEGORIES,
@@ -39,16 +39,16 @@ Brief context (for background only — do NOT copy this text): ${(briefContext |
 
 // ── Provider calls ────────────────────────────────────────────────────────────
 
-async function callNvidia(prompt) {
+async function callNvidia(prompt, model) {
   return fetch(NVIDIA_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${NVIDIA_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: NVIDIA_MODEL,
+      model,
       messages: [{ role: 'user', content: prompt }],
-      // deepseek spends part of the budget on reasoning tokens before the JSON;
-      // 2000 was truncating responses mid-article
-      max_tokens: 4000,
+      // Both models spend part of the budget on reasoning tokens before the
+      // JSON; 2000 was truncating responses mid-article
+      max_tokens: 8192,
       temperature: 0.5,
       top_p: 0.9,
     }),
@@ -110,8 +110,13 @@ function repairJson(s) {
 function parseResponse(raw) {
   try {
     const clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    // Reasoning models sometimes leak thinking text before the JSON; anchoring
+    // on the known schema start skips past it.
+    const anchorIdx = clean.lastIndexOf('{"description"');
+    const anchored  = anchorIdx >= 0 ? clean.slice(anchorIdx) : '';
     let parsed;
-    for (const candidate of [clean, repairJson(clean)]) {
+    for (const candidate of [clean, repairJson(clean), anchored, repairJson(anchored)]) {
+      if (!candidate || parsed) break;
       try { parsed = JSON.parse(candidate); break; } catch { /**/ }
       const m = candidate.match(/\{[\s\S]*\}/);
       if (m) { try { parsed = JSON.parse(m[0]); break; } catch { /**/ } }
@@ -149,7 +154,36 @@ async function enrichOne(article) {
   const prompt = buildPrompt(article.title, article.description || '');
   const label  = article.title.slice(0, 50);
 
-  // ── 1. Gemini (primary — answers in seconds) — one retry on 429 ──────
+  // ── 1. NVIDIA (primary) — tries each model in order, one retry on 429 ─
+  for (const model of NVIDIA_MODELS) {
+    let nvidiaRes = null;
+    try {
+      nvidiaRes = await callNvidia(prompt, model);
+    } catch (e) {
+      console.warn(`    ✗ NVIDIA ${model} network error "${label}": ${e.message}`);
+    }
+
+    if (nvidiaRes?.status === 429) {
+      console.warn(`    429 NVIDIA rate-limit (${model}) — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
+      await sleep(RETRY_SLEEP_MS);
+      try { nvidiaRes = await callNvidia(prompt, model); }
+      catch (e) { console.warn(`    NVIDIA retry failed: ${e.message}`); nvidiaRes = null; }
+    }
+
+    if (nvidiaRes?.status === 200) {
+      let json;
+      try { json = await nvidiaRes.json(); } catch { json = null; }
+      const raw = extractRaw(json, 'NVIDIA');
+      const result = parseResponse(raw);
+      if (result) { console.log(`    ✓ [NVIDIA ${model}] "${article.title.slice(0, 65)}"`); return result; }
+      console.warn(`    ✗ [NVIDIA ${model}] parse failed`);
+      console.warn(`    ⚠ NVIDIA raw (first 300): ${raw.slice(0, 300)}`);
+    } else if (nvidiaRes) {
+      console.warn(`    ✗ NVIDIA ${model} ${nvidiaRes.status}`);
+    }
+  }
+
+  // ── 2. Gemini fallback — one retry on 429 ────────────────────────────
   if (GEMINI_KEY) {
     try {
       let gRes = await callGemini(prompt);
@@ -163,42 +197,15 @@ async function enrichOne(article) {
         try { json = await gRes.json(); } catch { json = null; }
         const result = parseResponse(extractRaw(json, 'Gemini'));
         if (result) { console.log(`    ✓ [Gemini] "${article.title.slice(0, 65)}"`); return result; }
-        console.warn(`    ✗ [Gemini] parse failed — trying NVIDIA`);
+        console.warn(`    ✗ [Gemini] parse failed — trying OpenAI`);
       } else if (gRes) {
         let body = '';
         try { body = await gRes.text(); } catch { /**/ }
-        console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying NVIDIA`);
+        console.warn(`    ✗ Gemini ${gRes.status}: ${body.slice(0, 120)} — trying OpenAI`);
       }
     } catch (e) {
-      console.warn(`    ✗ Gemini error: ${e.message} — trying NVIDIA`);
+      console.warn(`    ✗ Gemini error: ${e.message} — trying OpenAI`);
     }
-  }
-
-  // ── 2. NVIDIA fallback (deepseek — slow, 35–120s) — one retry on 429 ─
-  let nvidiaRes = null;
-  try {
-    nvidiaRes = await callNvidia(prompt);
-  } catch (e) {
-    console.warn(`    ✗ NVIDIA network error "${label}": ${e.message}`);
-  }
-
-  if (nvidiaRes?.status === 429) {
-    console.warn(`    429 NVIDIA rate-limit — waiting ${RETRY_SLEEP_MS / 1000}s then retrying...`);
-    await sleep(RETRY_SLEEP_MS);
-    try { nvidiaRes = await callNvidia(prompt); }
-    catch (e) { console.warn(`    NVIDIA retry failed: ${e.message}`); nvidiaRes = null; }
-  }
-
-  if (nvidiaRes?.status === 200) {
-    let json;
-    try { json = await nvidiaRes.json(); } catch { json = null; }
-    const raw = extractRaw(json, 'NVIDIA');
-    const result = parseResponse(raw);
-    if (result) { console.log(`    ✓ [NVIDIA] "${article.title.slice(0, 65)}"`); return result; }
-    console.warn(`    ✗ [NVIDIA] parse failed — trying OpenAI`);
-    console.warn(`    ⚠ NVIDIA raw (first 300): ${raw.slice(0, 300)}`);
-  } else if (nvidiaRes) {
-    console.warn(`    ✗ NVIDIA ${nvidiaRes.status} — trying OpenAI`);
   }
 
   // ── 3. OpenAI fallback (sequential — free tier allows only 3 RPM) ────
